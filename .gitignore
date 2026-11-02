@@ -8,3 +8,6 @@ apps/api/storage/
 apps/api/.data/
 *.log
 .DS_Store
+e2e-errore.png
+apps/web/next-env.d.ts
+*.tsbuildinfo

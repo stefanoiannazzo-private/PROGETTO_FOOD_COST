@@ -14,6 +14,20 @@ import type {
 } from './types'
 
 const DEFAULT_MAX_DEPTH = 12
+const LOCAL_ONLY = new Set(['missing_final_weight', 'missing_portions', 'missing_yield'])
+
+const itDate = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso)
+
+/** Rimuove le segnalazioni identiche (stesso codice, messaggio e percorso) arrivate da più rami. */
+function dedupe(issues: Issue[]): Issue[] {
+  const seen = new Set<string>()
+  return issues.filter((i) => {
+    const k = `${i.severity}|${i.code}|${i.message}|${i.path.join('>')}`
+    if (seen.has(k)) return false
+    seen.add(k)
+    return true
+  })
+}
 const DEFAULT_MAX_NODES = 2000
 
 /**
@@ -104,7 +118,7 @@ export class RecipeCostEngine {
           line.baseUnit = u.baseUnit
           line.unitPrice = u.unitPrice
           if (u.unitPrice === null) {
-            issue('missing_price', `${ing.name}: nessun prezzo valido alla data ${this.ctx.date}.`, 'error', { type: 'ingredient', id: ing.id })
+            issue('missing_price', `${ing.name}: nessun prezzo valido alla data ${itDate(this.ctx.date)}.`, 'error', { type: 'ingredient', id: ing.id })
           } else {
             line.zeroPrice = u.unitPrice.isZero()
             if (line.zeroPrice) issue('zero_price', `${ing.name}: prezzo esplicitamente pari a zero.`, 'info', { type: 'ingredient', id: ing.id })
@@ -151,7 +165,12 @@ export class RecipeCostEngine {
 
       const sub = this.visit(subId, stack)
       line.sub = sub
-      for (const si of sub.issues) issues.push({ ...si, path: [recipe.title, ...si.path] })
+      // Si propagano gli errori e gli avvisi sui costi; non le note sulla resa della sottoricetta
+      // (porzioni o peso mancanti), che non riguardano il padre: se servono al dosaggio generano un errore qui.
+      for (const si of sub.issues) {
+        if (si.severity === 'info' || LOCAL_ONLY.has(si.code)) continue
+        issues.push({ ...si, path: [recipe.title, ...si.path] })
+      }
 
       // Base di dosaggio: peso finale netto per unità di massa, altrimenti la resa dichiarata se compatibile.
       try {
@@ -327,7 +346,7 @@ export class RecipeCostEngine {
       title: recipe.title,
       date: this.ctx.date,
       complete,
-      issues,
+      issues: dedupe(issues),
       ingredientLines,
       subrecipeLines,
       equipmentLines,

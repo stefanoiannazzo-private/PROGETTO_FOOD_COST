@@ -22,6 +22,11 @@ export async function connect(url = process.env.DATABASE_URL ?? 'pglite:./.data/
   if (url.startsWith('pglite:')) {
     const { PGlite } = await import('@electric-sql/pglite')
     const target = url.slice('pglite:'.length)
+    if (target !== 'memory') {
+      const { mkdirSync } = await import('node:fs')
+      const { dirname } = await import('node:path')
+      mkdirSync(dirname(target), { recursive: true })
+    }
     const pglite = await PGlite.create(target === 'memory' ? undefined : target, {
       parsers: { [DATE_OID]: (v: string) => v },
     })
