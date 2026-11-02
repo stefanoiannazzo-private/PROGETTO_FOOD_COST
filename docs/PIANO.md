@@ -1,116 +1,77 @@
 # Food Cost — Piano tecnico e decisioni
 
-Documento vivo: viene aggiornato a ogni fase. Ultimo aggiornamento: 2 novembre 2026, fase 1.
+Ultimo aggiornamento: 2 novembre 2026. Tutte le fasi del capitolato sono state completate.
 
 ## 1. Stato del repository
 
-Il repository `PROGETTO_FOOD_COST` era vuoto alla prima ispezione: nessun codice, nessuna istruzione preesistente. Il progetto parte da zero con lo stack di riferimento delle specifiche.
+Alla prima ispezione il repository era vuoto, quindi il progetto è partito da zero.
 
-## 2. Architettura
+## 2. Decisione sullo stack
 
-Monorepo con due applicazioni e un dominio di calcolo isolato:
+Il capitolato indicava Laravel, Next.js e MySQL. L’ambiente di sviluppo non poteva raggiungere Packagist (registro dei pacchetti PHP): Laravel sarebbe stato scritto senza poterlo installare né testare. Su decisione del cliente il progetto è interamente in TypeScript:
+
+| Livello | Scelta | Motivo |
+|---|---|---|
+| Dominio | `packages/domain`, TypeScript puro, `decimal.js` | motore di calcolo testabile senza database, condiviso da API e interfaccia |
+| API | Fastify + Kysely + Zod | API-first, leggera e veloce; query tipizzate |
+| Database | **PostgreSQL** | MySQL non è eseguibile qui; PostgreSQL gira anche in-process (PGlite), quindi i test usano un database vero, con vincoli CHECK, lock e transazioni |
+| Frontend | Next.js 16 + React 19 + TanStack Query | applicazione a pagina singola: menu fisso, prefetch, cache dei dati |
+| Coda | tabella `jobs` su PostgreSQL | nessun servizio aggiuntivo da gestire per una piccola agenzia |
+
+## 3. Architettura
 
 ```
-/backend    Laravel 12, API-first (JSON), PHP 8.3
-            app/Domain/Costing   motore di calcolo puro, senza dipendenze da HTTP o UI
-            app/Domain/Units     conversioni di unità e grandezze
-            app/Http             controller sottili, FormRequest, Resource
-            app/Jobs             importazioni asincrone a blocchi
-/frontend   Next.js (App Router) + React + TypeScript
-/docs       piano, modello dati, formule, API
-/templates  modelli CSV/XLSX per le importazioni
-docker-compose.yml   MySQL 8.4 e Redis per lo sviluppo locale
+packages/domain   motore di calcolo: unità, ingredienti, energia, lavoro, ricette annidate, grafo, formati italiani
+apps/api          src/routes (HTTP), src/services (costi, ricette, importazioni, sessioni, audit, coda), src/db (schema, migrazioni, seed)
+apps/web          app/(auth) accesso; app/(app) pagine; components (tabelle, editor, form, riepilogo)
 ```
 
-Niente microservizi: un'API, un frontend, un worker di coda, un database.
+Il backend calcola sempre il valore autorevole. L’editor mostra l’anteprima calcolata dal backend mentre si compila, con un ritardo di circa 450 ms dall’ultima modifica.
 
-### Perché questa forma
-- Il motore di calcolo è una libreria di dominio con input espliciti (quantità, prezzi, tariffe, costi del lavoro alla data) e output esplicito (righe valorizzate, totali, segnalazioni di incompletezza). È testabile senza database e viene riusato da anteprima, salvataggio, snapshot e importazioni.
-- Il frontend mostra anteprime immediate, ma il valore autorevole è sempre quello restituito dal backend.
+## 4. Velocità (requisito esplicito del cliente)
 
-## 3. Velocità percepita: requisito esplicito del cliente
+- Il menu e l’intestazione non si ricaricano mai, e le pagine del menu sono precaricate.
+- Le liste già viste si mostrano subito e si aggiornano in background. Ricerca, filtri e ordinamento sono server-side, con indici che iniziano da `company_id`.
+- Le valorizzazioni correnti stanno in cache per (ricetta, data) e vengono invalidate solo per le ricette interessate, anche indirettamente.
+- Le importazioni girano sempre in background.
 
-Obiettivo: nessuna attesa visibile nella navigazione ordinaria. Scelte concrete:
+Misure in `docs/VERIFICHE.md`: risposte API tra 5 e 25 ms con 5.000 articoli, cambi pagina sotto i 160 ms.
 
-| Ambito | Scelta |
-|---|---|
-| Navigazione | App Router con navigazione client-side e prefetch dei link del menu; il guscio dell'applicazione (menu, intestazione) non si ricarica mai. |
-| Dati | Cache lato client (TanStack Query): le liste già viste si mostrano subito e si aggiornano in background; mutazioni con aggiornamento ottimistico dove sicuro. |
-| Liste | Paginazione, ricerca e ordinamento server-side con indici composti che iniziano sempre da `company_id`; risposte leggere (solo i campi della lista). |
-| Ricerca | Ricerca con debounce di 200 ms e annullamento delle richieste superate. |
-| Editor ricetta | Il riepilogo costi si ricalcola in anteprima sul client a ogni modifica e viene confermato dal backend in background; nessun salvataggio blocca la digitazione. |
-| Calcolo | Memoizzazione delle sottoricette per (azienda, revisione, data) durante un calcolo; cache dei costi correnti invalidata a eventi su prezzi, tariffe, lavoro, resa e composizione. |
-| Backend | OPcache, cache di configurazione e route in produzione, Redis per cache e code, eager loading per evitare query N+1. |
-| Importazioni | Mai sincrone: job in coda, avanzamento interrogato a intervalli brevi. |
+## 5. Sicurezza e multi-azienda
 
-Obiettivi misurabili, verificati in fase 7: risposte API delle liste sotto 150 ms in locale con alcune migliaia di record, cambio pagina senza schermata di caricamento completa.
+- Database condiviso con `company_id`. L’azienda attiva viene dalla sessione e dalla membership verificata; un ID di un’altra azienda risponde 404.
+- Sessioni con token salvato solo come hash e cookie httpOnly SameSite=Lax. Protezione CSRF con header dedicato e controllo dell’origine. Rate limiting su login, recupero password e caricamenti.
+- Ruoli: amministratore, responsabile, operatore. Permessi distinti: `costs.read`, `salaries.read`, `employees.manage`, `tariffs.manage`, `imports.manage` e altri, concedibili oltre al ruolo.
+- Le retribuzioni non entrano nei payload senza `salaries.read` e non finiscono mai nei log di audit.
 
-## 4. Multi-tenancy e sicurezza
-
-- Database condiviso, colonna `company_id` su tutte le entità aziendali.
-- L'azienda attiva deriva dalla sessione autenticata e viene verificata contro le membership dell'utente a ogni richiesta; l'ID che arriva dal browser serve solo a *scegliere* tra le aziende autorizzate.
-- Global scope Eloquent per azienda su ogni modello aziendale, più policy per risorsa: un ID di un'altra azienda restituisce 404.
-- Autenticazione: Laravel Sanctum in modalità SPA (cookie di sessione + CSRF), password gestite dal framework, rate limiting su login e recupero password.
-- Ruoli per azienda: amministratore, responsabile, operatore. Permessi distinti e assegnabili: `employees.manage`, `salaries.read`, `costs.read`, `tariffs.manage`, oltre ai permessi di gestione anagrafiche.
-- Le retribuzioni sono escluse dai payload (Resource condizionali) senza `salaries.read`; mai nei log.
-- Audit essenziale su prezzi, tariffe, costi del lavoro, ricette e importazioni.
-
-## 5. Modello dati (sintesi)
-
-Il dettaglio dei campi è in `docs/MODELLO_DATI.md` (fase 2). Entità principali:
-
-- `companies`, `users`, `company_user` (ruolo e permessi aggiuntivi), `invitations`
-- `ingredients`, `ingredient_prices` (storico con data di validità)
-- `utility_tariffs` (elettricità, gas; estendibile ad acqua) con `utility_bills` per la modalità assistita
-- `equipment` con parametri elettrici e gas
-- `employees`, `employee_cost_configs` (storico con validità)
-- `recipes`, `recipe_revisions` (composizione immutabile per revisione)
-- `recipe_components` (ingrediente **oppure** sottoricetta, vincolo CHECK)
-- `recipe_phases`, `recipe_equipment_uses`, `recipe_labor_assignments`
-- `cost_snapshots` (fotografia immutabile, autosufficiente, in JSON + colonne di riepilogo)
-- `imports`, `import_rows` (staging), `audit_logs`
-
-Tutti gli importi e le quantità sono `DECIMAL`; nel codice si usa aritmetica decimale (brick/math), arrotondando solo in visualizzazione.
-
-## 6. Formule
-
-| Voce | Formula |
-|---|---|
-| Prezzo normalizzato ingrediente | prezzo confezione / contenuto confezione nell'unità base (kg, l, pz) |
-| Quantità acquistata equivalente | quantità netta / resa edibile |
-| Costo riga ingrediente | quantità acquistata equivalente × prezzo normalizzato |
-| Costo riga semilavorato | quantità prelevata × costo unitario della sottoricetta (totale / resa finale) |
-| Elettricità | kWh = kW × minuti / 60 × coefficiente di utilizzo; costo = kWh × €/kWh |
-| Gas (portata) | consumo = portata oraria × minuti / 60 [× fattore di carico, una sola volta]; costo = consumo × tariffa nella stessa unità |
-| Quota condivisa | costo uso strumento × quota di imputazione |
-| Costo lavoro | costo orario aziendale = (lordo + oneri + altri costi) / ore produttive; costo/minuto = costo orario / 60; riga = minuti attivi × costo/minuto × quota |
-| Totale lotto | ingredienti diretti + semilavorati + strumenti + manodopera |
-| Costo/kg | totale / peso finale netto in kg |
-| Costo/porzione | totale / numero porzioni |
-
-Regole trasversali: nessuna conversione volume↔peso senza densità, nessuna pezzi↔peso senza peso unitario, m³ ≠ Smc, gas → kWh solo con coefficiente esplicito. Dati mancanti producono uno stato "incompleto" con le voci mancanti elencate, mai un totale definitivo.
-
-## 7. Fasi di consegna
+## 6. Fasi
 
 | Fase | Contenuto | Stato |
 |---|---|---|
 | 1 | Ispezione, piano, decisioni | completata |
-| 2 | Autenticazione, aziende, ruoli, modello dati, migrazioni | da fare |
-| 3 | Anagrafiche ingredienti/prezzi, utenze, strumenti, dipendenti | da fare |
-| 4 | Motore di calcolo con i test numerici A–E | da fare |
-| 5 | Editor ricette, annidamento, scheda, valorizzazioni, snapshot | da fare |
-| 6 | Importazioni CSV/XLSX con anteprima, validazione, report | da fare |
-| 7 | Dashboard, rifinitura UI, verifiche di velocità, documentazione | da fare |
+| 2 | Autenticazione, aziende, ruoli, modello dati, migrazioni | completata |
+| 3 | Ingredienti e prezzi, utenze, strumenti, dipendenti | completata |
+| 4 | Motore di calcolo e test numerici A–E | completata |
+| 5 | Editor ricette, annidamento, scheda, valorizzazioni, snapshot | completata |
+| 6 | Importazioni CSV/XLSX con anteprima, validazione e report | completata |
+| 7 | Dashboard, rifinitura, verifiche di velocità, documentazione | completata |
 
-## 8. Assunzioni
+## 7. Assunzioni implementate
 
-- Valuta EUR, interfaccia e formati italiani; le API scambiano numeri normalizzati come stringhe decimali con il punto.
-- Tutti i costi inseriti sono netti IVA; la convenzione è mostrata nell'interfaccia.
-- Database di sviluppo e produzione MySQL 8.4; i test automatici usano MySQL quando disponibile e SQLite come ripiego, con i vincoli CHECK verificati anche a livello applicativo.
-- Push consentito solo sul repository `stefanoiannazzo-private/PROGETTO_FOOD_COST`, su richiesta esplicita del cliente; nessun deploy.
+- Valuta EUR, interfaccia italiana. Si digita e si legge in formato italiano (1.234,56); l’API accetta solo numeri normalizzati (1234.56).
+- Costi netti IVA, come inseriti, e convenzione indicata nell’interfaccia.
+- Fuso orario Europe/Rome per la “data di oggi” delle valorizzazioni.
+- Ogni salvataggio di una ricetta crea una revisione immutabile; gli snapshot sono fotografie JSON autosufficienti.
+- Le sottoricette sono valorizzate con la loro revisione corrente alla data scelta. La valorizzazione a data passata usa i prezzi di quella data con la composizione corrente; la composizione storica esatta resta negli snapshot e nelle revisioni.
+- Importazioni solo in modalità atomica (la modalità parziale, facoltativa nel capitolato, non è stata implementata).
+- Le aziende clienti le crea l’amministratore di piattaforma; non c’è registrazione pubblica.
 
-## 9. Blocchi aperti
+## 8. Limiti ancora presenti
 
-- **Registri pacchetti non raggiungibili** dall'ambiente di sviluppo (Packagist, npm): da sbloccare nelle impostazioni di rete dell'account. Senza di essi non è possibile installare Laravel/Next.js né eseguire i test.
-- **Scrittura sul repository**: richiede l'installazione dell'app GitHub di Claude sull'account.
-- **MySQL** non disponibile nell'ambiente di sviluppo (nessun Docker attivo): i test useranno SQLite finché non è disponibile; `docker-compose.yml` sarà fornito per l'uso in locale.
+- **Email**: inviti e reset sono scritti in `storage/outbox`; manca il collegamento a un server SMTP.
+- **Server PostgreSQL** non provato in questo ambiente (vedi `VERIFICHE.md`); con PGlite il worker gira nello stesso processo dell’API.
+- **Acqua**: tariffa prevista nel modello, ma senza consumi d’acqua sugli strumenti.
+- **Fasi**: l’editor gestisce nome e descrizione; i campi di inizio e durata sono nello schema ma non ancora nell’interfaccia.
+- **Audit**: registrato nel database, senza una pagina di consultazione.
+- **Rate limiting** in memoria del singolo processo: con più istanze dell’API serve un archivio condiviso.
+- Conservazione delle importazioni: file e righe di staging eliminati dopo `IMPORT_RETENTION_DAYS` (30 di default); resta il riepilogo.

@@ -639,7 +639,7 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
           </div>
         </section>
 
-        <div className="card card-pad row wrap between" style={{ position: 'sticky', bottom: 12, zIndex: 5 }}>
+        <div className="card card-pad row wrap between save-bar">
           <label className="row">
             <span className="label">Stato</span>
             <select className="input" style={{ width: 'auto' }} value={s.status} onChange={(e) => update({ status: e.target.value as 'draft' | 'active' })}>
