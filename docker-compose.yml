@@ -1,0 +1,14 @@
+# PostgreSQL per sviluppo locale (alternativa: DATABASE_URL=pglite:... senza server)
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: foodcost
+      POSTGRES_PASSWORD: foodcost
+      POSTGRES_DB: foodcost
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - foodcost-db:/var/lib/postgresql/data
+volumes:
+  foodcost-db:
