@@ -1,0 +1,36 @@
+{
+  "name": "@foodcost/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "worker": "tsx src/worker.ts",
+    "migrate": "tsx src/db/migrate-cli.ts",
+    "seed:demo": "tsx src/db/seed-demo.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@foodcost/domain": "0.1.0",
+    "@electric-sql/pglite": "0.5.14",
+    "@fastify/cookie": "11.1.5",
+    "@fastify/multipart": "10.1.7",
+    "@fastify/rate-limit": "11.2.1",
+    "csv-parse": "7.0.3",
+    "decimal.js": "10.6.0",
+    "exceljs": "4.4.0",
+    "fastify": "5.12.7",
+    "kysely": "0.29.8",
+    "pg": "8.23.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/pg": "8.15.6",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "5.0.5"
+  }
+}
