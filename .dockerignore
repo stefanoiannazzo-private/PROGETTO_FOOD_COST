@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/.data
+**/storage
+**/.env
+**/.env.*
+!**/.env.example
+.git
+deploy/backups
+**/*.log
+e2e-errore.png

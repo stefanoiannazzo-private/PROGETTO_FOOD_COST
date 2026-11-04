@@ -1,10 +1,15 @@
-import { loadEnv } from './env'
+import { assertProductionConfig, config, loadEnv } from './env'
 import { connect } from './db/connection'
 import { migrate } from './db/migrate'
 import { buildApp } from './app'
 import { startWorker } from './services/jobs'
 
 loadEnv()
+const problems = assertProductionConfig(config(), process.env.DATABASE_URL)
+if (problems.length) {
+  console.error('Configurazione di produzione non valida:\n- ' + problems.join('\n- '))
+  process.exit(1)
+}
 const database = await connect()
 if (process.env.AUTO_MIGRATE !== 'false') await migrate(database, (m) => console.log(m))
 const app = await buildApp(database)

@@ -1,0 +1,134 @@
+# Food Cost — installazione di produzione su un server Linux con Docker.
+# Dalla cartella deploy/:
+#   cp .env.example .env    (e compilarlo)
+#   docker compose up -d --build
+# Guida completa: docs/PUBBLICAZIONE.md
+
+name: foodcost
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: foodcost
+      POSTGRES_DB: foodcost
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?imposta POSTGRES_PASSWORD nel file .env}
+      TZ: Europe/Rome
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foodcost -d foodcost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # il database non è esposto su internet: raggiungibile solo dagli altri servizi
+    networks: [backend]
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment: &api-env
+      NODE_ENV: production
+      DATABASE_URL: postgres://foodcost:${POSTGRES_PASSWORD}@db:5432/foodcost
+      APP_URL: https://${DOMAIN:?imposta DOMAIN nel file .env}
+      ALLOWED_ORIGINS: https://${DOMAIN}
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+      WORKER_INLINE: "false"
+      APP_TZ: Europe/Rome
+      SESSION_DAYS: ${SESSION_DAYS:-14}
+      LOGIN_RATE_LIMIT: ${LOGIN_RATE_LIMIT:-10}
+      IMPORT_MAX_BYTES: ${IMPORT_MAX_BYTES:-10485760}
+      IMPORT_MAX_ROWS: ${IMPORT_MAX_ROWS:-20000}
+      IMPORT_RETENTION_DAYS: ${IMPORT_RETENTION_DAYS:-30}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - storage:/data/storage
+    networks: [backend]
+
+  worker:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    restart: unless-stopped
+    command: ["node", "--import", "tsx", "src/worker.ts"]
+    depends_on:
+      api:
+        condition: service_healthy
+    environment: *api-env
+    volumes:
+      - storage:/data/storage
+    healthcheck:
+      disable: true
+    networks: [backend]
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+    restart: unless-stopped
+    depends_on:
+      - api
+    networks: [backend]
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?imposta ACME_EMAIL nel file .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [backend]
+
+  # copia di sicurezza giornaliera del database (conservate le ultime 14)
+  backup:
+    image: postgres:17
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Europe/Rome
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          f=/backups/foodcost-$$(date +%Y%m%d-%H%M).dump
+          pg_dump -h db -U foodcost -d foodcost -Fc -f "$$f" && echo "backup: $$f"
+          ls -1t /backups/foodcost-*.dump 2>/dev/null | tail -n +15 | xargs -r rm -f
+          sleep 86400
+        done
+    networks: [backend]
+
+volumes:
+  db-data:
+  storage:
+  caddy-data:
+  caddy-config:
+
+networks:
+  backend:

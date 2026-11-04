@@ -124,6 +124,7 @@ function MemberDrawer({ member, catalog, onClose }: { member: Member | null; cat
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [devLink, setDevLink] = useState('')
+  const [mailSent, setMailSent] = useState(false)
   const rolePerms = new Set(catalog.roles.find((r) => r.value === v.role)?.permissions ?? [])
   const save = async () => {
     setErrors({})
@@ -134,9 +135,12 @@ function MemberDrawer({ member, catalog, onClose }: { member: Member | null; cat
         toast('Utente aggiornato.')
         onClose()
       } else {
-        const r = await api.post<{ devLink?: string }>('/users/invitations', { name: v.name, email: v.email, role: v.role, extraPermissions: v.extra })
-        toast('Invito inviato.')
-        if (r.devLink) setDevLink(r.devLink)
+        const r = await api.post<{ inviteLink?: string; mail: 'sent' | 'outbox' | 'failed' }>('/users/invitations', { name: v.name, email: v.email, role: v.role, extraPermissions: v.extra })
+        toast(r.mail === 'sent' ? 'Invito inviato per email.' : 'Invito creato.')
+        if (r.inviteLink) {
+          setMailSent(r.mail === 'sent')
+          setDevLink(r.inviteLink)
+        }
         else onClose()
       }
       qc.invalidateQueries({ queryKey: ['users'] })
@@ -165,12 +169,13 @@ function MemberDrawer({ member, catalog, onClose }: { member: Member | null; cat
       <div className="stack">
         {error ? <div className="alert err">{error}</div> : null}
         {devLink ? (
-          <div className="alert ok">
-            <div>
-              Invito creato. In ambiente di sviluppo l’email è salvata in storage/outbox; link diretto:{' '}
-              <a className="link" href={devLink}>
-                {devLink}
-              </a>
+          <div className={`alert ${mailSent ? 'ok' : 'warn'}`}>
+            <div className="stack tight">
+              <span>{mailSent ? 'Email inviata. Link dell’invito:' : 'L’email non è stata inviata (server di posta non configurato o non raggiungibile). Consegna tu questo link alla persona invitata, è valido 7 giorni:'}</span>
+              <input className="input mono" readOnly value={devLink} onFocus={(e) => e.target.select()} aria-label="Link di invito" />
+              <button className="btn sm" type="button" onClick={() => navigator.clipboard?.writeText(devLink).then(() => toast('Link copiato.'))}>
+                Copia link
+              </button>
             </div>
           </div>
         ) : null}

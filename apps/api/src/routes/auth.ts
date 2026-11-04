@@ -113,7 +113,12 @@ export async function authRoutes(app: FastifyInstance) {
       const token = newToken()
       await db.insertInto('password_resets').values({ token_hash: hashToken(token), user_id: user.id, expires_at: new Date(Date.now() + 60 * 60 * 1000) }).execute()
       const link = `${cfg.appUrl}/reimposta-password?token=${token}`
-      await sendMail(cfg.storageDir, user.email, 'Food Cost — reimpostazione password', `Per reimpostare la password apri questo link entro 60 minuti:\n${link}\n`)
+      try {
+        await sendMail(cfg.storageDir, user.email, 'Food Cost — reimpostazione password', `Per reimpostare la password apri questo link entro 60 minuti:\n${link}\n`)
+      } catch (e) {
+        // la risposta resta identica: non si rivela se l'indirizzo esiste
+        req.log.error({ err: (e as Error).message }, 'invio email di reset non riuscito')
+      }
       if (cfg.devExposeTokens) devLink = link
     }
     // risposta identica che l'utente esista o meno

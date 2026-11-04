@@ -92,7 +92,8 @@ describe('Utenti, inviti e ruoli', () => {
   it('invito → accettazione → membership con ruolo; modifica ruolo e disattivazione', async () => {
     const admin = await loginAs(env, 'admin.a@example.test')
     const inv = expectOk(await admin.post('/api/users/invitations', { email: 'nuovo@example.test', name: 'Nuovo Cuoco', role: 'operator', extraPermissions: ['costs.read'] }))
-    const token = new URL(inv.devLink).searchParams.get('token')!
+    expect(inv.mail).toBe('outbox')
+    const token = new URL(inv.inviteLink).searchParams.get('token')!
     const anon = new Client(env.app)
     const info = expectOk(await anon.get(`/api/auth/invitations/${token}`))
     expect(info.company).toBe('Trattoria A')

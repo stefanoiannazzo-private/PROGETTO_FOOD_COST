@@ -1,0 +1,34 @@
+# Immagine dell'API e del worker delle importazioni (stesso codice, comando diverso).
+# Costruzione dalla cartella principale del repository:
+#   docker build -f deploy/Dockerfile.api -t foodcost-api .
+
+FROM node:22-bookworm-slim AS deps
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY packages/domain/package.json packages/domain/
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+# solo le dipendenze di produzione dell'API e del dominio (tsx, dipendenza dell'API, esegue il TypeScript)
+RUN npm ci --omit=dev --workspace apps/api --workspace packages/domain --include-workspace-root=false --no-audit --no-fund \
+ && npm cache clean --force
+
+FROM node:22-bookworm-slim
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=4000 \
+    STORAGE_DIR=/data/storage \
+    TZ=Europe/Rome
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json tsconfig.base.json ./
+COPY packages/domain ./packages/domain
+COPY apps/api/package.json ./apps/api/package.json
+COPY apps/api/src ./apps/api/src
+COPY apps/api/tsconfig.json ./apps/api/tsconfig.json
+RUN mkdir -p /data/storage && chown -R node:node /data
+USER node
+WORKDIR /app/apps/api
+EXPOSE 4000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||4000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "--import", "tsx", "src/server.ts"]

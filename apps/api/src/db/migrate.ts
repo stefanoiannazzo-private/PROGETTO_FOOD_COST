@@ -23,3 +23,19 @@ export async function migrate(database: Database, log: (msg: string) => void = (
   }
   return ran
 }
+
+/** Attende che tutte le migrazioni siano applicate (le applica l'API all'avvio): usato dal worker. */
+export async function waitForMigrations(database: Database, timeoutMs = 120_000): Promise<void> {
+  const files = (await readdir(MIGRATIONS_DIR)).filter((f) => f.endsWith('.sql'))
+  const start = Date.now()
+  for (;;) {
+    try {
+      const r = await sql<{ n: string }>`SELECT count(*) AS n FROM schema_migrations`.execute(database.db)
+      if (Number(r.rows[0]?.n ?? 0) >= files.length) return
+    } catch {
+      /* tabella non ancora creata */
+    }
+    if (Date.now() - start > timeoutMs) throw new Error('Il database non è stato migrato: avviare prima l’API.')
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+}

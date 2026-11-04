@@ -2,7 +2,11 @@
   "name": "food-cost",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["packages/domain", "apps/api", "apps/web"],
+  "workspaces": [
+    "packages/domain",
+    "apps/api",
+    "apps/web"
+  ],
   "scripts": {
     "dev:api": "npm run dev -w apps/api",
     "dev:web": "npm run dev -w apps/web",
@@ -11,7 +15,10 @@
     "seed:demo": "npm run seed:demo -w apps/api",
     "test": "npm test -w packages/domain && npm test -w apps/api",
     "typecheck": "npm run typecheck -w packages/domain && npm run typecheck -w apps/api && npm run typecheck -w apps/web",
-    "build": "npm run build -w apps/web"
+    "build": "npm run build -w apps/web",
+    "create-admin": "npm run create-admin -w apps/api --"
   },
-  "engines": { "node": ">=22" }
+  "engines": {
+    "node": ">=22"
+  }
 }

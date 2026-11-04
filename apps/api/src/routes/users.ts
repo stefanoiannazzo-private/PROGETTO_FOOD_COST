@@ -85,9 +85,16 @@ export async function userRoutes(app: FastifyInstance) {
       .returning('id')
       .executeTakeFirstOrThrow()
     const link = `${app.cfg.appUrl}/invito?token=${token}`
-    await sendMail(app.cfg.storageDir, body.email, `Invito a Food Cost — ${ctx.company.name}`, `${ctx.user.name} ti ha invitato su Food Cost per ${ctx.company.name} come ${ROLE_LABELS[body.role]}.\nAccetta l’invito entro 7 giorni:\n${link}\n`)
+    let mail: 'sent' | 'outbox' | 'failed'
+    try {
+      mail = await sendMail(app.cfg.storageDir, body.email, `Invito a Food Cost — ${ctx.company.name}`, `${ctx.user.name} ti ha invitato su Food Cost per ${ctx.company.name} come ${ROLE_LABELS[body.role]}.\nAccetta l’invito entro 7 giorni:\n${link}\n`)
+    } catch (e) {
+      req.log.error({ err: (e as Error).message }, 'invio email di invito non riuscito')
+      mail = 'failed'
+    }
     await audit(db, { companyId: ctx.companyId, userId: ctx.user.id, entityType: 'invitation', entityId: inv.id, action: 'created', details: { email: body.email, role: body.role } })
-    return { id: inv.id, ...(app.cfg.devExposeTokens ? { devLink: link } : {}) }
+    // se l'email non è partita, l'amministratore riceve il link da consegnare di persona
+    return { id: inv.id, mail, ...(mail !== 'sent' || app.cfg.devExposeTokens ? { inviteLink: link } : {}) }
   })
 
   app.delete('/users/invitations/:id', async (req) => {

@@ -11,3 +11,5 @@ apps/api/.data/
 e2e-errore.png
 apps/web/next-env.d.ts
 *.tsbuildinfo
+deploy/backups/
+deploy/.env

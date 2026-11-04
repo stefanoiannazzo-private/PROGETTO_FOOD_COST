@@ -13,20 +13,49 @@ export interface TestEnv {
   app: FastifyInstance
   database: Database
   storageDir: string
+  dropDb?: () => Promise<void>
+}
+
+/**
+ * Database di test: PGlite in memoria, oppure un database nuovo su un server PostgreSQL
+ * se è impostato TEST_DATABASE_URL (es. postgres://utente:pw@127.0.0.1:5432/postgres).
+ */
+async function testDatabase(): Promise<{ database: Database; drop?: () => Promise<void> }> {
+  const admin = process.env.TEST_DATABASE_URL
+  if (!admin) return { database: await connect('pglite:memory') }
+  const pg = (await import('pg')).default
+  const name = `fc_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`
+  const client = new pg.Client({ connectionString: admin })
+  await client.connect()
+  await client.query(`CREATE DATABASE ${name}`)
+  await client.end()
+  const url = new URL(admin)
+  url.pathname = `/${name}`
+  const database = await connect(url.toString())
+  return {
+    database,
+    drop: async () => {
+      const c = new pg.Client({ connectionString: admin })
+      await c.connect()
+      await c.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`)
+      await c.end()
+    },
+  }
 }
 
 export async function setup(overrides: Partial<import('../src/env').AppConfig> = {}): Promise<TestEnv> {
-  const database = await connect('pglite:memory')
+  const { database, drop } = await testDatabase()
   await migrate(database)
   const storageDir = await mkdtemp(join(tmpdir(), 'foodcost-test-'))
   const app = await buildApp(database, { storageDir, devExposeTokens: true, importMaxRows: 20000, loginRateLimit: 1000, ...overrides })
   await app.ready()
-  return { app, database, storageDir }
+  return { app, database, storageDir, dropDb: drop }
 }
 
 export async function teardown(env: TestEnv) {
   await env.app.close()
   await env.database.close()
+  await env.dropDb?.()
 }
 
 /** Crea direttamente un utente (solo per i test e per il seed locale). */

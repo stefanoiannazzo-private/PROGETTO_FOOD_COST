@@ -1,0 +1,27 @@
+# Immagine dell'interfaccia (server Next.js autonomo).
+#   docker build -f deploy/Dockerfile.web -t foodcost-web .
+
+FROM node:22-bookworm-slim AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY packages/domain/package.json packages/domain/
+COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
+RUN npm ci --workspace apps/web --workspace packages/domain --include-workspace-root=false --no-audit --no-fund
+COPY tsconfig.base.json ./
+COPY packages/domain ./packages/domain
+COPY apps/web ./apps/web
+# in produzione /api/* è instradato all'API da Caddy, non da Next
+ENV API_REWRITE=off NEXT_TELEMETRY_DISABLED=1
+RUN npm run build -w apps/web
+
+FROM node:22-bookworm-slim
+ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000 NEXT_TELEMETRY_DISABLED=1 TZ=Europe/Rome
+WORKDIR /app
+COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+USER node
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:3000/accedi').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "apps/web/server.js"]

@@ -44,7 +44,19 @@ export function config(): AppConfig {
     importRetentionDays: Number(env.IMPORT_RETENTION_DAYS ?? 30),
     allowedOrigins: (env.ALLOWED_ORIGINS ?? 'http://localhost:3000,http://127.0.0.1:3000').split(',').map((s) => s.trim()).filter(Boolean),
     appUrl: env.APP_URL ?? 'http://localhost:3000',
-    devExposeTokens: env.DEV_EXPOSE_TOKENS === 'true',
+    // mai in produzione, qualunque cosa dica la configurazione
+    devExposeTokens: env.NODE_ENV !== 'production' && env.DEV_EXPOSE_TOKENS === 'true',
     loginRateLimit: Number(env.LOGIN_RATE_LIMIT ?? 10),
   }
+}
+
+/** Controlli bloccanti all'avvio in produzione: meglio non partire che partire insicuri. */
+export function assertProductionConfig(c: AppConfig, databaseUrl: string | undefined): string[] {
+  if (process.env.NODE_ENV !== 'production') return []
+  const errors: string[] = []
+  if (!databaseUrl || databaseUrl.startsWith('pglite:')) errors.push('DATABASE_URL deve puntare a un server PostgreSQL (postgres://…).')
+  if (!c.cookieSecure) errors.push('COOKIE_SECURE deve essere true (il sito è servito in HTTPS).')
+  if (!c.appUrl.startsWith('https://')) errors.push('APP_URL deve essere l’indirizzo pubblico in https://.')
+  if (c.allowedOrigins.some((o) => /localhost|127\.0\.0\.1/.test(o)) || !c.allowedOrigins.includes(c.appUrl)) errors.push('ALLOWED_ORIGINS deve contenere solo il dominio pubblico (uguale ad APP_URL).')
+  return errors
 }

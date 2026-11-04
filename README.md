@@ -9,6 +9,7 @@ Applicazione web di COMETOWEB per ristoranti, gastronomie, macellerie, pasticcer
 | [`docs/FORMULE.md`](docs/FORMULE.md) | formule di calcolo e regole sui dati mancanti |
 | [`docs/API.md`](docs/API.md) | endpoint principali |
 | [`docs/VERIFICHE.md`](docs/VERIFICHE.md) | test, build e misure realmente eseguiti, con esiti |
+| [`docs/PUBBLICAZIONE.md`](docs/PUBBLICAZIONE.md) | messa online su un dominio con Docker e HTTPS |
 | [`templates/`](templates) | modelli CSV e XLSX per le importazioni |
 
 ## Stack
@@ -50,22 +51,21 @@ npm run dev:web
 
 Accessi demo creati dal seed, tutti con la password scelta al punto 2: `admin@demo.local` (amministratore), `responsabile@demo.local` (responsabile), `operatore@demo.local` (operatore). Il seed si rifiuta di partire con `NODE_ENV=production`.
 
-### Produzione (senza deploy automatico)
+### Pubblicazione su un dominio
+
+Tutto il necessario è in `deploy/`: immagini Docker, docker-compose con PostgreSQL, worker, backup giornaliero e Caddy (HTTPS automatico). La guida passo passo è in [`docs/PUBBLICAZIONE.md`](docs/PUBBLICAZIONE.md). In sintesi, sul server:
 
 ```bash
-npm run build                               # build dell'interfaccia
-# API: DATABASE_URL=postgres://…  COOKIE_SECURE=true  WORKER_INLINE=false
-npm run start -w apps/api                   # API
-npm run worker                              # worker importazioni, processo separato
-npm run start -w apps/web                   # interfaccia (API_URL indica dove raggiungere l'API)
+cd deploy && cp .env.example .env     # dominio, email, password del database, SMTP
+docker compose up -d --build
+docker compose exec api node --import tsx src/db/create-admin.ts --email … --name "…" --company "…"
 ```
-
-L'interfaccia inoltra `/api/*` all'API (stessa origine: cookie di sessione semplici, nessun CORS). Dietro HTTPS impostare `COOKIE_SECURE=true` e `ALLOWED_ORIGINS` con il dominio pubblico.
 
 ## Comandi di verifica
 
 ```bash
 npm test                 # motore di calcolo + API (PostgreSQL reale in-process)
+                         # TEST_DATABASE_URL=postgres://…/postgres npm test -w apps/api  → su un server PostgreSQL
 npm run typecheck        # controllo dei tipi di dominio, API e web
 npm run build            # build di produzione dell'interfaccia
 npm run e2e -w apps/web  # flusso UI in Chrome headless (API e web avviati, seed caricato)

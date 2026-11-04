@@ -1,6 +1,6 @@
 # Food Cost — Piano tecnico e decisioni
 
-Ultimo aggiornamento: 2 novembre 2026. Tutte le fasi del capitolato sono state completate.
+Ultimo aggiornamento: 4 novembre 2026. Tutte le fasi del capitolato sono state completate; il progetto è pronto per la pubblicazione (`docs/PUBBLICAZIONE.md`).
 
 ## 1. Stato del repository
 
@@ -68,8 +68,9 @@ Misure in `docs/VERIFICHE.md`: risposte API tra 5 e 25 ms con 5.000 articoli, ca
 
 ## 8. Limiti ancora presenti
 
-- **Email**: inviti e reset sono scritti in `storage/outbox`; manca il collegamento a un server SMTP.
-- **Server PostgreSQL** non provato in questo ambiente (vedi `VERIFICHE.md`); con PGlite il worker gira nello stesso processo dell’API.
+- **Email**: invio via SMTP configurabile; senza SMTP l’amministratore riceve il link d’invito da consegnare a mano, mentre il recupero password autonomo richiede l’SMTP.
+- **Immagini Docker**: i passaggi dei Dockerfile sono stati riprodotti e verificati fuori da Docker (non disponibile nell’ambiente di sviluppo); la prima `docker compose up --build` sul server è la verifica finale.
+- **Dipendenze**: restano 9 avvisi di gravità moderata nelle librerie interne del lettore Excel (`exceljs` → `archiver`/`minimatch`, `uuid`). Non sono sfruttabili nell’uso che ne fa l’applicazione (nessun pattern di file fornito dagli utenti, `uuid` senza buffer esterni); da rivedere quando `exceljs` aggiornerà le sue dipendenze.
 - **Acqua**: tariffa prevista nel modello, ma senza consumi d’acqua sugli strumenti.
 - **Fasi**: l’editor gestisce nome e descrizione; i campi di inizio e durata sono nello schema ma non ancora nell’interfaccia.
 - **Audit**: registrato nel database, senza una pagina di consultazione.
