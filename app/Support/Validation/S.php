@@ -258,6 +258,39 @@ final class S
         return new Schema(fn ($v, array $path, Issues $issues) => $schema->run($fn($v), $path, $issues));
     }
 
+    public static function literal(string $value, ?string $message = null): Schema
+    {
+        return new Schema(function ($v, array $path, Issues $issues) use ($value, $message) {
+            if ($v !== $value) {
+                $issues->add($path, $message ?? 'Invalid input: expected "'.$value.'"');
+
+                return S::missing();
+            }
+
+            return $v;
+        });
+    }
+
+    /** z.discriminatedUnion(key, [...]) */
+    public static function discriminated(string $key, array $options): Schema
+    {
+        return new Schema(function ($v, array $path, Issues $issues) use ($key, $options) {
+            if (! is_array($v)) {
+                $issues->add($path, 'Invalid input: expected object, received '.self::typeOf($v));
+
+                return S::missing();
+            }
+            $tag = $v[$key] ?? null;
+            if (! is_string($tag) || ! isset($options[$tag])) {
+                $issues->add([...$path, $key], 'Invalid input');
+
+                return S::missing();
+            }
+
+            return $options[$tag]->run($v, $path, $issues);
+        });
+    }
+
     /** Qualsiasi valore (z.unknown()). */
     public static function any(): Schema
     {

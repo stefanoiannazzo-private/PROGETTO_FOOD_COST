@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Services\Jobs;
+use App\Support\AppError;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+/**
+ * Indirizzo per il cron dell'hosting (Aruba: Pannello → Hosting Linux → Processi Cron, ogni 5–15 minuti):
+ *   https://<dominio>/api/cron?k=<CRON_KEY>
+ * Fa avanzare i lavori in coda (importazioni) e la pulizia periodica. Senza CRON_KEY l'indirizzo è disattivato.
+ */
+final class SystemController extends Controller
+{
+    public function cron(Request $req): array
+    {
+        $key = (string) config('foodcost.cron_key');
+        if ($key === '' || ! hash_equals($key, (string) $req->query('k', ''))) {
+            throw AppError::notFound();
+        }
+        @ignore_user_abort(true);
+        Jobs::maybeScheduleCleanup();
+        $done = Jobs::runPending(null, 50);
+        // sessioni e token scaduti
+        DB::table('sessions')->where('expires_at', '<', now('UTC')->format('Y-m-d H:i:s.v'))->delete();
+
+        return ['ok' => true, 'jobs' => $done];
+    }
+}
