@@ -54,15 +54,19 @@ final class Applier
             $validatedAt = $imp->validated_at;
             $touched = [];
             $offset = 0;
+            $last = 0;
+            $codes = $imp->type === 'ingredients' ? new CodeBook($imp->company_id) : null;
             for (;;) {
-                $rows = DB::table('import_rows')->where('import_id', $importId)->whereIn('action', ['create', 'update'])
-                    ->orderBy('row_number')->limit(self::CHUNK)->offset($offset)->get(['row_number', 'normalized', 'action', 'target_id']);
+                // paginazione per chiave (row_number), non per OFFSET: costo costante per blocco
+                $rows = DB::table('import_rows')->where('import_id', $importId)->whereIn('action', ['create', 'update'])->where('row_number', '>', $last)
+                    ->orderBy('row_number')->limit(self::CHUNK)->get(['row_number', 'normalized', 'action', 'target_id']);
                 if ($rows->isEmpty()) {
                     break;
                 }
                 $offset += $rows->count();
+                $last = (int) $rows->last()->row_number;
                 $ids = $imp->type === 'ingredients'
-                    ? self::applyIngredients($imp->company_id, $imp->created_by, $importId, $validatedAt, $rows)
+                    ? self::applyIngredients($imp->company_id, $imp->created_by, $importId, $validatedAt, $rows, $codes)
                     : self::applyEmployees($imp->company_id, $imp->created_by, $importId, $validatedAt, $rows);
                 array_push($touched, ...$ids);
             }
@@ -82,14 +86,42 @@ final class Applier
         return $out;
     }
 
-    private static function applyIngredients(string $companyId, string $userId, string $importId, string $validatedAt, $rows): array
+    /**
+     * Applicazione degli ingredienti di un blocco. Stesse verifiche, stesso ordine e stessi messaggi della
+     * versione riga per riga dell'originale (apply.ts), ma con letture e scritture raggruppate:
+     * - prima si simulano in memoria, riga dopo riga, codici generati, conflitti di codice, modifiche avvenute
+     *   dopo l'anteprima e prezzi con la stessa data (il primo errore in ordine di riga interrompe tutto);
+     * - poi si scrive il blocco con inserimenti multipli. Tutto avviene nella transazione unica di run().
+     */
+    private static function applyIngredients(string $companyId, string $userId, string $importId, string $validatedAt, $rows, CodeBook $codes): array
     {
         $ids = [];
+        $now = Clock::now();
+        $decoded = [];
+        $updateIds = [];
         foreach ($rows as $r) {
-            $n = json_decode($r->normalized, true);
+            $decoded[$r->row_number] = json_decode($r->normalized, true);
+            if ($r->action === 'update') {
+                $updateIds[] = $r->target_id;
+            }
+        }
+        // righe esistenti da aggiornare (bloccate fino a fine transazione) e loro prezzi
+        $current = $updateIds ? DB::table('ingredients')->whereIn('id', $updateIds)->where('company_id', $companyId)->lockForUpdate()
+            ->get(['id', 'updated_at', 'package_unit', 'package_content', 'supplier'])->keyBy('id') : collect();
+        $existingPrices = [];
+        if ($updateIds) {
+            foreach (DB::table('ingredient_prices')->whereIn('ingredient_id', $updateIds)->get(['ingredient_id', 'valid_from', 'package_price']) as $p) {
+                $existingPrices[$p->ingredient_id.'|'.$p->valid_from] = $p->package_price;
+            }
+        }
+        $updates = [];
+        $inserts = [];
+        $prices = [];
+        foreach ($rows as $r) {
+            $n = $decoded[$r->row_number];
             $id = $r->target_id;
             if ($r->action === 'update') {
-                $cur = DB::table('ingredients')->where('id', $id)->where('company_id', $companyId)->lockForUpdate()->first(['id', 'updated_at', 'package_unit', 'package_content']);
+                $cur = $current[$id] ?? null;
                 if (! $cur) {
                     throw new ApplyError("Riga {$r->row_number}: l’ingrediente non esiste più.");
                 }
@@ -106,15 +138,17 @@ final class Applier
                     $set['edible_yield'] = Dec::of($n['edibleYieldPercent'])->div(100)->toFixed();
                 }
                 if ($set) {
-                    DB::table('ingredients')->where('id', $id)->update([...$set, 'updated_at' => Clock::now(), 'lock_version' => DB::raw('lock_version + 1')]);
+                    $updates[$id] = $set;
                 }
+                $ing = ['package_content' => $set['package_content'] ?? $cur->package_content, 'package_unit' => $set['package_unit'] ?? $cur->package_unit, 'supplier' => array_key_exists('supplier', $set) ? $set['supplier'] : $cur->supplier];
             } else {
-                $code = $n['code'] ?? Codes::next('ingredients', $companyId, 'ING');
-                if (DB::table('ingredients')->where('company_id', $companyId)->where('code', $code)->exists()) {
+                $code = $n['code'] ?? $codes->next('ING');
+                if ($codes->exists($code)) {
                     throw new ApplyError("Riga {$r->row_number}: il codice {$code} è stato creato da qualcun altro dopo l’anteprima. Rivalida l’importazione.");
                 }
+                $codes->add($code);
                 $id = (string) Str::uuid();
-                DB::table('ingredients')->insert([
+                $inserts[] = [
                     'id' => $id,
                     'company_id' => $companyId,
                     'code' => $code,
@@ -127,36 +161,45 @@ final class Applier
                     'edible_yield' => self::t($n['edibleYieldPercent'] ?? null) ? Dec::of($n['edibleYieldPercent'])->div(100)->toFixed() : '1',
                     'density_kg_per_l' => $n['densityKgPerL'] ?? null,
                     'unit_weight_kg' => $n['unitWeightKg'] ?? null,
-                    'created_at' => Clock::now(),
-                    'updated_at' => Clock::now(),
-                ]);
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+                $ing = ['package_content' => $n['packageContent'], 'package_unit' => $n['packageUnit'], 'supplier' => $n['supplier'] ?? null];
             }
             if (($n['packagePrice'] ?? null) !== null && self::t($n['priceDate'] ?? null) && empty($n['priceDuplicate'])) {
-                $ing = DB::table('ingredients')->where('id', $id)->first(['package_content', 'package_unit', 'supplier']);
-                $existing = DB::table('ingredient_prices')->where('ingredient_id', $id)->where('valid_from', $n['priceDate'])->first(['id', 'package_price']);
-                if ($existing) {
-                    if (! Dec::of($existing->package_price)->eq($n['packagePrice'])) {
+                $existing = $existingPrices[$id.'|'.$n['priceDate']] ?? null;
+                if ($existing !== null) {
+                    if (! Dec::of($existing)->eq($n['packagePrice'])) {
                         throw new ApplyError("Riga {$r->row_number}: un prezzo diverso con la stessa data è stato inserito dopo l’anteprima.");
                     }
                 } else {
-                    DB::table('ingredient_prices')->insert([
+                    $prices[] = [
                         'id' => (string) Str::uuid(),
                         'company_id' => $companyId,
                         'ingredient_id' => $id,
                         'package_price' => $n['packagePrice'],
-                        'package_content' => $n['packageContent'] ?? $ing->package_content,
-                        'package_unit' => $n['packageUnit'] ?? $ing->package_unit,
+                        'package_content' => $n['packageContent'] ?? $ing['package_content'],
+                        'package_unit' => $n['packageUnit'] ?? $ing['package_unit'],
                         'valid_from' => $n['priceDate'],
                         'source' => $n['priceSource'] ?? 'Importazione',
-                        'supplier' => $ing->supplier,
+                        'supplier' => $ing['supplier'],
                         'agent_name' => $n['agentName'] ?? null,
                         'import_id' => $importId,
                         'created_by' => $userId,
-                        'created_at' => Clock::now(),
-                    ]);
+                        'created_at' => $now,
+                    ];
                 }
             }
             $ids[] = $id;
+        }
+        foreach ($updates as $id => $set) {
+            DB::table('ingredients')->where('id', $id)->update([...$set, 'updated_at' => $now, 'lock_version' => DB::raw('lock_version + 1')]);
+        }
+        foreach (array_chunk($inserts, 250) as $batch) {
+            DB::table('ingredients')->insert($batch);
+        }
+        foreach (array_chunk($prices, 250) as $batch) {
+            DB::table('ingredient_prices')->insert($batch);
         }
 
         return $ids;

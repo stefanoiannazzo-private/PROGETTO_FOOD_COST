@@ -60,7 +60,8 @@ final class Jobs
             })
             ->orderBy('run_at')->orderBy('id');
         if ($importId) {
-            $q->where('payload', 'like', '%"importId":"'.$importId.'"%');
+            // MySQL normalizza le colonne JSON (`{"importId": "…"}` con lo spazio): si confronta il valore estratto
+            $q->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(payload, '$.importId')) = ?", [$importId]);
         }
         foreach ($q->limit(5)->get(['id']) as $candidate) {
             $n = DB::table('jobs')->where('id', $candidate->id)

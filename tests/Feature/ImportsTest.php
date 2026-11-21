@@ -234,6 +234,44 @@ class ImportsTest extends TestCase
         $this->assertSame(0, DB::table('ingredients')->where('code', 'NEW-9')->count());
     }
 
+    /** Senza worker: la sola richiesta di avanzamento (GET) fa procedere validazione e applicazione di quell'importazione. */
+    public function test_avanzamento_senza_worker_tramite_polling(): void
+    {
+        $r = $this->uploadListino();
+        $id = $r->body['id'];
+        $this->ok($this->admin->post("/api/imports/{$id}/validate", ['options' => ['headerRow' => 1, 'encoding' => 'latin1', 'delimiter' => ';'], 'mapping' => $r->body['suggestedMapping']]));
+        $imp = $this->ok($this->admin->get("/api/imports/{$id}"));
+        $this->assertSame('validated', $imp['status']);
+        $this->ok($this->admin->post("/api/imports/{$id}/confirm", ['lockVersion' => $imp['lockVersion']]));
+        $this->assertSame('applied', $this->ok($this->admin->get("/api/imports/{$id}"))['status']);
+        $this->assertSame(4, DB::table('ingredients')->count());
+        // il filtro per importazione non tocca i lavori di altre importazioni
+        Jobs::enqueue('import.validate', ['importId' => '00000000-0000-4000-8000-000000000000']);
+        $this->assertSame(0, Jobs::runPending($id, 5));
+    }
+
+    /** Codici generati in sequenza (come Codes::next riga per riga) e conflitto con un codice esplicito successivo. */
+    public function test_codici_generati_in_sequenza(): void
+    {
+        $ok = "Codice;Nome;Contenuto confezione;Unità contenuto\n;Uno;1;kg\nING-00007;Sette;1;kg\n;Otto;1;kg\n";
+        $r = $this->upload($this->admin, 'ingredients', 'seq.csv', $ok);
+        $imp = $this->validate($this->admin, $r->body['id'], $r->body['suggestedMapping']);
+        $this->ok($this->admin->post("/api/imports/{$r->body['id']}/confirm", ['lockVersion' => $imp['lockVersion']]));
+        $this->drain();
+        $this->assertSame(['ING-00001' => 'Uno', 'ING-00007' => 'Sette', 'ING-00008' => 'Otto'], DB::table('ingredients')->orderBy('code')->pluck('name', 'code')->all());
+
+        $clash = "Codice;Nome;Contenuto confezione;Unità contenuto\n;Nove;1;kg\ning-00009;Esplicito;1;kg\n";
+        $r2 = $this->upload($this->admin, 'ingredients', 'clash.csv', $clash);
+        $imp2 = $this->validate($this->admin, $r2->body['id'], $r2->body['suggestedMapping']);
+        $this->assertSame(0, $imp2['summary']['error']);
+        $this->ok($this->admin->post("/api/imports/{$r2->body['id']}/confirm", ['lockVersion' => $imp2['lockVersion']]));
+        $this->drain();
+        $after = $this->ok($this->admin->get("/api/imports/{$r2->body['id']}"));
+        $this->assertSame('failed', $after['status']);
+        $this->assertSame('Riga 3: il codice ing-00009 è stato creato da qualcun altro dopo l’anteprima. Rivalida l’importazione.', $after['error']);
+        $this->assertSame(3, DB::table('ingredients')->count());
+    }
+
     // --- Importazione da XLSX ---
 
     public function test_xlsx_fogli_date_numeri_e_formule(): void
