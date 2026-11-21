@@ -1,0 +1,34 @@
+# Food Cost — instradamento per hosting condiviso (es. Aruba Linux), dove la cartella del dominio
+# è essa stessa la radice web e non si può puntare il DocumentRoot su public/.
+# Tutte le richieste finiscono in public/: il codice dell'applicazione (app/, config/, vendor/, .env, storage/…)
+# non è mai raggiungibile dal web.
+
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+# nessun file nascosto (.env, .git, .htaccess…) né file di progetto servito direttamente
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+<FilesMatch "\.(env|log|sql|sqlite|lock|md|xml|yml|yaml|json|neon|sh|bat|ps1)$">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # HTTPS obbligatorio (rispetta anche un proxy che termina TLS)
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+    RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:\d+)?$
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # tutto dentro public/ (una sola volta)
+    RewriteCond %{REQUEST_URI} !^/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+    # senza mod_rewrite l'applicazione non può funzionare in sicurezza: si blocca tutto
+    Require all denied
+</IfModule>

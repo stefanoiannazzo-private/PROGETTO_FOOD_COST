@@ -1,0 +1,47 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Services\Jobs;
+use App\Support\Clock;
+use Illuminate\Support\Facades\DB;
+use Tests\TestCase;
+
+/** NUOVO: indirizzi per l'hosting condiviso (cron via URL e passo finale del deploy), protetti da chiave. */
+class SystemTest extends TestCase
+{
+    public function test_cron_disattivato_senza_chiave_e_protetto(): void
+    {
+        config(['foodcost.cron_key' => '']);
+        $this->assertSame(404, $this->client()->get('/api/cron?k=')->status);
+        config(['foodcost.cron_key' => 'chiave-di-prova-lunga']);
+        $this->assertSame(404, $this->client()->get('/api/cron?k=sbagliata')->status);
+        $this->assertSame(404, $this->client()->get('/api/cron')->status);
+    }
+
+    public function test_cron_esegue_i_lavori_e_pulisce_le_sessioni(): void
+    {
+        config(['foodcost.cron_key' => 'chiave-di-prova-lunga']);
+        $uid = $this->createUser('x@example.test', 'X');
+        DB::table('sessions')->insert(['token_hash' => str_repeat('a', 64), 'user_id' => $uid, 'created_at' => Clock::now(), 'expires_at' => Clock::plusSeconds(-86400), 'last_seen_at' => Clock::now()]);
+        Jobs::enqueue('imports.cleanup', []);
+        $r = $this->ok($this->client()->get('/api/cron?k=chiave-di-prova-lunga'));
+        $this->assertTrue($r['ok']);
+        $this->assertGreaterThanOrEqual(1, $r['jobs']);
+        $this->assertSame(0, DB::table('sessions')->count(), json_encode(DB::table('sessions')->get()));
+    }
+
+    public function test_deploy_protetto_da_chiave(): void
+    {
+        config(['foodcost.deploy_key' => '']);
+        $this->assertSame(404, $this->client()->request('POST', '/api/system/deploy', [])->status);
+        config(['foodcost.deploy_key' => 'chiave-deploy-lunga']);
+        // senza chiave, con chiave errata o senza l'header dell'app: nessuna esecuzione
+        $this->assertSame(404, $this->client()->request('POST', '/api/system/deploy', [])->status);
+        $c = $this->client();
+        $this->assertSame(403, $c->request('POST', '/api/system/deploy', [], false)->status);
+        $this->assertSame(404, $this->call('POST', '/api/system/deploy', [], [], [], ['HTTP_X_REQUESTED_WITH' => 'foodcost', 'HTTP_X_DEPLOY_KEY' => 'sbagliata'])->getStatusCode());
+        // il metodo GET non esiste (la SPA non intercetta /api)
+        $this->assertSame(404, $this->call('GET', '/api/system/deploy', [], [], [], ['HTTP_X_DEPLOY_KEY' => 'chiave-deploy-lunga'])->getStatusCode());
+    }
+}

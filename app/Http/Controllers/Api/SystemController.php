@@ -8,7 +8,9 @@ use App\Http\Controllers\Controller;
 use App\Services\Jobs;
 use App\Support\AppError;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Indirizzo per il cron dell'hosting (Aruba: Pannello → Hosting Linux → Processi Cron, ogni 5–15 minuti):
@@ -30,5 +32,31 @@ final class SystemController extends Controller
         DB::table('sessions')->where('expires_at', '<', now('UTC')->format('Y-m-d H:i:s.v'))->delete();
 
         return ['ok' => true, 'jobs' => $done];
+    }
+
+    /**
+     * NUOVO: passo finale del deploy automatico su hosting senza SSH (chiamato da GitHub Actions dopo il caricamento FTP).
+     * Esegue le migrazioni e ricostruisce la cache di configurazione. Protetto da DEPLOY_KEY (header X-Deploy-Key):
+     * con la chiave vuota l'indirizzo non esiste.
+     */
+    public function deploy(Request $req): array
+    {
+        $key = (string) config('foodcost.deploy_key');
+        if ($key === '' || ! hash_equals($key, (string) $req->headers->get('X-Deploy-Key', ''))) {
+            throw AppError::notFound();
+        }
+        @ignore_user_abort(true);
+        @set_time_limit(300);
+        $out = [];
+        foreach ([['migrate', ['--force' => true]], ['optimize:clear', []], ['config:cache', []]] as [$cmd, $args]) {
+            $code = Artisan::call($cmd, $args);
+            $out[] = ['command' => $cmd, 'exit' => $code, 'output' => trim(Artisan::output())];
+            if ($code !== 0) {
+                throw new AppError(500, 'deploy_failed', "Comando {$cmd} non riuscito.", ['steps' => $out]);
+            }
+        }
+        Log::info('deploy completato', ['steps' => array_column($out, 'command')]);
+
+        return ['ok' => true, 'steps' => $out];
     }
 }

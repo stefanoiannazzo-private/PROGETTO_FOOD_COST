@@ -23,7 +23,8 @@ final class Clock
 
     public static function plusSeconds(int $seconds): string
     {
-        return (new DateTimeImmutable('now', new DateTimeZone('UTC')))->modify("+{$seconds} seconds")->format('Y-m-d H:i:s.v');
+        // segno esplicito: "+-600 seconds" sarebbe interpretato da PHP come +600
+        return (new DateTimeImmutable('now', new DateTimeZone('UTC')))->modify(sprintf('%+d seconds', $seconds))->format('Y-m-d H:i:s.v');
     }
 
     /** "2026-11-21 18:00:00.123" (UTC) → "2026-11-21T18:00:00.123Z", come Date.toISOString(). */

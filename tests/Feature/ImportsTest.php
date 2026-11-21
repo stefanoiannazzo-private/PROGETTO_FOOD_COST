@@ -272,6 +272,18 @@ class ImportsTest extends TestCase
         $this->assertSame(3, DB::table('ingredients')->count());
     }
 
+    /** Conservazione: solo le importazioni più vecchie di IMPORT_RETENTION_DAYS perdono file e righe di staging. */
+    public function test_pulizia_solo_delle_importazioni_scadute(): void
+    {
+        $old = $this->uploadListino()->body['id'];
+        $recent = $this->uploadListino()->body['id'];
+        DB::table('imports')->where('id', $old)->update(['created_at' => Clock::plusSeconds(-31 * 86400)]);
+        $this->assertSame(1, Jobs::cleanupImports());
+        $this->assertSame('', DB::table('imports')->where('id', $old)->value('storage_path'));
+        $this->assertNotSame('', DB::table('imports')->where('id', $recent)->value('storage_path'));
+        $this->assertTrue($this->ok($this->admin->get("/api/imports/{$recent}"))['fileAvailable']);
+    }
+
     // --- Importazione da XLSX ---
 
     public function test_xlsx_fogli_date_numeri_e_formule(): void

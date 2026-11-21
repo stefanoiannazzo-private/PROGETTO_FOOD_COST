@@ -1,0 +1,68 @@
+# Ambiente locale di sviluppo e prova (Docker Desktop su Windows).
+#   docker compose up -d --build        → http://localhost:8080  (Apache + PHP 8.3 + MySQL 8, come l'hosting)
+#   docker compose --profile dev up -d  → in più l'interfaccia Vite con ricarica automatica su http://localhost:5173
+# Credenziali e password qui sotto valgono SOLO in locale.
+services:
+  app:
+    build: { context: ., dockerfile: docker/php/Dockerfile }
+    ports: ["8080:80"]
+    volumes: [".:/var/www/html"]
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8080
+      ALLOWED_ORIGINS: http://localhost:8080,http://localhost:5173
+      COOKIE_SECURE: "false"
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: foodcost
+      DB_USERNAME: foodcost
+      DB_PASSWORD: foodcost-locale
+      CACHE_STORE: database
+      SESSION_DRIVER: array
+      QUEUE_CONNECTION: sync
+      MAIL_MAILER: log
+      DEV_EXPOSE_TOKENS: "true"
+      CRON_KEY: chiave-cron-locale
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-Demo-locale-2026}
+    depends_on:
+      db: { condition: service_healthy }
+      assets: { condition: service_completed_successfully }
+
+  db:
+    image: mysql:8.0
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci", "--default-time-zone=+00:00"]
+    environment:
+      MYSQL_DATABASE: foodcost
+      MYSQL_USER: foodcost
+      MYSQL_PASSWORD: foodcost-locale
+      MYSQL_ROOT_PASSWORD: root-locale
+    ports: ["3307:3306"]
+    volumes: [db-data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot-locale"]
+      interval: 5s
+      retries: 30
+
+  # compila l'interfaccia una volta all'avvio (public/app)
+  assets:
+    image: node:22-alpine
+    working_dir: /src/resources/frontend
+    volumes: [".:/src", "frontend-modules:/src/resources/frontend/node_modules"]
+    command: sh -c "npm ci --no-audit --no-fund && npm run build"
+
+  # interfaccia in sviluppo con ricarica automatica (facoltativa)
+  vite:
+    profiles: ["dev"]
+    image: node:22-alpine
+    working_dir: /src/resources/frontend
+    volumes: [".:/src", "frontend-modules:/src/resources/frontend/node_modules"]
+    environment: { API_URL: "http://app:80" }
+    command: sh -c "npm ci --no-audit --no-fund && npx vite --host 0.0.0.0"
+    ports: ["5173:5173"]
+    depends_on: [app]
+
+volumes:
+  db-data:
+  frontend-modules:

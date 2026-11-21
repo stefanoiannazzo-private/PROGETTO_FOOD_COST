@@ -18,4 +18,6 @@ return [
     'rate_limit_in_tests' => false,
     // chiave per l'indirizzo del cron dell'hosting (/api/cron?k=...); vuota = indirizzo disattivato
     'cron_key' => (string) env('CRON_KEY', ''),
+    // chiave del passo finale del deploy automatico (POST /api/system/deploy, header X-Deploy-Key); vuota = disattivato
+    'deploy_key' => (string) env('DEPLOY_KEY', ''),
 ];
