@@ -1,11 +1,13 @@
-# Food Cost: intestazioni di sicurezza anche sui file statici dell'interfaccia (l'API le aggiunge da sé)
+# Food Cost: intestazioni di sicurezza sui file statici dell'interfaccia (le risposte PHP le ricevono già da Laravel:
+# impostarle anche qui le duplicherebbe)
 <IfModule mod_headers.c>
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-Frame-Options "DENY"
-    Header always set Referrer-Policy "same-origin"
-    Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
-    # file con hash nel nome: cache lunga; index.html mai in cache (sempre l'ultima versione)
-    <FilesMatch "\.(js|css|svg|woff2?)$">
+    <FilesMatch "\.(js|css|svg|png|ico|woff2?|html|txt)$">
+        Header set X-Content-Type-Options "nosniff"
+        Header set X-Frame-Options "DENY"
+        Header set Referrer-Policy "same-origin"
+    </FilesMatch>
+    # file con hash nel nome: cache lunga; index.html è servito da Laravel senza cache
+    <FilesMatch "\.(js|css|woff2?)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
 </IfModule>

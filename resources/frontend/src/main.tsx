@@ -3,14 +3,15 @@
  * (cartella app/): gruppo (auth) senza menu, gruppo (app) dentro AppShell. Le pagine sono quelle
  * originali, importate senza modifiche; next/link e next/navigation sono sostituiti da shims/.
  */
-import { StrictMode, Suspense, lazy, useEffect, type ComponentType } from 'react'
+import { StrictMode, useEffect, type ComponentType } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createBrowserRouter, Outlet, RouterProvider, useLocation } from 'react-router'
 import '../app/globals.css'
 import { Providers } from '../app/providers'
 import AppLayout from '../app/(app)/layout'
 
-const pages = import.meta.glob<{ default: ComponentType }>('../app/**/page.tsx')
+// pagine caricate subito (come il prefetch di Next.js): nessuna attesa né stato intermedio durante la navigazione
+const pages = import.meta.glob<{ default: ComponentType }>('../app/**/page.tsx', { eager: true })
 
 /** "../app/(app)/ricette/[id]/page.tsx" → "/ricette/:id" */
 function routePath(file: string): string {
@@ -19,7 +20,7 @@ function routePath(file: string): string {
 }
 
 function page(file: string) {
-  const C = lazy(pages[file]!)
+  const C = pages[file]!.default
   return <C />
 }
 
@@ -39,9 +40,7 @@ function Root() {
   return (
     <Providers>
       <ScrollToTop />
-      <Suspense fallback={null}>
-        <Outlet />
-      </Suspense>
+      <Outlet />
     </Providers>
   )
 }
@@ -49,9 +48,7 @@ function Root() {
 function Shell() {
   return (
     <AppLayout>
-      <Suspense fallback={null}>
-        <Outlet />
-      </Suspense>
+      <Outlet />
     </AppLayout>
   )
 }

@@ -1,0 +1,198 @@
+# Verifica il codice e pubblica l'applicazione sull'hosting (Aruba Linux) via FTPS a ogni push su main,
+# come per ACAT (acat-sito/.github/workflows/deploy.yml).
+#
+# Secrets (GitHub > Settings > Secrets and variables > Actions):
+#   FTP_SERVER, FTP_USERNAME, FTP_PASSWORD   accesso FTP all'hosting
+#   DB_HOST, DB_NAME, DB_USER, DB_PASS       database MySQL dell'hosting (scritti nel .env pubblicato, mai nel repository)
+#   APP_KEY                                  chiave dell'applicazione: base64:... (php artisan key:generate --show)
+#   CRON_KEY                                 chiave del cron dell'hosting (https://<sito>/api/cron?k=<CRON_KEY>)
+#   DEPLOY_KEY                               chiave del passo finale (migrazioni) dopo il caricamento
+#   SMTP_USER, SMTP_PASS                     facoltativi: casella del dominio che invia gli inviti (smtps.aruba.it, porta 465)
+# Variabili (stessa pagina, scheda Variables):
+#   APP_URL       obbligatoria: indirizzo pubblico, es. https://foodcost.example.it
+#   FTP_DIR       cartella del sito sul server (predefinita "/")
+#   FTP_PROTOCOL  "ftps" (predefinito) o "ftp"
+#   SMTP_HOST     predefinito smtps.aruba.it
+# Finché FTP_SERVER non è impostato il workflow esegue solo i test: nessuna pubblicazione.
+name: Verifica e pubblica
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: foodcost_test
+          MYSQL_USER: foodcost
+          MYSQL_PASSWORD: foodcost
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot" --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_mysql, zip, xmlreader, intl
+          coverage: none
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Librerie PHP
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Test (dominio, parità con l'originale, API, importazioni, console SaaS)
+        run: vendor/bin/phpunit
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: resources/frontend/package-lock.json
+
+      - name: "Interfaccia: controllo dei tipi e compilazione"
+        working-directory: resources/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm run build
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Controlla che le credenziali FTP ci siano
+        id: check
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+        run: |
+          if [ -z "$FTP_SERVER" ]; then
+            echo "Credenziali FTP non ancora impostate: nessuna pubblicazione."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: shivammathur/setup-php@v2
+        if: steps.check.outputs.ready == 'true'
+        with:
+          php-version: "8.3"
+          extensions: mbstring, pdo_mysql, zip, xmlreader, intl
+          coverage: none
+        env:
+          COMPOSER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Librerie PHP di produzione
+        if: steps.check.outputs.ready == 'true'
+        run: composer install --no-dev --no-interaction --no-progress --prefer-dist --optimize-autoloader
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: resources/frontend/package-lock.json
+
+      - name: Compila l'interfaccia
+        if: steps.check.outputs.ready == 'true'
+        working-directory: resources/frontend
+        run: npm ci --no-audit --no-fund && npm run build
+
+      - name: Crea la configurazione (.env) dai secrets
+        if: steps.check.outputs.ready == 'true'
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASS: ${{ secrets.DB_PASS }}
+          CRON_KEY: ${{ secrets.CRON_KEY }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          SMTP_HOST: ${{ vars.SMTP_HOST || 'smtps.aruba.it' }}
+        run: |
+          php -r '
+            foreach (["APP_URL","APP_KEY","DB_HOST","DB_NAME","DB_USER","DB_PASS","CRON_KEY","DEPLOY_KEY"] as $k)
+              if (getenv($k) === false || getenv($k) === "") { fwrite(STDERR, "Manca $k\n"); exit(1); }
+            if (!str_starts_with(getenv("APP_URL"), "https://")) { fwrite(STDERR, "APP_URL deve iniziare con https://\n"); exit(1); }
+            if (strlen(getenv("CRON_KEY")) < 24 || strlen(getenv("DEPLOY_KEY")) < 24) { fwrite(STDERR, "CRON_KEY e DEPLOY_KEY: almeno 24 caratteri\n"); exit(1); }
+            $q = fn ($v) => "\"" . addcslashes((string) $v, "\"\\\$") . "\"";
+            $url = rtrim(getenv("APP_URL"), "/");
+            $e = [
+              "APP_NAME" => "Food Cost", "APP_ENV" => "production", "APP_DEBUG" => "false", "APP_KEY" => getenv("APP_KEY"),
+              "APP_URL" => $url, "APP_TZ" => "Europe/Rome", "APP_LOCALE" => "it", "APP_FALLBACK_LOCALE" => "it",
+              "LOG_CHANNEL" => "daily", "LOG_LEVEL" => "warning",
+              "DB_CONNECTION" => "mysql", "DB_HOST" => getenv("DB_HOST"), "DB_PORT" => "3306",
+              "DB_DATABASE" => getenv("DB_NAME"), "DB_USERNAME" => getenv("DB_USER"), "DB_PASSWORD" => getenv("DB_PASS"),
+              "SESSION_DRIVER" => "array", "SESSION_DAYS" => "14", "COOKIE_SECURE" => "true", "ALLOWED_ORIGINS" => $url,
+              "CACHE_STORE" => "database", "QUEUE_CONNECTION" => "sync", "JOB_SLICE_SECONDS" => "4",
+              "CRON_KEY" => getenv("CRON_KEY"), "DEPLOY_KEY" => getenv("DEPLOY_KEY"),
+              "IMPORT_MAX_BYTES" => "10485760", "IMPORT_MAX_ROWS" => "20000", "IMPORT_RETENTION_DAYS" => "30",
+              "DEV_EXPOSE_TOKENS" => "false", "MAIL_MAILER" => "log", "MAIL_FROM_NAME" => "Food Cost",
+            ];
+            if (getenv("SMTP_USER") && getenv("SMTP_PASS")) {
+              $e["MAIL_MAILER"] = "smtp";
+              $e += ["MAIL_SCHEME" => "smtps", "MAIL_HOST" => getenv("SMTP_HOST"), "MAIL_PORT" => "465",
+                     "MAIL_USERNAME" => getenv("SMTP_USER"), "MAIL_PASSWORD" => getenv("SMTP_PASS"), "MAIL_FROM_ADDRESS" => getenv("SMTP_USER")];
+            }
+            $out = "# Creato dalla pubblicazione automatica: non modificare (si rigenera a ogni push).\n";
+            foreach ($e as $k => $v) $out .= "$k=" . $q($v) . "\n";
+            file_put_contents(".env", $out);
+          '
+
+      - name: Carica l'applicazione via FTP
+        if: steps.check.outputs.ready == 'true'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          local-dir: ./
+          server-dir: ${{ vars.FTP_DIR || '/' }}
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/node_modules/**
+            .github/**
+            docker/**
+            docker-compose*.yml
+            tests/**
+            tools/**
+            resources/frontend/**
+            storage/logs/*.log
+            storage/app/imports/**
+            storage/app/outbox/**
+            storage/framework/cache/data/**
+            storage/framework/views/*.php
+            bootstrap/cache/*.php
+            phpunit.xml
+            *.md
+
+      - name: Migrazioni e cache di configurazione sul server
+        if: steps.check.outputs.ready == 'true'
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        run: |
+          curl --fail-with-body -sS -X POST "${APP_URL%/}/api/system/deploy" \
+            -H "X-Requested-With: foodcost" -H "X-Deploy-Key: $DEPLOY_KEY" -H "Accept: application/json"
+          curl --fail -sS "${APP_URL%/}/api/health"

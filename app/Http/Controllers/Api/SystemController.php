@@ -47,8 +47,17 @@ final class SystemController extends Controller
         }
         @ignore_user_abort(true);
         @set_time_limit(300);
+        // cartelle di lavoro (il caricamento FTP non crea le cartelle vuote)
+        foreach (['app/imports', 'app/outbox', 'framework/cache/data', 'framework/views', 'framework/sessions', 'logs'] as $dir) {
+            if (! is_dir(storage_path($dir))) {
+                @mkdir(storage_path($dir), 0755, true);
+            }
+        }
+        if (! is_dir(base_path('bootstrap/cache'))) {
+            @mkdir(base_path('bootstrap/cache'), 0755, true);
+        }
         $out = [];
-        foreach ([['migrate', ['--force' => true]], ['optimize:clear', []], ['config:cache', []]] as [$cmd, $args]) {
+        foreach ([['migrate', ['--force' => true]], ['config:clear', []], ['route:clear', []], ['config:cache', []]] as [$cmd, $args]) {
             $code = Artisan::call($cmd, $args);
             $out[] = ['command' => $cmd, 'exit' => $code, 'output' => trim(Artisan::output())];
             if ($code !== 0) {

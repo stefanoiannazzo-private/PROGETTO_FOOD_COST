@@ -23,7 +23,8 @@ until php -r 'new PDO("mysql:host=".getenv("DB_HOST").";port=".(getenv("DB_PORT"
 done
 
 php artisan migrate --force
-if [ -n "$DEMO_PASSWORD" ] && [ "$(php artisan tinker --execute='echo \DB::table("users")->count();' 2>/dev/null | tail -1)" = "0" ]; then
+USERS=$(php -r '$p=new PDO("mysql:host=".getenv("DB_HOST").";port=".(getenv("DB_PORT")?:3306).";dbname=".getenv("DB_DATABASE"), getenv("DB_USERNAME"), getenv("DB_PASSWORD")); echo $p->query("SELECT COUNT(*) FROM users")->fetchColumn();')
+if [ -n "$DEMO_PASSWORD" ] && [ "$USERS" = "0" ]; then
   echo "[foodcost] carico i dati dimostrativi"
   php artisan foodcost:seed-demo --password="$DEMO_PASSWORD"
 fi
