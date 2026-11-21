@@ -208,9 +208,8 @@ final class S
 
         return new Schema(function ($v, array $path, Issues $issues) use ($o, $label) {
             if (! is_string($v) && ! is_int($v) && ! is_float($v)) {
-                $issues->add($path, self::typeOf($v) === 'undefined'
-                    ? 'Invalid input: expected string, received undefined'
-                    : 'Invalid input: expected string, received '.self::typeOf($v));
+                // z.union([z.string(), z.number()]): messaggio generico di Zod
+                $issues->add($path, 'Invalid input');
 
                 return S::missing();
             }

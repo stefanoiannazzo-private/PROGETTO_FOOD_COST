@@ -410,7 +410,9 @@ final class RecipeController extends Controller
         ]));
         $cid = $ctx->companyId();
         $date = $body['date'] ?? Clock::today();
-        DB::statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        if (DB::transactionLevel() === 0) {
+            DB::statement('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+        }
 
         return DB::transaction(function () use ($ctx, $body, $cid, $id, $date) {
             $r = DB::table('recipes')->where('id', $id)->where('company_id', $cid)->lockForUpdate()->first(['id', 'current_revision_id', 'title']);

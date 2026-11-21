@@ -146,7 +146,7 @@ final class ImportController extends Controller
         $tmp = tempnam(sys_get_temp_dir(), 'fc').'.xlsx';
         $w = new XlsxWriter;
         $w->openToFile($tmp);
-        $bold = (new Style)->withFontBold(true);
+        $bold = (new Style)->setFontBold();
         $w->getCurrentSheet()->setName('Dati');
         $w->addRow(XRow::fromValues(array_column($fields, 'label'), $bold));
         $w->addRow(XRow::fromValues(array_column($fields, 'example')));

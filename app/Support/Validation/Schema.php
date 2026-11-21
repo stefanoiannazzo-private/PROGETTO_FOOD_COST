@@ -11,7 +11,7 @@ use Closure;
  */
 final class Schema
 {
-    /** @var list<Closure> */
+    /** @var list<array{0: Closure, 1: bool}> */
     private array $steps = [];
 
     private bool $nullable = false;
@@ -44,17 +44,21 @@ final class Schema
         if ($out instanceof Missing && $issues->count() > $before) {
             return $out;
         }
-        foreach ($this->steps as $step) {
+        foreach ($this->steps as [$step, $isRefinement]) {
+            // come Zod: i controlli personalizzati non si eseguono su un valore che ha già errori
+            if ($isRefinement && $issues->count() > $before) {
+                continue;
+            }
             $out = $step($out, $path, $issues);
         }
 
         return $out;
     }
 
-    private function with(Closure $step): self
+    private function with(Closure $step, bool $isRefinement = false): self
     {
         $c = clone $this;
-        $c->steps[] = $step;
+        $c->steps[] = [$step, $isRefinement];
 
         return $c;
     }
@@ -140,7 +144,7 @@ final class Schema
             }
 
             return $v;
-        });
+        }, true);
     }
 
     /** Controlli multipli: $fn($value, $add) dove $add(string $message, array $subPath = []). */
@@ -152,7 +156,7 @@ final class Schema
             }
 
             return $v;
-        });
+        }, true);
     }
 
     public function transform(Closure $fn): self
