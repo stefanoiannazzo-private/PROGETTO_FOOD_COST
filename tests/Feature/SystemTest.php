@@ -44,4 +44,23 @@ class SystemTest extends TestCase
         // il metodo GET non esiste (la SPA non intercetta /api)
         $this->assertSame(404, $this->call('GET', '/api/system/deploy', [], [], [], ['HTTP_X_DEPLOY_KEY' => 'chiave-deploy-lunga'])->getStatusCode());
     }
+
+    public function test_primo_superadmin_senza_ssh(): void
+    {
+        config(['foodcost.deploy_key' => 'chiave-deploy-lunga']);
+        $call = fn (array $b, string $k = 'chiave-deploy-lunga') => $this->call('POST', '/api/system/first-admin', [], [], [], ['HTTP_X_REQUESTED_WITH' => 'foodcost', 'HTTP_X_DEPLOY_KEY' => $k, 'CONTENT_TYPE' => 'application/json'], json_encode($b));
+        $this->assertSame(404, $call(['email' => 'boss@example.test', 'name' => 'Boss'], 'sbagliata')->getStatusCode());
+        $r = $call(['email' => 'Boss@Example.test', 'name' => 'Boss']);
+        $this->assertSame(200, $r->getStatusCode(), $r->getContent());
+        parse_str((string) parse_url($r->json('setPasswordLink'), PHP_URL_QUERY), $q);
+        // nessuna password finché non la imposta chi riceve il link
+        $this->assertSame(401, $this->client()->post('/api/auth/login', ['email' => 'boss@example.test', 'password' => 'qualsiasi-password'])->status);
+        $this->ok($this->client()->post('/api/auth/password/reset', ['token' => $q['token'], 'password' => 'Password-del-boss-1']));
+        $me = $this->ok($this->client()->post('/api/auth/login', ['email' => 'boss@example.test', 'password' => 'Password-del-boss-1']));
+        $this->assertTrue($me['user']['isPlatformAdmin']);
+        // una sola volta
+        $again = $call(['email' => 'altro@example.test', 'name' => 'Altro']);
+        $this->assertSame(409, $again->getStatusCode());
+        $this->assertSame('already_initialized', $again->json('error.code'));
+    }
 }

@@ -23,6 +23,7 @@ Route::get('/health', fn () => ['ok' => true]);
 // Cron dell'hosting (Aruba: "Processi Cron" che richiama un indirizzo): fa avanzare i lavori e la pulizia.
 Route::get('/cron', [SystemController::class, 'cron']);
 Route::post('/system/deploy', [SystemController::class, 'deploy']);
+Route::post('/system/first-admin', [SystemController::class, 'firstAdmin']);
 
 // Accesso e sessione
 Route::post('/auth/login', [AuthController::class, 'login']);

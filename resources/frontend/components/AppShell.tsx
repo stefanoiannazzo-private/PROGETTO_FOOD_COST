@@ -58,6 +58,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     if (error instanceof ApiError && error.status === 401) router.replace(`/accedi?next=${encodeURIComponent(pathname)}`)
   }, [error, router, pathname])
 
+  // NUOVO: il superadmin senza aziende proprie lavora dalla console della piattaforma
+  useEffect(() => {
+    if (me?.user?.isPlatformAdmin && !me.company && me.companies.length === 0 && !pathname.startsWith('/piattaforma')) router.replace('/piattaforma')
+  }, [me, pathname, router])
+
   if (isLoading || !me?.user) {
     return (
       <div className="auth-wrap">

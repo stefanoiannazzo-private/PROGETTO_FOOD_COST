@@ -49,32 +49,32 @@ export default function PlatformPage() {
       {ov.data ? (
         <div className="kpis">
           <div className="kpi">
-            <div className="label">Aziende attive</div>
-            <div className="value">{num(ov.data.activeCompanies)}</div>
+            <div className="k-label">Aziende attive</div>
+            <div className="k-value">{num(ov.data.activeCompanies)}</div>
           </div>
           <div className="kpi">
-            <div className="label">Utenti</div>
-            <div className="value">{num(ov.data.users)}</div>
+            <div className="k-label">Utenti</div>
+            <div className="k-value">{num(ov.data.users)}</div>
           </div>
           <div className="kpi">
-            <div className="label">Ricette</div>
-            <div className="value">{num(ov.data.recipes)}</div>
+            <div className="k-label">Ricette</div>
+            <div className="k-value">{num(ov.data.recipes)}</div>
           </div>
           <div className="kpi">
-            <div className="label">Prodotti · prezzi</div>
-            <div className="value">
+            <div className="k-label">Prodotti · prezzi</div>
+            <div className="k-value">
               {num(ov.data.ingredients)} · {num(ov.data.prices)}
             </div>
           </div>
           <div className="kpi">
-            <div className="label">Fornitori · agenti</div>
-            <div className="value">
+            <div className="k-label">Fornitori · agenti</div>
+            <div className="k-value">
               {num(ov.data.suppliers)} · {num(ov.data.agents)}
             </div>
           </div>
         </div>
       ) : null}
-      <div className="card">
+      <div className="card" style={{ marginTop: 16 }}>
         <div className="toolbar">
           <select className="input" value={archived ? '1' : '0'} onChange={(e) => setArchived(e.target.value === '1')} aria-label="Stato">
             <option value="0">Attive</option>
