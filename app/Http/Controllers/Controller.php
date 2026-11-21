@@ -89,4 +89,18 @@ abstract class Controller
 
         return strtolower($id);
     }
+
+    /**
+     * Più parametri di percorso validati insieme, con i loro nomi (come `z.object({ id, priceId })` dell'originale):
+     * gli errori riportano tutti i campi non validi.
+     *
+     * @param  array<string, string>  $params
+     * @return list<string>
+     */
+    protected function uuids(array $params): array
+    {
+        S::parse(S::object(array_map(fn () => S::uuid(), $params)), $params);
+
+        return array_values(array_map('strtolower', $params));
+    }
 }

@@ -272,8 +272,7 @@ final class EmployeeController extends Controller
     public function deleteCost(Request $req, string $id, string $configId): array
     {
         $ctx = $this->requireCompany($req, 'employees.manage', 'salaries.read');
-        $id = $this->uuid($id);
-        $configId = $this->uuid($configId);
+        [$id, $configId] = $this->uuids(['id' => $id, 'configId' => $configId]);
         $cid = $ctx->companyId();
         $n = DB::table('employee_cost_configs')->where('id', $configId)->where('employee_id', $id)->where('company_id', $cid)->delete();
         if (! $n) {

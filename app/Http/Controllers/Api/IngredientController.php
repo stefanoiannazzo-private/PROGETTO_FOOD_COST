@@ -383,8 +383,7 @@ final class IngredientController extends Controller
     public function deletePrice(Request $req, string $id, string $priceId): array
     {
         $ctx = $this->requireCompany($req, 'ingredients.manage', 'costs.read');
-        $id = $this->uuid($id);
-        $priceId = $this->uuid($priceId);
+        [$id, $priceId] = $this->uuids(['id' => $id, 'priceId' => $priceId]);
         $cid = $ctx->companyId();
         $p = DB::table('ingredient_prices')->where('id', $priceId)->where('ingredient_id', $id)->where('company_id', $cid)->first();
         if (! $p) {

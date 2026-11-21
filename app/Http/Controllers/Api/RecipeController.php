@@ -385,8 +385,7 @@ final class RecipeController extends Controller
     public function revision(Request $req, string $id, string $revisionId)
     {
         $ctx = $this->requireCompany($req, 'recipes.read');
-        $id = $this->uuid($id);
-        $revisionId = $this->uuid($revisionId);
+        [$id, $revisionId] = $this->uuids(['id' => $id, 'revisionId' => $revisionId]);
         $exists = DB::table('recipe_revisions')->where('id', $revisionId)->where('recipe_id', $id)->where('company_id', $ctx->companyId())->exists();
         if (! $exists) {
             throw AppError::notFound('Revisione');

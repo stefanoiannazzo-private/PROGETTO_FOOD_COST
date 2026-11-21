@@ -244,8 +244,7 @@ final class TariffController extends Controller
     public function deleteVersion(Request $req, string $id, string $versionId): array
     {
         $ctx = $this->requireCompany($req, 'tariffs.manage');
-        $id = $this->uuid($id);
-        $versionId = $this->uuid($versionId);
+        [$id, $versionId] = $this->uuids(['id' => $id, 'versionId' => $versionId]);
         $cid = $ctx->companyId();
         $n = DB::table('tariff_versions')->where('id', $versionId)->where('tariff_id', $id)->where('company_id', $cid)->delete();
         if (! $n) {
