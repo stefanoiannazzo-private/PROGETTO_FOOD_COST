@@ -30,3 +30,6 @@ Thumbs.db
 /storage/app/imports
 /resources/frontend/node_modules
 /dist
+
+/public/app
+/resources/frontend/node_modules
