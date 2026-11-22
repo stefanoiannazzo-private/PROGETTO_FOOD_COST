@@ -115,7 +115,26 @@ Su questa macchina 20.000 ingredienti con prezzo si applicano in circa 3 secondi
 - **Sola lettura:** la console non modifica i dati dei ristoratori. Per aiutare un cliente, il superadmin usa "Assisti": entra nell'azienda come amministratore, e ogni accesso viene registrato nell'audit (`assist_started`).
 - **Doppioni tra aziende** (stesso nome e fornitore): vengono solo segnalati ("in N aziende"). Come da decisione, nessuna unificazione automatica.
 
-## 8. Hosting condiviso
+## 8. Coefficiente di redditività (novità)
+
+Pagina `/redditivita`, visibile e modificabile **solo dall'amministratore** dell'azienda (anche il superadmin in assistenza). Risponde alla domanda "quante pizze devo vendere per andare in pari?".
+
+```
+costi fissi mensili  = voci inserite (settimanali × 52/12, annuali ÷ 12; solo quelle in corso a oggi)
+                     + personale: costo aziendale mensile dei dipendenti attivi (disattivabile)
+                     + quote fisse delle bollette NON incluse nel prezzo dell'utenza (riportate a un mese medio di 30,4375 giorni)
+costi fissi a settimana = mensili × 12 ÷ 52;   per giorno di apertura = settimanali ÷ giorni aperti
+guadagno per piatto  = prezzo in menu ÷ (1 + IVA)  −  (ingredienti + energia della ricetta, semilavorati compresi) ÷ porzioni
+piatti a settimana   = costi fissi settimanali ÷ guadagno per piatto, arrotondato per eccesso
+```
+
+- **Manodopera esclusa dal piatto:** gli stipendi si pagano comunque e sono già tra i costi fissi. Toglierli anche dal piatto li conterebbe due volte.
+- **Settimana come riferimento:** il ristoratore indica i giorni di chiusura; la media per giorno di apertura è solo indicativa, perché l'affluenza cambia da giorno a giorno.
+- **Scadenze:** rate e finanziamenti hanno una data di fine; quando finiscono escono dal calcolo da soli.
+- **Dati:** tabelle nuove `fixed_costs`, `profitability_settings` e `recipe_prices` (migrazione `2026_11_22_000001`). Le tabelle e le risposte API dell'originale non cambiano.
+- **Codice:** formula in `app/Domain/Profitability/BreakEven.php`, API in `ProfitabilityController`, pagina in `resources/frontend/app/(app)/redditivita/`.
+
+## 9. Hosting condiviso
 
 - **Instradamento:** `.htaccess` nella radice manda tutto in `public/` e nega file nascosti e file di progetto. Sull'hosting la cartella del dominio è la radice web.
 - **Pubblicazione:** GitHub Actions esegue i test, compila, genera `.env` dai secrets, carica via FTPS e chiama `POST /api/system/deploy` (migrazioni e cache di configurazione, protetto da `DEPLOY_KEY`). Dettagli in DEPLOYMENT.md.

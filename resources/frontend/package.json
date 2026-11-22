@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p .",
-    "e2e": "node e2e/flusso-ricetta.mjs && node e2e/console-saas.mjs"
+    "e2e": "node e2e/flusso-ricetta.mjs && node e2e/console-saas.mjs && node e2e/redditivita.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.105.1",

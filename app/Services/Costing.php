@@ -348,7 +348,7 @@ final class Costing
         return $map;
     }
 
-    private static function loadEmployees(string $companyId, array $ids, string $date): array
+    public static function loadEmployees(string $companyId, array $ids, string $date): array
     {
         $map = [];
         if (! $ids) {

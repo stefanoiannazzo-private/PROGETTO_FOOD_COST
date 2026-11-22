@@ -22,6 +22,14 @@ use Illuminate\Support\Facades\Route;
 Route::get('/health', fn () => ['ok' => true]);
 // Cron dell'hosting (Aruba: "Processi Cron" che richiama un indirizzo): fa avanzare i lavori e la pulizia.
 Route::get('/cron', [SystemController::class, 'cron']);
+
+// NUOVO: coefficiente di redditività (solo amministratore)
+Route::get('/profitability', [\App\Http\Controllers\Api\ProfitabilityController::class, 'show']);
+Route::put('/profitability/settings', [\App\Http\Controllers\Api\ProfitabilityController::class, 'updateSettings']);
+Route::post('/profitability/fixed-costs', [\App\Http\Controllers\Api\ProfitabilityController::class, 'storeFixedCost']);
+Route::put('/profitability/fixed-costs/{id}', [\App\Http\Controllers\Api\ProfitabilityController::class, 'updateFixedCost']);
+Route::delete('/profitability/fixed-costs/{id}', [\App\Http\Controllers\Api\ProfitabilityController::class, 'destroyFixedCost']);
+Route::put('/profitability/prices/{recipeId}', [\App\Http\Controllers\Api\ProfitabilityController::class, 'updatePrice']);
 Route::post('/system/deploy', [SystemController::class, 'deploy']);
 Route::post('/system/first-admin', [SystemController::class, 'firstAdmin']);
 

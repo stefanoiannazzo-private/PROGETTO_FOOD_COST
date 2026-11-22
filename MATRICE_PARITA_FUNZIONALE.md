@@ -11,10 +11,10 @@ Confronto tra l'originale (`PROGETTO_FOOD_COST`, commit `d17db7c`) e il clone La
 | **T** | test API dell'originale portati: `AuthTenancyTest` (17), `CostingFlowTest` (17), `ImportsTest` (15 originali + 4 nuovi), `PerformanceTest` (1) | tutti superati |
 | **C** | `tools/parity/compare.mjs`: 66 letture sulle due API avviate in parallelo con gli stessi dati dimostrativi | 64 identiche, 2 differenze spiegate sotto |
 | **A** | `tools/parity/actions.mjs`: 56 scritture (archiviazioni, eliminazioni, inviti, password, stati…) eseguite in sequenza su entrambe le API | **56/56 identiche** |
-| **E** | test nel browser: `e2e/flusso-ricetta.mjs` (lo script dell'originale, invariato) e `e2e/console-saas.mjs` | superati sia con `php artisan serve` sia su Apache + `.htaccess` (Docker) |
+| **E** | test nel browser: `e2e/flusso-ricetta.mjs` (lo script dell'originale, invariato), `e2e/console-saas.mjs` e `e2e/redditivita.mjs` | superati sia con `php artisan serve` sia su Apache + `.htaccess` (Docker) |
 | **V** | `tools/parity/screens.mjs`: 18 schermate di originale e clone confrontate pixel per pixel, con due utenti (amministratore e responsabile) | differenze solo negli orari di creazione dei dati e nel badge di sviluppo di Next |
 
-Totale PHPUnit: **355 test, 5.680 verifiche**.
+Totale PHPUnit: **369 test, 5.758 verifiche**.
 
 Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate · ➕ novità non presente nell'originale · ⛔ assente anche nell'originale.
 
@@ -134,6 +134,18 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 | Statistiche prezzi per prodotto, fornitore, agente, azienda | `test_statistiche_prezzi…`, E |
 | Modalità assistenza registrata nell'audit | `test_modalita_assistenza_registrata`, E |
 | Primo superadmin senza SSH; deploy e cron protetti da chiave | `SystemTest` (4) |
+
+## 11. Novità: coefficiente di redditività
+
+| Funzionalità | Stato | Prove |
+|---|---|---|
+| Piatti da vendere a settimana, per giorno di apertura e al mese per coprire i costi fissi, con il piatto scelto come unità di misura | ➕ | `BreakEvenTest` (6, compreso l'esempio della pizzeria), `ProfitabilityTest::test_calcolo_completo`, E |
+| Costi fissi (affitto, mutuo, finanziamenti, leasing, assicurazioni, servizi, altro) settimanali, mensili o annuali, con data di fine | ➕ | `ProfitabilityTest`, E |
+| Personale e quote fisse delle bollette aggiunti in automatico, senza doppi conteggi | ➕ | `test_personale_escludibile_e_quote_fisse_bollette` |
+| Giorni di chiusura settimanali | ➕ | `test_calcolo_completo`, E |
+| Prezzo in menu con IVA inclusa per ricetta | ➕ | `test_casi_senza_risposta`, E |
+| Solo l'amministratore (403 anche al responsabile con permesso sulle retribuzioni), isolamento tra aziende | ➕ | `test_solo_amministratore`, `test_isolamento_tra_aziende`, E |
+| Nessun effetto sulle API dell'originale | ✅ | C 64/66 e A 56/56 rieseguiti dopo l'aggiunta, risultati invariati |
 
 ## Differenze rimaste rispetto all'originale
 

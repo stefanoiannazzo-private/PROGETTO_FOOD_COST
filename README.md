@@ -4,7 +4,8 @@ Calcolo del costo di produzione di ricette e preparazioni: ingredienti, energia 
 Clone funzionale di `PROGETTO_FOOD_COST` (Fastify + Next.js + PostgreSQL), riscritto con **Laravel 13 + MySQL 8**
 per l'**hosting condiviso** (Aruba Linux), con la stessa interfaccia compilata con **Vite + React**.
 In più rispetto all'originale ha un livello **SaaS**: un superadmin crea le aziende clienti, consulta ricette e
-prodotti di tutti e confronta ricette e prezzi.
+prodotti di tutti e confronta ricette e prezzi. Ogni amministratore ha inoltre il **coefficiente di redditività**:
+quanti piatti di un certo tipo deve vendere a settimana per coprire i costi fissi.
 
 | Documento | Contenuto |
 |---|---|
@@ -79,7 +80,7 @@ php artisan serve               # http://localhost:8000
 
 ## Test
 
-`vendor/bin/phpunit` esegue **355 test**, divisi in tre gruppi.
+`vendor/bin/phpunit` esegue **369 test**, divisi in tre gruppi.
 
 **Dominio:**
 - tutti i test dell'originale;
@@ -89,6 +90,7 @@ php artisan serve               # http://localhost:8000
 
 **Funzioni nuove:**
 - console superadmin;
+- coefficiente di redditività;
 - agente sui prezzi;
 - voce extra della retribuzione;
 - cron e deploy.

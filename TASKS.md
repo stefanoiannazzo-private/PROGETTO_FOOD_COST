@@ -1,6 +1,6 @@
 # Attività
 
-Stato al 21 novembre 2026. Un'attività è "fatta" solo se le sue prove sono superate (vedi MATRICE_PARITA_FUNZIONALE.md).
+Stato al 22 novembre 2026. Un'attività è "fatta" solo se le sue prove sono superate (vedi MATRICE_PARITA_FUNZIONALE.md).
 Legenda: ✅ fatta · 🔒 in attesa di una tua autorizzazione · ⏳ da fare · ⏸ rinviata per tua decisione.
 
 ## Migrazione (piano dell'analisi)
@@ -33,7 +33,7 @@ Legenda: ✅ fatta · 🔒 in attesa di una tua autorizzazione · ⏳ da fare ·
 | T23 | Test nel browser e confronto visivo | ✅ | E; V (18 schermate) |
 | T24 | Pacchetto per hosting condiviso: `.htaccess`, deploy senza SSH, cron, primo superadmin | ✅ | provato su Apache in Docker |
 | T25 | Documentazione | ✅ | questi file |
-| T26 | Verifica finale | ✅ | confronti automatici con l'originale (C 64/66, A 56/56, V, E) e 355 test |
+| T26 | Verifica finale | ✅ | confronti automatici con l'originale (C 64/66, A 56/56, V, E) e 369 test |
 
 ## Novità SaaS
 
@@ -47,6 +47,7 @@ Legenda: ✅ fatta · 🔒 in attesa di una tua autorizzazione · ⏳ da fare ·
 | S06 | Statistiche dei prezzi per prodotto, fornitore, agente, azienda | ✅ | `PlatformTest`, E |
 | S07 | Agente del fornitore sul prezzo (modulo, storico, importazione) | ✅ | `PlatformTest`, E |
 | S08 | Voce extra della retribuzione (modulo, storico, importazione, calcolo) | ✅ | `PlatformTest`, E |
+| S11 | Coefficiente di redditività: costi fissi con scadenza, personale e quote fisse delle bollette automatici, giorni di chiusura, prezzo in menu con IVA, piatti a settimana e per giorno (solo amministratore) | ✅ | `BreakEvenTest`, `ProfitabilityTest`, E `redditivita.mjs` |
 | S09 | Unificazione dei prodotti doppi tra aziende | ⏸ | tua decisione: "per il momento lasciali così" |
 | S10 | Abbonamenti e pagamenti | ⏸ | tua decisione: non per ora |
 

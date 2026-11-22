@@ -32,6 +32,8 @@ const paths: Record<string, string> = {
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
   layers: 'M12 2 2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+  // NUOVO: icona del coefficiente di redditività
+  trend: 'M3 3v18h18M7 15l4-4 3 3 6-6M15 8h5v5',
 }
 export function Icon({ name, size = 16 }: { name: keyof typeof paths | string; size?: number }) {
   return (

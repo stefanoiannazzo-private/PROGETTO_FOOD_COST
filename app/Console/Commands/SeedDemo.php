@@ -177,6 +177,18 @@ final class SeedDemo extends Command
             'code' => 'PEST', 'title' => 'Pesto al basilico (bozza)', 'category' => 'Salse',
             'revision' => ['components' => [$c($I['basilico'], '200', 'g'), ['kind' => 'ingredient', 'ingredientId' => $I['olio'], 'quantity' => null, 'unit' => 'ml']]],
         ]);
+        // NUOVO — coefficiente di redditività: costi fissi, giorno di chiusura e prezzo in menu della lasagna
+        foreach ([
+            ['name' => 'Affitto locale', 'category' => 'rent', 'amount' => '2500', 'period' => 'monthly', 'validFrom' => '2026-01-01'],
+            ['name' => 'Rate forno combinato', 'category' => 'leasing', 'amount' => '380', 'period' => 'monthly', 'validFrom' => '2025-06-01', 'validTo' => '2028-05-31', 'notes' => '36 rate'],
+            ['name' => 'Assicurazione RC', 'category' => 'insurance', 'amount' => '1200', 'period' => 'yearly', 'validFrom' => '2026-01-01'],
+            ['name' => 'Commercialista', 'category' => 'services', 'amount' => '250', 'period' => 'monthly', 'validFrom' => '2026-01-01'],
+        ] as $fc) {
+            $api->call('POST', '/profitability/fixed-costs', $fc);
+        }
+        $api->call('PUT', "/profitability/prices/{$lasagna}", ['menuPrice' => '14', 'vatPercent' => '10']);
+        $api->call('PUT', '/profitability/settings', ['closedWeekdays' => [1], 'includeStaff' => true, 'referenceRecipeId' => $lasagna]);
+
         $detail = $api->call('GET', "/recipes/{$lasagna}");
         $api->call('POST', "/recipes/{$lasagna}/snapshots", ['label' => 'Listino autunno 2026', 'expectedRevisionId' => $detail['revision']['id']]);
 

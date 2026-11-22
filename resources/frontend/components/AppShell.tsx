@@ -8,13 +8,15 @@ import { api, ApiError } from '@/lib/api'
 import { useMe, useSwitchCompany } from '@/lib/session'
 import { Icon, Skeleton } from './ui'
 
-const NAV: Array<{ href: string; label: string; icon: string; perm?: string }> = [
+const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adminOnly?: boolean }> = [
   { href: '/', label: 'Dashboard', icon: 'home' },
   { href: '/ricette', label: 'Ricette', icon: 'book', perm: 'recipes.read' },
   { href: '/ingredienti', label: 'Ingredienti', icon: 'box', perm: 'recipes.read' },
   { href: '/strumenti', label: 'Strumenti', icon: 'tool', perm: 'recipes.read' },
   { href: '/utenze', label: 'Utenze', icon: 'bolt', perm: 'tariffs.read' },
   { href: '/dipendenti', label: 'Dipendenti', icon: 'users', perm: 'employees.read' },
+  // NUOVO: coefficiente di redditività, solo per l'amministratore dell'azienda
+  { href: '/redditivita', label: 'Redditività', icon: 'trend', adminOnly: true },
   { href: '/importazioni', label: 'Importazioni', icon: 'upload', perm: 'imports.manage' },
   { href: '/utenti', label: 'Utenti', icon: 'key', perm: 'users.manage' },
   { href: '/impostazioni', label: 'Impostazioni', icon: 'settings' },
@@ -116,7 +118,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <nav className="nav" aria-label="Navigazione principale">
           {me.company
-            ? NAV.filter((n) => !n.perm || perms.has(n.perm)).map((n) => (
+            ? NAV.filter((n) => (!n.perm || perms.has(n.perm)) && (!n.adminOnly || me.role === 'admin')).map((n) => (
                 <Link key={n.href} href={n.href} prefetch aria-current={isActive(n.href) ? 'page' : undefined}>
                   <Icon name={n.icon} />
                   {n.label}
