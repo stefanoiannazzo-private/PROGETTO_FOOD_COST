@@ -326,3 +326,44 @@ details > summary::-webkit-details-marker { display: none; }
 .price-preview { font-size: 13px; color: var(--ok); font-weight: 600; }
 details.more > summary { cursor: pointer; font-weight: 600; color: var(--text-2); padding: 4px 0; }
 details.more[open] > summary { margin-bottom: 12px; }
+
+/* NUOVO — tabelle su smartphone: solo il nome, gli altri dati si aprono con la freccia (components/MobileTables.tsx) */
+.m-only { display: none; }
+@media (max-width: 720px) {
+  .m-only { display: block; }
+  .table-wrap:has(> table[data-menhanced]) { overflow-x: visible; }
+  table.table[data-menhanced] { display: block; width: 100%; min-width: 0 !important; }
+  table.table[data-menhanced] > thead { display: none; }
+  table.table[data-menhanced] > tbody { display: block; }
+  table.table[data-menhanced] tr[data-mrow] {
+    display: flex; flex-direction: column; position: relative; cursor: pointer;
+    padding: 12px 44px 12px 14px; border-bottom: 1px solid var(--border);
+  }
+  /* il nome resta sempre in cima, anche quando la riga è aperta */
+  table.table[data-menhanced] tr[data-mrow] > td[data-mprimary] { order: -1; }
+  table.table[data-menhanced] tr[data-mrow] > td { display: none; border: 0; padding: 0; text-align: left; white-space: normal; }
+  table.table[data-menhanced] tr[data-mrow] > td[data-mprimary] { display: block; font-size: 16px; font-weight: 600; line-height: 1.35; }
+  table.table[data-menhanced] tr[data-mrow]::after {
+    content: ''; position: absolute; right: 12px; top: 12px; width: 24px; height: 24px; border-radius: 6px;
+    background: var(--surface-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center / 18px no-repeat;
+    transition: transform .15s;
+  }
+  table.table[data-menhanced] tr[data-mrow][data-mopen]::after { transform: rotate(180deg); }
+  table.table[data-menhanced] tr[data-mrow][data-mopen] { background: color-mix(in srgb, var(--accent) 4%, transparent); }
+  table.table[data-menhanced] tr[data-mrow][data-mopen] > td:not([data-mprimary]) {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 7px 0 0; font-size: 14px; text-align: right;
+  }
+  table.table[data-menhanced] tr[data-mrow][data-mopen] > td[data-mprimary] { margin-bottom: 4px; }
+  table.table[data-menhanced] tr[data-mrow][data-mopen] > td:not([data-mprimary])::before {
+    content: attr(data-label); flex: 0 0 42%; text-align: left; color: var(--text-3); font-size: 13px;
+  }
+  table.table[data-menhanced] tr[data-mrow][data-mopen] > td:empty { display: none; }
+  /* celle di sole azioni (cestino, matita…): a destra, senza etichetta */
+  table.table[data-menhanced] tr[data-mrow][data-mopen] > td[data-label='']::before { content: ''; }
+  table.table[data-menhanced] tr[data-mrow][data-mopen] > td[data-label=''] { justify-content: flex-end; }
+}
+/* NUOVO — scheda ricetta su schermi stretti: il riquadro Costi scorre con la pagina (non copre la composizione) */
+@media (max-width: 1100px) {
+  .summary-panel.summary-static { position: static !important; max-height: none; box-shadow: none; border-radius: var(--radius, 12px); }
+}

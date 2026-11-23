@@ -7,6 +7,7 @@ import { useIsFetching, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '@/lib/api'
 import { useMe, useSwitchCompany } from '@/lib/session'
 import { Icon, Skeleton } from './ui'
+import { MobileTables } from './MobileTables'
 
 const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adminOnly?: boolean }> = [
   { href: '/', label: 'Dashboard', icon: 'home' },
@@ -194,6 +195,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </header>
         <main className="content">{children}</main>
+        <MobileTables />
       </div>
     </div>
   )

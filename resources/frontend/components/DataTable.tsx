@@ -92,6 +92,31 @@ export function DataTable<T extends { id: string }>({
           <span className="addon">{isFetching ? <span className="spinner" aria-label="Aggiornamento" /> : <Icon name="search" size={14} />}</span>
         </div>
         {toolbar}
+        {/* NUOVO: su smartphone le intestazioni non si vedono, quindi l'ordinamento è in una tendina */}
+        {columns.some((c) => c.sortable) ? (
+          <select
+            className="input m-only"
+            style={{ width: 'auto' }}
+            aria-label="Ordina per"
+            value={state.sort ? `${state.sort}:${state.dir}` : ''}
+            onChange={(e) => {
+              const [sort, dir] = e.target.value.split(':')
+              update({ sort: sort ?? '', dir: (dir as 'asc' | 'desc') ?? 'asc' })
+            }}
+          >
+            <option value="">Ordina per…</option>
+            {columns
+              .filter((c) => c.sortable)
+              .flatMap((c) => [
+                <option key={`${c.key}:asc`} value={`${c.key}:asc`}>
+                  {typeof c.label === 'string' ? c.label : c.key} ↑
+                </option>,
+                <option key={`${c.key}:desc`} value={`${c.key}:desc`}>
+                  {typeof c.label === 'string' ? c.label : c.key} ↓
+                </option>,
+              ])}
+          </select>
+        ) : null}
       </div>
       {error ? (
         <div style={{ padding: 12 }}>

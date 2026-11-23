@@ -450,7 +450,7 @@ export default function RecipeDetailPage() {
         </div>
 
         {v ? (
-          <aside className="card summary-panel" data-open="true" style={{ transform: 'none', position: 'sticky' }}>
+          <aside className="card summary-panel summary-static" data-open="true" style={{ transform: 'none', position: 'sticky' }}>
             <div className="card-head">
               <h2>Costi</h2>
               <input type="date" className="input" style={{ width: 150, height: 30 }} value={valDate} max="2100-12-31" onChange={(e) => e.target.value && setValDate(e.target.value)} aria-label="Data di valorizzazione" />

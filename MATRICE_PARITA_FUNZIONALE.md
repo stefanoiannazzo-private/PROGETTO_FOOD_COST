@@ -201,6 +201,14 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 | Creazione azienda: il link di invito viene sempre mostrato con il pulsante «Copia»; l'email parte solo se il superadmin clicca «Invia per email» (`POST /platform/invitations/{id}/send`, con verifica del token) | ➕ | `PlatformTest::test_link_di_invito_sempre_visibile_e_invio_su_richiesta`, E `invito.mjs` |
 | «Nuovo link» per un invito in attesa o scaduto: il link precedente smette di valere, il nuovo vale 7 giorni (`POST /platform/invitations/{id}/renew`) | ➕ | stesso test, E |
 
+## 18. Novità: tabelle su smartphone
+
+| Funzionalità | Stato | Prove |
+|---|---|---|
+| Sotto i 720 px ogni tabella (liste e tabelle delle schede) mostra solo il nome con una freccia; toccando la riga si aprono gli altri dati come «etichetta: valore»; il nome resta il link alla scheda (`components/MobileTables.tsx`, un solo punto per tutte le tabelle) | ➕ | E `mobile.mjs`, `mobile2.mjs` (390 × 844, nessuno scorrimento orizzontale) |
+| Ordinamento delle liste con una tendina su smartphone (le intestazioni sono nascoste) | ➕ | E |
+| Scheda ricetta su schermi stretti: il riquadro Costi non resta fisso sopra la composizione | ✅ | E |
+
 ## Differenze rimaste rispetto all'originale
 
 1. **Ordinamento con valori uguali** (`/ingredients?sort=category`). A parità di categoria entrambe le API ordinano per ID interno, cioè per UUID casuali diversi nei due database. Non è una differenza di logica.
