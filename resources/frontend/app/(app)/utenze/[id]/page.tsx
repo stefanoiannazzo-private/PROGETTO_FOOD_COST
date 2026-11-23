@@ -47,6 +47,8 @@ export default function TariffDetailPage() {
   const can = useCan()
   const q = useQuery({ queryKey: ['tariffs', 'detail', id], queryFn: () => api.get<Detail>(`/tariffs/${id}`) })
   const [affected, setAffected] = useState<AffectedRecipe[]>([])
+  const qc = useQueryClient()
+  const toast = useToast()
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />
   if (!q.data) return <Skeleton rows={8} />
   const t = q.data
@@ -89,6 +91,7 @@ export default function TariffDetailPage() {
                   <th>Origine</th>
                   <th>Dettaglio</th>
                   <th>Inserito</th>
+                  {can('tariffs.manage') ? <th /> : null}
                 </tr>
               </thead>
               <tbody>
@@ -112,6 +115,29 @@ export default function TariffDetailPage() {
                     <td className="faint small">
                       {dateTime(v.created_at)} {v.created_by ? `· ${v.created_by}` : ''}
                     </td>
+                    {/* NUOVO: eliminazione di un valore inserito per errore (l'API esisteva già nell'originale) */}
+                    {can('tariffs.manage') ? (
+                      <td className="num">
+                        <button
+                          className="btn ghost icon sm"
+                          aria-label="Elimina valore"
+                          title="Elimina questo valore"
+                          onClick={async () => {
+                            if (!window.confirm(`Eliminare il valore dal ${date(v.valid_from)}? Gli snapshot già salvati non cambiano.`)) return
+                            try {
+                              const r = await api.del<{ affectedRecipes: AffectedRecipe[] }>(`/tariffs/${t.id}/versions/${v.id}`)
+                              setAffected(r.affectedRecipes)
+                              await qc.invalidateQueries({ queryKey: ['tariffs'] })
+                              qc.invalidateQueries({ queryKey: ['recipes'] })
+                            } catch (e) {
+                              toast(errorMessage(e), 'err')
+                            }
+                          }}
+                        >
+                          <Icon name="trash" />
+                        </button>
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>

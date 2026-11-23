@@ -159,6 +159,7 @@ export default function EmployeeDetailPage() {
                         <th className="num">Ore produttive</th>
                         <th className="num">Costo orario</th>
                         <th className="num">Al minuto</th>
+                        {editable ? <th /> : null}
                       </tr>
                     </thead>
                     <tbody>
@@ -176,6 +177,29 @@ export default function EmployeeDetailPage() {
                             {euro(c.companyHourly, 4)} {c.basis === 'gross_only' ? <span className="badge warn">solo lordo</span> : null}
                           </td>
                           <td className="num">{euro(c.costPerMinute, 4)}</td>
+                          {/* NUOVO: eliminazione di una configurazione inserita per errore (API già presente nell'originale) */}
+                          {editable ? (
+                            <td className="num">
+                              <button
+                                className="btn ghost icon sm"
+                                aria-label="Elimina configurazione"
+                                title="Elimina questa configurazione"
+                                onClick={async () => {
+                                  if (!window.confirm(`Eliminare la configurazione dal ${date(c.validFrom)}? Gli snapshot già salvati non cambiano.`)) return
+                                  try {
+                                    const r = await api.del<{ affectedRecipes: AffectedRecipe[] }>(`/employees/${id}/costs/${c.id}`)
+                                    setAffected(r.affectedRecipes)
+                                    await qc.invalidateQueries({ queryKey: ['employees'] })
+                                    qc.invalidateQueries({ queryKey: ['recipes'] })
+                                  } catch (e) {
+                                    toast(errorMessage(e), 'err')
+                                  }
+                                }}
+                              >
+                                <Icon name="trash" />
+                              </button>
+                            </td>
+                          ) : null}
                         </tr>
                       ))}
                     </tbody>
