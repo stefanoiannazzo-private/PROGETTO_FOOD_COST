@@ -188,6 +188,8 @@ final class RecipeController extends Controller
             'comparison' => $ctx->can('costs.read') ? $comparison : null,
             'snapshots' => $snapshots,
             'usedBy' => Row::all($usedBy),
+            // NUOVO: semilavorati con il loro tempo di preparazione (avviso «da preparare prima»)
+            'subrecipeLeadTimes' => self::leadTimes($cid, $form),
             // NUOVO: prezzo in menu (IVA inclusa) solo per l'amministratore, come la pagina Redditività;
             // per gli altri ruoli i campi non esistono proprio nella risposta
             ...($ctx->role === 'admin' ? ['menuPrice' => (function () use ($r) {
@@ -203,6 +205,22 @@ final class RecipeController extends Controller
                 'canSnapshot' => $ctx->can('snapshots.create'),
             ],
         ];
+    }
+
+    /** @return list<array{recipeId: string, title: string, minutes: string, waitingMinutes: string}> */
+    private static function leadTimes(string $cid, ?array $form): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map(fn ($c) => $c['kind'] === 'recipe' ? $c['recipeId'] : null, $form['components'] ?? []))));
+        if (! $ids) {
+            return [];
+        }
+        $rows = DB::table('recipes as r')->join('recipe_revisions as v', 'v.id', '=', 'r.current_revision_id')
+            ->where('r.company_id', $cid)->whereIn('r.id', $ids)->whereNotNull('v.declared_duration_minutes')
+            ->get(['r.id', 'r.title', 'v.id as rev', 'v.declared_duration_minutes']);
+        $waiting = DB::table('recipe_phases')->whereIn('revision_id', $rows->pluck('rev')->all())->where('is_waiting', true)
+            ->groupBy('revision_id')->selectRaw('revision_id, SUM(duration_minutes) as w')->pluck('w', 'revision_id');
+
+        return $rows->map(fn ($x) => ['recipeId' => $x->id, 'title' => $x->title, 'minutes' => $x->declared_duration_minutes, 'waitingMinutes' => (string) ($waiting[$x->rev] ?? '0')])->values()->all();
     }
 
     /* ------------------------ anteprima dall'editor ------------------------ */

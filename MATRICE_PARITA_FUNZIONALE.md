@@ -209,6 +209,16 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 | Ordinamento delle liste con una tendina su smartphone (le intestazioni sono nascoste) | ➕ | E |
 | Scheda ricetta su schermi stretti: il riquadro Costi non resta fisso sopra la composizione | ✅ | E |
 
+## 19. Novità: fasi di lavorazione con attese
+
+| Funzionalità | Stato | Prove |
+|---|---|---|
+| Editor: una scheda per fase con nome, durata (min o ore) e interruttore «Attesa»; strumenti e persone si aggiungono dentro la fase, con subtotale energia/manodopera | ➕ | E `fasi.mjs` |
+| Fasi di attesa (lievitazione, maturazione, riposo): nessuna manodopera; frigorifero o cella facoltativo in mantenimento per la durata della fase, con la quota di spazio occupato | ➕ | `RecipePhasesTest` (frigo 0,4 kW × 24 h × 0,4 × 10% = 0,192 €) |
+| Tempo totale di preparazione = somma delle durate delle fasi (calcolato dal server), con le ore di attesa | ➕ | `RecipePhasesTest`, E |
+| Scheda ricetta: strumenti e persone raggruppati per fase, con durata, attesa e subtotale | ➕ | E |
+| Avviso nei piatti che usano un semilavorato: «va preparato almeno N h prima (di cui M h di attesa)» | ➕ | `RecipePhasesTest`, E |
+
 ## Differenze rimaste rispetto all'originale
 
 1. **Ordinamento con valori uguali** (`/ingredients?sort=category`). A parità di categoria entrambe le API ordinano per ID interno, cioè per UUID casuali diversi nei due database. Non è una differenza di logica.

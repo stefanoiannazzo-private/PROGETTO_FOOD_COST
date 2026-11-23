@@ -376,3 +376,9 @@ details.more[open] > summary { margin-bottom: 12px; }
   .btn.sm { height: 34px; }
   .drawer-body { overflow-x: hidden; }
 }
+
+/* NUOVO — editor ricetta: una scheda per fase */
+.phase-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--surface); }
+.phase-card.waiting { background: color-mix(in srgb, var(--info) 6%, var(--surface)); border-style: dashed; }
+.phase-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.table tr.phase-row > td { background: var(--surface-2); padding-top: 9px; padding-bottom: 9px; }

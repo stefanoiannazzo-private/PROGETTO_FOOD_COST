@@ -27,6 +27,17 @@ final class Recipes
         return S::decOpt(['gt' => 0, 'max' => 100, 'label' => $label])->transform(fn ($v) => $v ?? '100');
     }
 
+    /** Somma delle durate delle fasi (null se nessuna fase ha una durata). */
+    public static function phasesDuration(array $phases): ?string
+    {
+        $with = array_filter($phases, fn ($p) => self::t($p['durationMinutes'] ?? null));
+        if (! $with) {
+            return null;
+        }
+
+        return \App\Domain\Costing\Dec::sum(array_map(fn ($p) => \App\Domain\Costing\Dec::of($p['durationMinutes']), $with))->toFixed();
+    }
+
     /** Composizione di una revisione come arriva dall'editor. Le fasi sono referenziate con chiavi locali. */
     public static function revisionBody(): Schema
     {
@@ -44,6 +55,8 @@ final class Recipes
                 'description' => S::optText(2000),
                 'startOffsetMinutes' => S::decOpt(['min' => 0, 'label' => 'L’inizio della fase']),
                 'durationMinutes' => S::decOpt(['gt' => 0, 'label' => 'La durata della fase']),
+                // NUOVO: fase di attesa (nessuno lavora, conta solo nel tempo)
+                'waiting' => S::bool()->default(false),
             ]))->max(50)->default([]),
             'components' => S::array(
                 S::object([
@@ -162,7 +175,8 @@ final class Recipes
             'final_unit' => $rev['finalUnit'] ?? null,
             'final_weight_kg' => $rev['finalWeightKg'] ?? null,
             'portions' => $rev['portions'] ?? null,
-            'declared_duration_minutes' => $rev['declaredDurationMinutes'] ?? null,
+            // NUOVO: se le fasi hanno una durata, il tempo complessivo è la loro somma (attese comprese)
+            'declared_duration_minutes' => self::phasesDuration($rev['phases'] ?? []) ?? ($rev['declaredDurationMinutes'] ?? null),
             'yield_notes' => $rev['yieldNotes'] ?? null,
             'created_by' => $userId,
             'created_at' => $now,
@@ -179,6 +193,7 @@ final class Recipes
                 'description' => $p['description'] ?? null,
                 'start_offset_minutes' => $p['startOffsetMinutes'] ?? null,
                 'duration_minutes' => $p['durationMinutes'] ?? null,
+                'is_waiting' => ! empty($p['waiting']),
             ]);
             $phaseIds[$p['key']] = $pid;
         }
@@ -315,7 +330,7 @@ final class Recipes
             'portions' => $rev->portions,
             'declaredDurationMinutes' => $rev->declared_duration_minutes,
             'yieldNotes' => $rev->yield_notes,
-            'phases' => $phases->map(fn ($p) => ['key' => $p->id, 'name' => $p->name, 'description' => $p->description, 'startOffsetMinutes' => $p->start_offset_minutes, 'durationMinutes' => $p->duration_minutes])->all(),
+            'phases' => $phases->map(fn ($p) => ['key' => $p->id, 'name' => $p->name, 'description' => $p->description, 'startOffsetMinutes' => $p->start_offset_minutes, 'durationMinutes' => $p->duration_minutes, 'waiting' => (bool) ($p->is_waiting ?? false)])->all(),
             'components' => $comps->map(fn ($c) => [
                 'id' => $c->id,
                 'kind' => $c->ingredient_id ? 'ingredient' : 'recipe',
@@ -365,7 +380,7 @@ final class Recipes
             'portions' => $form['portions'],
             'declaredDurationMinutes' => $form['declaredDurationMinutes'],
             'yieldNotes' => $form['yieldNotes'],
-            'phases' => array_map(fn ($p) => ['key' => $p['key'], 'name' => $p['name'], 'description' => $p['description'], 'startOffsetMinutes' => $p['startOffsetMinutes'], 'durationMinutes' => $p['durationMinutes']], $form['phases']),
+            'phases' => array_map(fn ($p) => ['key' => $p['key'], 'name' => $p['name'], 'description' => $p['description'], 'startOffsetMinutes' => $p['startOffsetMinutes'], 'durationMinutes' => $p['durationMinutes'], 'waiting' => $p['waiting'] ?? false], $form['phases']),
             'components' => array_map(fn ($c) => ['kind' => $c['kind'], 'ingredientId' => $c['ingredientId'], 'recipeId' => $c['recipeId'], 'quantity' => $c['quantity'], 'unit' => $c['unit'], 'note' => $c['note']], $form['components']),
             'equipmentUses' => array_map(fn ($u) => [
                 'phaseKey' => $u['phaseKey'], 'equipmentId' => $u['equipmentId'], 'segment' => $u['segment'], 'minutes' => $u['minutes'], 'sharePercent' => $u['sharePercent'],

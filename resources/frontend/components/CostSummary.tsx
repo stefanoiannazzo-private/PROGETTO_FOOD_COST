@@ -84,7 +84,7 @@ export function CostSummary({ cost, compact, stale }: { cost: RecipeCost; compac
           <div>{minutes(cost.personMinutes)}</div>
         </div>
         <div>
-          <div className="faint">Durata dichiarata</div>
+          <div className="faint">Tempo di preparazione</div>
           <div>{cost.declaredDurationMinutes ? minutes(cost.declaredDurationMinutes) : '—'}</div>
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError, type AffectedRecipe } from '@/lib/api'
 import type { RecipeCost } from '@/lib/cost-types'
 import { clearLocalDraft, readLocalDraft, useLocalDraft } from '@/lib/hooks'
@@ -55,6 +55,28 @@ export interface PhaseRow {
   key: string
   name: string
   description: string
+  /** NUOVO: durata della fase (minuti sull'orologio) e fase di attesa (nessuno lavora) */
+  durationMinutes: string | null
+  waiting: boolean
+}
+
+/** «2 h 30 min» */
+export function fmtDuration(min: number | string | null | undefined): string {
+  const m = Math.round(Number(min ?? 0))
+  if (!m) return '0 min'
+  // sempre in ore (es. «30 h 45 min»): i giorni abbreviati si confonderebbero con i grammi
+  const h = Math.floor(m / 60)
+  const r = m % 60
+  return [h ? `${h} h` : '', r ? `${r} min` : ''].filter(Boolean).join(' ')
+}
+
+/** Tempo totale calcolato dalle fasi: null se nessuna fase ha una durata. */
+export function phaseTotals(phases: Array<{ durationMinutes: string | null; waiting: boolean }>) {
+  const withDur = phases.filter((p) => p.durationMinutes && Number(p.durationMinutes) > 0)
+  if (!withDur.length) return null
+  const total = withDur.reduce((t, p) => t + Number(p.durationMinutes), 0)
+  const waiting = withDur.filter((p) => p.waiting).reduce((t, p) => t + Number(p.durationMinutes), 0)
+  return { total, waiting, work: total - waiting }
 }
 export interface EditorState {
   code: string
@@ -112,7 +134,7 @@ export function editorFromRecipe(r: any): EditorState {
     declaredDurationMinutes: rev.declaredDurationMinutes ?? null,
     yieldNotes: rev.yieldNotes ?? '',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    phases: (rev.phases ?? []).map((p: any) => ({ key: p.key, name: p.name, description: p.description ?? '' })),
+    phases: (rev.phases ?? []).map((p: any) => ({ key: p.key, name: p.name, description: p.description ?? '', durationMinutes: p.durationMinutes ?? null, waiting: !!p.waiting })),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     components: (rev.components ?? []).map((c: any) => ({ key: key(), kind: c.kind, ingredientId: c.ingredientId, recipeId: c.recipeId, quantity: c.quantity, unit: c.unit, note: c.note ?? '', ref: c.ref })),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,15 +146,17 @@ export function editorFromRecipe(r: any): EditorState {
 
 function revisionPayload(s: EditorState) {
   const phaseKeys = new Set(s.phases.map((p) => p.key))
+  const totals = phaseTotals(s.phases)
   return {
     instructions: s.instructions || null,
     finalQuantity: s.finalQuantity,
     finalUnit: s.finalQuantity ? s.finalUnit : null,
     finalWeightKg: s.finalWeightKg,
     portions: s.portions,
-    declaredDurationMinutes: s.declaredDurationMinutes,
+    // NUOVO: con le durate delle fasi il tempo complessivo è la loro somma
+    declaredDurationMinutes: totals ? String(totals.total) : s.declaredDurationMinutes,
     yieldNotes: s.yieldNotes || null,
-    phases: s.phases.map((p) => ({ key: p.key, name: p.name || 'Fase', description: p.description || null })),
+    phases: s.phases.map((p) => ({ key: p.key, name: p.name || 'Fase', description: p.description || null, durationMinutes: p.durationMinutes, waiting: p.waiting })),
     components: s.components.map((c) => ({ kind: c.kind, ingredientId: c.ingredientId, recipeId: c.recipeId, quantity: c.quantity, unit: c.unit, note: c.note || null })),
     equipmentUses: s.equipmentUses.map((u) => ({
       phaseKey: u.phaseKey && phaseKeys.has(u.phaseKey) ? u.phaseKey : null,
@@ -288,6 +312,7 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
     ;[c[i], c[j]] = [c[j]!, c[i]!]
     return c
   }
+  const totalsNow = phaseTotals(s.phases)
   const phaseSelect = (value: string | null, onChange: (v: string | null) => void) => (
     <select className="input" value={value ?? ''} onChange={(e) => onChange(e.target.value || null)} aria-label="Fase">
       <option value="">Nessuna fase</option>
@@ -298,6 +323,157 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
       ))}
     </select>
   )
+
+  /* ---------------------- NUOVO: fasi, strumenti e persone ---------------------- */
+  const addPhase = (waiting: boolean) =>
+    update((x) => ({ ...x, phases: [...x.phases, { key: key(), name: waiting ? 'Attesa' : `Fase ${x.phases.length + 1}`, description: '', durationMinutes: null, waiting }] }))
+  const addUse = (o: PickerOption & { powerType?: string }, p: PhaseRow | null) =>
+    update((x) => ({
+      ...x,
+      equipmentUses: [
+        ...x.equipmentUses,
+        {
+          key: key(),
+          phaseKey: p?.key ?? null,
+          equipmentId: o.id,
+          // in una fase di attesa lo strumento (es. frigorifero) tiene la temperatura per tutta la durata, per la quota di spazio occupato
+          segment: p?.waiting ? 'hold' : 'work',
+          minutes: p?.waiting ? p.durationMinutes : null,
+          sharePercent: p?.waiting ? '10' : '100',
+          sources: null,
+          measuredElectricKwh: null,
+          measuredGasQuantity: null,
+          measuredGasUnit: null,
+          note: '',
+          ref: { name: o.label, powerType: o.powerType ?? 'electric' },
+        },
+      ],
+    }))
+  const addLabor = (o: PickerOption & { jobTitle?: string | null }, phaseKey: string | null) =>
+    update((x) => ({ ...x, labor: [...x.labor, { key: key(), phaseKey, employeeId: o.id, activeMinutes: null, sharePercent: '100', note: '', ref: { name: o.label, jobTitle: o.jobTitle } }] }))
+  const phaseKeySet = new Set(s.phases.map((p) => p.key))
+  const unphasedUses = s.equipmentUses.map((u, i) => ({ u, i })).filter((x) => !x.u.phaseKey || !phaseKeySet.has(x.u.phaseKey))
+  const unphasedLabor = s.labor.map((a, i) => ({ a, i })).filter((x) => !x.a.phaseKey || !phaseKeySet.has(x.a.phaseKey))
+  const phaseSubtotal = (pk: string) => {
+    if (!cost) return null
+    let energy = 0
+    let labor = 0
+    s.equipmentUses.forEach((u, i) => {
+      if (u.phaseKey === pk) energy += Number(lineCost('u', i) ?? 0)
+    })
+    s.labor.forEach((a, i) => {
+      if (a.phaseKey === pk) labor += Number(lineCost('l', i) ?? 0)
+    })
+    return { energy, labor }
+  }
+  const phaseOf = (pk: string | null) => s.phases.find((p) => p.key === pk) ?? null
+
+  const useRow = (u: UseRow, i: number, withPhase: boolean) => {
+    const issues = lineIssues('equipment_use', i)
+    const mixed = u.ref.powerType === 'mixed'
+    const hasGas = u.ref.powerType === 'gas' || mixed
+    const hasEl = u.ref.powerType === 'electric' || mixed
+    const inWaiting = !!phaseOf(u.phaseKey)?.waiting
+    return (
+      <div key={u.key} className="line-row use-row">
+        <div style={{ minWidth: 0 }}>
+          <span className="faint small">🔧 </span>
+          <strong>{u.ref.name}</strong>
+          <div className="row wrap small" style={{ gap: 6, marginTop: 4 }}>
+            <select className="input" style={{ height: 28, width: 'auto' }} value={u.segment} onChange={(e) => setUse(i, { segment: e.target.value as UseRow['segment'] })} aria-label="Segmento">
+              {Object.entries(SEGMENT_LABEL).map(([k, l]) => (
+                <option key={k} value={k}>
+                  {l}
+                </option>
+              ))}
+            </select>
+            {withPhase && s.phases.length ? <div style={{ width: 150 }}>{phaseSelect(u.phaseKey, (v) => setUse(i, { phaseKey: v }))}</div> : null}
+            {mixed ? (
+              <select
+                className="input"
+                style={{ height: 28, width: 'auto' }}
+                value={(u.sources ?? ['electric', 'gas']).join(',')}
+                onChange={(e) => setUse(i, { sources: e.target.value.split(',') as Array<'electric' | 'gas'> })}
+                aria-label="Fonti usate"
+              >
+                <option value="electric,gas">Elettrico + gas</option>
+                <option value="electric">Solo elettrico</option>
+                <option value="gas">Solo gas</option>
+              </select>
+            ) : null}
+          </div>
+          {inWaiting ? <div className="faint small" style={{ marginTop: 2 }}>Quota = parte dello spazio occupata da questa produzione (es. 10% del frigorifero)</div> : null}
+          {u.ref.powerType !== 'manual' ? (
+            <details style={{ marginTop: 4 }}>
+              <summary className="small faint">{u.measuredElectricKwh || u.measuredGasQuantity ? 'Consumo misurato inserito' : 'Inserisci un consumo misurato (sostituisce la stima)'}</summary>
+              <div className="row wrap" style={{ marginTop: 6 }}>
+                {hasEl ? (
+                  <div style={{ width: 150 }}>
+                    <NumberInput value={u.measuredElectricKwh} onChange={(x) => setUse(i, { measuredElectricKwh: x })} suffix="kWh" ariaLabel="kWh misurati" />
+                  </div>
+                ) : null}
+                {hasGas ? (
+                  <div style={{ width: 170 }}>
+                    <NumberInput
+                      value={u.measuredGasQuantity}
+                      onChange={(x) => setUse(i, { measuredGasQuantity: x })}
+                      ariaLabel="Gas misurato"
+                      suffix={
+                        <select className="addon" value={u.measuredGasUnit ?? 'm3'} onChange={(e) => setUse(i, { measuredGasUnit: e.target.value as UseRow['measuredGasUnit'] })} aria-label="Unità gas">
+                          {['m3', 'smc', 'kwh'].map((x) => (
+                            <option key={x} value={x}>
+                              {unitLabel(x)}
+                            </option>
+                          ))}
+                        </select>
+                      }
+                    />
+                  </div>
+                ) : null}
+              </div>
+            </details>
+          ) : (
+            <div className="faint small">manuale: nessun consumo</div>
+          )}
+          {issues.map((x, k) => (
+            <div key={k} className="small" style={{ color: 'var(--err)' }}>
+              {x.message}
+            </div>
+          ))}
+        </div>
+        <NumberInput value={u.minutes} onChange={(x) => setUse(i, { minutes: x })} suffix="min" ariaLabel="Minuti d’uso" invalid={!u.minutes} />
+        <NumberInput value={u.sharePercent} onChange={(x) => setUse(i, { sharePercent: x })} suffix="%" ariaLabel={inWaiting ? 'Quota di spazio occupato' : 'Quota imputata'} />
+        <span className="num small">{costsVisible ? euro(lineCost('u', i)) : ''}</span>
+        <span />
+        <button className="btn ghost icon sm" onClick={() => update((x) => ({ ...x, equipmentUses: x.equipmentUses.filter((_, j) => j !== i) }))} aria-label="Rimuovi uso strumento">
+          <Icon name="x" />
+        </button>
+      </div>
+    )
+  }
+  const laborRow = (a: LaborRow, i: number, withPhase: boolean) => {
+    const issues = lineIssues('labor', i)
+    return (
+      <div key={a.key} className="line-row lab-row">
+        <div style={{ minWidth: 0 }}>
+          <span className="faint small">👤 </span>
+          <strong>{a.ref.name}</strong> <span className="faint small">{a.ref.jobTitle ?? ''}</span>
+          {issues.map((x, k) => (
+            <div key={k} className="small" style={{ color: 'var(--err)' }}>
+              {x.message}
+            </div>
+          ))}
+        </div>
+        {withPhase && s.phases.length ? phaseSelect(a.phaseKey, (v) => setLab(i, { phaseKey: v })) : <span className="faint small">minuti di lavoro attivo</span>}
+        <NumberInput value={a.activeMinutes} onChange={(x) => setLab(i, { activeMinutes: x })} suffix="min" ariaLabel="Minuti attivi" invalid={!a.activeMinutes} />
+        <NumberInput value={a.sharePercent} onChange={(x) => setLab(i, { sharePercent: x })} suffix="%" ariaLabel="Quota imputata" />
+        <span className="num small">{costsVisible && can('salaries.read') ? euro(lineCost('l', i)) : ''}</span>
+        <button className="btn ghost icon sm" onClick={() => update((x) => ({ ...x, labor: x.labor.filter((_, j) => j !== i) }))} aria-label="Rimuovi manodopera">
+          <Icon name="x" />
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="editor">
@@ -384,9 +560,20 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
               </Field>
             </div>
             <div className="grid-2">
-              <Field label="Durata complessiva dichiarata" htmlFor="r-dur" hint="Tempo dall’inizio alla fine: non è la somma di tempi macchina e uomo">
-                <NumberInput id="r-dur" value={s.declaredDurationMinutes} onChange={(x) => update({ declaredDurationMinutes: x })} suffix="min" />
-              </Field>
+              {totalsNow ? (
+                <Field label="Tempo totale di preparazione" hint="Calcolato dalle durate delle fasi qui sotto">
+                  <div className="input" style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-2)', height: 'auto', minHeight: 34, padding: '6px 10px' }}>
+                    <span>
+                      <strong>{fmtDuration(totalsNow.total)}</strong>
+                      {totalsNow.waiting ? <span className="faint small"> · di cui {fmtDuration(totalsNow.waiting)} di attesa</span> : null}
+                    </span>
+                  </div>
+                </Field>
+              ) : (
+                <Field label="Durata complessiva" htmlFor="r-dur" hint="Tempo dall’inizio alla fine. Se indichi la durata delle fasi, si calcola da sola">
+                  <NumberInput id="r-dur" value={s.declaredDurationMinutes} onChange={(x) => update({ declaredDurationMinutes: x })} suffix="min" />
+                </Field>
+              )}
               <Field label="Note su resa e perdite" htmlFor="r-yn">
                 <input id="r-yn" className="input" value={s.yieldNotes} onChange={(e) => update({ yieldNotes: e.target.value })} />
               </Field>
@@ -449,179 +636,98 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
           </div>
         </section>
 
-        {/* -------- fasi e strumenti -------- */}
+        {/* -------- NUOVO: fasi di lavorazione (strumenti e persone dentro ogni fase) -------- */}
         <section className="card" id="fasi">
           <div className="card-head">
-            <h2>Fasi e strumenti</h2>
-            <button className="btn sm" onClick={() => update((x) => ({ ...x, phases: [...x.phases, { key: key(), name: `Fase ${x.phases.length + 1}`, description: '' }] }))}>
+            <h2>Fasi di lavorazione</h2>
+            <button className="btn sm" onClick={() => addPhase(false)}>
               <Icon name="plus" /> Fase
             </button>
           </div>
           <div className="card-body stack">
-            {s.phases.length ? (
-              <div className="stack tight">
-                {s.phases.map((p, i) => (
-                  <div key={p.key} className="row">
-                    <span className="badge">{i + 1}</span>
-                    <input className="input" style={{ maxWidth: 260 }} value={p.name} onChange={(e) => update((x) => ({ ...x, phases: x.phases.map((y, j) => (j === i ? { ...y, name: e.target.value } : y)) }))} aria-label="Nome fase" />
-                    <input className="input grow" value={p.description} placeholder="Descrizione (facoltativa)" onChange={(e) => update((x) => ({ ...x, phases: x.phases.map((y, j) => (j === i ? { ...y, description: e.target.value } : y)) }))} aria-label="Descrizione fase" />
-                    <button className="btn ghost icon sm" onClick={() => update((x) => ({ ...x, phases: move(x.phases, i, -1) }))} aria-label="Sposta su">
-                      <Icon name="up" />
-                    </button>
-                    <button className="btn ghost icon sm" onClick={() => update((x) => ({ ...x, phases: x.phases.filter((_, j) => j !== i) }))} aria-label="Rimuovi fase">
-                      <Icon name="x" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="small muted">Le fasi sono facoltative: servono a organizzare strumenti e manodopera.</p>
-            )}
-            <div className="section-title">Uso degli strumenti</div>
-            <p className="small muted">Preriscaldamento, lavorazione e mantenimento vanno in righe separate, senza sommarli due volte. Se lo strumento è condiviso tra più produzioni, indica la quota imputata a questo lotto.</p>
-            {s.equipmentUses.map((u, i) => {
-              const issues = lineIssues('equipment_use', i)
-              const mixed = u.ref.powerType === 'mixed'
-              const hasGas = u.ref.powerType === 'gas' || mixed
-              const hasEl = u.ref.powerType === 'electric' || mixed
-              return (
-                <div key={u.key} className="line-row use-row">
-                  <div style={{ minWidth: 0 }}>
-                    <strong>{u.ref.name}</strong>
-                    <div className="row wrap small" style={{ gap: 6, marginTop: 4 }}>
-                      <select className="input" style={{ height: 28, width: 'auto' }} value={u.segment} onChange={(e) => setUse(i, { segment: e.target.value as UseRow['segment'] })} aria-label="Segmento">
-                        {Object.entries(SEGMENT_LABEL).map(([k, l]) => (
-                          <option key={k} value={k}>
-                            {l}
-                          </option>
-                        ))}
-                      </select>
-                      {s.phases.length ? <div style={{ width: 150 }}>{phaseSelect(u.phaseKey, (v) => setUse(i, { phaseKey: v }))}</div> : null}
-                      {mixed ? (
-                        <select
-                          className="input"
-                          style={{ height: 28, width: 'auto' }}
-                          value={(u.sources ?? ['electric', 'gas']).join(',')}
-                          onChange={(e) => setUse(i, { sources: e.target.value.split(',') as Array<'electric' | 'gas'> })}
-                          aria-label="Fonti usate"
-                        >
-                          <option value="electric,gas">Elettrico + gas</option>
-                          <option value="electric">Solo elettrico</option>
-                          <option value="gas">Solo gas</option>
-                        </select>
-                      ) : null}
-                    </div>
-                    {u.ref.powerType !== 'manual' ? (
-                      <details style={{ marginTop: 4 }}>
-                        <summary className="small faint">{u.measuredElectricKwh || u.measuredGasQuantity ? 'Consumo misurato inserito' : 'Inserisci un consumo misurato (sostituisce la stima)'}</summary>
-                        <div className="row wrap" style={{ marginTop: 6 }}>
-                          {hasEl ? (
-                            <div style={{ width: 150 }}>
-                              <NumberInput value={u.measuredElectricKwh} onChange={(x) => setUse(i, { measuredElectricKwh: x })} suffix="kWh" ariaLabel="kWh misurati" />
-                            </div>
-                          ) : null}
-                          {hasGas ? (
-                            <div style={{ width: 170 }}>
-                              <NumberInput
-                                value={u.measuredGasQuantity}
-                                onChange={(x) => setUse(i, { measuredGasQuantity: x })}
-                                ariaLabel="Gas misurato"
-                                suffix={
-                                  <select className="addon" value={u.measuredGasUnit ?? 'm3'} onChange={(e) => setUse(i, { measuredGasUnit: e.target.value as UseRow['measuredGasUnit'] })} aria-label="Unità gas">
-                                    {['m3', 'smc', 'kwh'].map((x) => (
-                                      <option key={x} value={x}>
-                                        {unitLabel(x)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                }
-                              />
-                            </div>
-                          ) : null}
-                        </div>
-                      </details>
-                    ) : (
-                      <div className="faint small">manuale: nessun consumo</div>
-                    )}
-                    {issues.map((x, k) => (
-                      <div key={k} className="small" style={{ color: 'var(--err)' }}>
-                        {x.message}
-                      </div>
-                    ))}
-                  </div>
-                  <NumberInput value={u.minutes} onChange={(x) => setUse(i, { minutes: x })} suffix="min" ariaLabel="Minuti d’uso" invalid={!u.minutes} />
-                  <NumberInput value={u.sharePercent} onChange={(x) => setUse(i, { sharePercent: x })} suffix="%" ariaLabel="Quota imputata" />
-                  <span className="num small">{costsVisible ? euro(lineCost('u', i)) : ''}</span>
-                  <span />
-                  <button className="btn ghost icon sm" onClick={() => update((x) => ({ ...x, equipmentUses: x.equipmentUses.filter((_, j) => j !== i) }))} aria-label="Rimuovi uso strumento">
-                    <Icon name="x" />
-                  </button>
-                </div>
-              )
-            })}
-            <div style={{ maxWidth: 420 }}>
-              <AsyncPicker
-                queryKey="equipment"
-                fetchOptions={equipmentOptions}
-                value={null}
-                onSelect={(o: PickerOption & { powerType?: string }) =>
+            <p className="small muted">
+              Dividi la ricetta in fasi, ognuna con la sua <strong>durata</strong>. Dentro ogni fase aggiungi gli <strong>strumenti</strong> usati e le <strong>persone</strong> che ci lavorano (solo i minuti di lavoro attivo). Le fasi di{' '}
+              <strong>attesa</strong> (lievitazione, maturazione, riposo, raffreddamento) contano solo nel tempo di preparazione.
+            </p>
+            {s.phases.map((p, pi) => (
+              <PhaseCard
+                key={p.key}
+                index={pi}
+                phase={p}
+                uses={s.equipmentUses.map((u, i) => ({ u, i })).filter((x) => x.u.phaseKey === p.key)}
+                labor={s.labor.map((a, i) => ({ a, i })).filter((x) => x.a.phaseKey === p.key)}
+                onPhase={(patch) =>
+                  update((x) => {
+                    const old = x.phases[pi]!
+                    const next = { ...old, ...patch }
+                    // in attesa gli strumenti seguono la durata della fase (es. frigorifero per tutta la maturazione)
+                    const follow = next.waiting && patch.durationMinutes !== undefined
+                    return {
+                      ...x,
+                      phases: x.phases.map((y, j) => (j === pi ? next : y)),
+                      equipmentUses: follow ? x.equipmentUses.map((u) => (u.phaseKey === p.key && (!u.minutes || u.minutes === old.durationMinutes) ? { ...u, minutes: next.durationMinutes } : u)) : x.equipmentUses,
+                    }
+                  })
+                }
+                onMoveUp={() => update((x) => ({ ...x, phases: move(x.phases, pi, -1) }))}
+                onRemove={() => {
+                  const busy = s.equipmentUses.some((u) => u.phaseKey === p.key) || s.labor.some((a) => a.phaseKey === p.key)
+                  if (busy && !window.confirm(`Eliminare la fase «${p.name}»? Strumenti e persone della fase restano tra le righe senza fase.`)) return
                   update((x) => ({
                     ...x,
-                    equipmentUses: [
-                      ...x.equipmentUses,
-                      { key: key(), phaseKey: x.phases.at(-1)?.key ?? null, equipmentId: o.id, segment: 'work', minutes: null, sharePercent: '100', sources: null, measuredElectricKwh: null, measuredGasQuantity: null, measuredGasUnit: null, note: '', ref: { name: o.label, powerType: o.powerType ?? 'electric' } },
-                    ],
+                    phases: x.phases.filter((_, j) => j !== pi),
+                    equipmentUses: x.equipmentUses.map((u) => (u.phaseKey === p.key ? { ...u, phaseKey: null } : u)),
+                    labor: x.labor.map((a) => (a.phaseKey === p.key ? { ...a, phaseKey: null } : a)),
                   }))
-                }
-                placeholder="+ Aggiungi uso di uno strumento…"
-                ariaLabel="Aggiungi strumento"
+                }}
+                renderUse={(u, i) => useRow(u, i, false)}
+                renderLabor={(a, i) => laborRow(a, i, false)}
+                addUse={(o) => addUse(o, p)}
+                addLabor={(o) => addLabor(o, p.key)}
+                equipmentOptions={equipmentOptions}
+                employeeOptions={employeeOptions}
+                subtotal={costsVisible ? phaseSubtotal(p.key) : null}
+                salariesVisible={can('salaries.read')}
               />
-            </div>
-          </div>
-        </section>
-
-        {/* -------- manodopera -------- */}
-        <section className="card" id="manodopera">
-          <div className="card-head">
-            <h2>Manodopera</h2>
-            <span className="faint small">minuti di lavoro attivo, non tempo macchina</span>
-          </div>
-          <div className="card-body stack">
-            <p className="small muted">60 minuti di cottura possono richiedere 10 minuti di lavoro: indica solo il tempo in cui la persona lavora davvero. Più dipendenti possono partecipare alla stessa fase.</p>
-            {s.labor.map((a, i) => {
-              const issues = lineIssues('labor', i)
-              return (
-                <div key={a.key} className="line-row lab-row">
-                  <div style={{ minWidth: 0 }}>
-                    <strong>{a.ref.name}</strong> <span className="faint small">{a.ref.jobTitle ?? ''}</span>
-                    {issues.map((x, k) => (
-                      <div key={k} className="small" style={{ color: 'var(--err)' }}>
-                        {x.message}
-                      </div>
-                    ))}
-                  </div>
-                  {s.phases.length ? phaseSelect(a.phaseKey, (v) => setLab(i, { phaseKey: v })) : <span />}
-                  <NumberInput value={a.activeMinutes} onChange={(x) => setLab(i, { activeMinutes: x })} suffix="min" ariaLabel="Minuti attivi" invalid={!a.activeMinutes} />
-                  <NumberInput value={a.sharePercent} onChange={(x) => setLab(i, { sharePercent: x })} suffix="%" ariaLabel="Quota imputata" />
-                  <span className="num small">{costsVisible && can('salaries.read') ? euro(lineCost('l', i)) : ''}</span>
-                  <button className="btn ghost icon sm" onClick={() => update((x) => ({ ...x, labor: x.labor.filter((_, j) => j !== i) }))} aria-label="Rimuovi manodopera">
-                    <Icon name="x" />
-                  </button>
+            ))}
+            {s.phases.length === 0 ? (
+              <div className="row wrap" style={{ gap: 8 }}>
+                <button className="btn" onClick={() => addPhase(false)}>
+                  <Icon name="plus" /> Aggiungi una fase di lavoro
+                </button>
+                <button className="btn" onClick={() => addPhase(true)}>
+                  <Icon name="plus" /> Aggiungi una fase di attesa
+                </button>
+              </div>
+            ) : (
+              <div className="row wrap" style={{ gap: 8 }}>
+                <button className="btn sm" onClick={() => addPhase(false)}>
+                  <Icon name="plus" /> Fase di lavoro
+                </button>
+                <button className="btn sm" onClick={() => addPhase(true)}>
+                  <Icon name="plus" /> Fase di attesa
+                </button>
+              </div>
+            )}
+            {/* righe senza fase: ricette senza fasi o righe di fasi eliminate */}
+            {unphasedUses.length || unphasedLabor.length || s.phases.length === 0 ? (
+              <div className="phase-card">
+                <div className="phase-head">
+                  <strong>{s.phases.length ? 'Senza fase' : 'Strumenti e persone'}</strong>
+                  <span className="faint small">{s.phases.length ? 'scegli la fase dalla tendina di ogni riga' : 'puoi anche non usare le fasi'}</span>
                 </div>
-              )
-            })}
-            <div style={{ maxWidth: 420 }}>
-              <AsyncPicker
-                queryKey="employees"
-                fetchOptions={employeeOptions}
-                value={null}
-                onSelect={(o: PickerOption & { jobTitle?: string | null }) =>
-                  update((x) => ({ ...x, labor: [...x.labor, { key: key(), phaseKey: x.phases.at(-1)?.key ?? null, employeeId: o.id, activeMinutes: null, sharePercent: '100', note: '', ref: { name: o.label, jobTitle: o.jobTitle } }] }))
-                }
-                placeholder="+ Aggiungi dipendente…"
-                ariaLabel="Aggiungi dipendente"
-              />
-            </div>
+                <div className="stack tight">
+                  {unphasedUses.map(({ u, i }) => useRow(u, i, true))}
+                  {unphasedLabor.map(({ a, i }) => laborRow(a, i, true))}
+                  {s.phases.length === 0 ? (
+                    <div className="grid-2">
+                      <AsyncPicker queryKey="equipment" fetchOptions={equipmentOptions} value={null} onSelect={(o: PickerOption & { powerType?: string }) => addUse(o, null)} placeholder="+ Strumento…" ariaLabel="Aggiungi strumento" />
+                      <AsyncPicker queryKey="employees" fetchOptions={employeeOptions} value={null} onSelect={(o: PickerOption & { jobTitle?: string | null }) => addLabor(o, null)} placeholder="+ Persona…" ariaLabel="Aggiungi dipendente" />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -685,6 +791,108 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
 
       {newIngredient !== null ? (
         <CreateIngredientDrawer initialName={newIngredient} onClose={() => setNewIngredient(null)} onCreated={(ing) => addIngredient({ id: ing.id, label: ing.name, sub: ing.code, unit: ing.usageUnit } as PickerOption & { unit: string })} />
+      ) : null}
+    </div>
+  )
+}
+
+/** NUOVO — durata in minuti con unità a scelta (min / h). */
+function DurationInput({ value, onChange, id }: { value: string | null; onChange: (minutes: string | null) => void; id?: string }) {
+  const [unit, setUnit] = useState<'min' | 'h'>(value && Number(value) >= 120 && Number(value) % 30 === 0 ? 'h' : 'min')
+  const shown = value === null || value === '' ? null : unit === 'h' ? String(Number(value) / 60) : value
+  return (
+    <NumberInput
+      id={id}
+      value={shown}
+      onChange={(x) => onChange(x === null || x === '' ? null : unit === 'h' ? String(Math.round(Number(x) * 60 * 100) / 100) : x)}
+      ariaLabel="Durata della fase"
+      suffix={
+        <select className="addon" value={unit} onChange={(e) => setUnit(e.target.value as 'min' | 'h')} aria-label="Unità della durata">
+          <option value="min">min</option>
+          <option value="h">ore</option>
+        </select>
+      }
+    />
+  )
+}
+
+/** NUOVO — una fase: nome, durata, attesa; dentro, strumenti e persone con il subtotale. */
+function PhaseCard({
+  index,
+  phase,
+  uses,
+  labor,
+  onPhase,
+  onMoveUp,
+  onRemove,
+  renderUse,
+  renderLabor,
+  addUse,
+  addLabor,
+  equipmentOptions,
+  employeeOptions,
+  subtotal,
+  salariesVisible,
+}: {
+  index: number
+  phase: PhaseRow
+  uses: Array<{ u: UseRow; i: number }>
+  labor: Array<{ a: LaborRow; i: number }>
+  onPhase: (p: Partial<PhaseRow>) => void
+  onMoveUp: () => void
+  onRemove: () => void
+  renderUse: (u: UseRow, i: number) => ReactNode
+  renderLabor: (a: LaborRow, i: number) => ReactNode
+  addUse: (o: PickerOption & { powerType?: string }) => void
+  addLabor: (o: PickerOption & { jobTitle?: string | null }) => void
+  equipmentOptions: (q: string, signal?: AbortSignal) => Promise<PickerOption[]>
+  employeeOptions: (q: string, signal?: AbortSignal) => Promise<PickerOption[]>
+  subtotal: { energy: number; labor: number } | null
+  salariesVisible: boolean
+}) {
+  return (
+    <div className={`phase-card${phase.waiting ? ' waiting' : ''}`}>
+      <div className="phase-head">
+        <span className="badge">{index + 1}</span>
+        <input className="input" style={{ maxWidth: 240 }} value={phase.name} onChange={(e) => onPhase({ name: e.target.value })} aria-label="Nome fase" placeholder={phase.waiting ? 'es. Lievitazione' : 'es. Impasto'} />
+        <div style={{ width: 150 }}>
+          <DurationInput value={phase.durationMinutes} onChange={(x) => onPhase({ durationMinutes: x })} />
+        </div>
+        <label className="checkbox" title="Nessuno lavora: la fase conta solo nel tempo di preparazione">
+          <input type="checkbox" checked={phase.waiting} onChange={(e) => onPhase({ waiting: e.target.checked })} /> ⏸ Attesa
+        </label>
+        <span className="grow" />
+        <button className="btn ghost icon sm" onClick={onMoveUp} aria-label="Sposta su" disabled={index === 0}>
+          <Icon name="up" />
+        </button>
+        <button className="btn ghost icon sm" onClick={onRemove} aria-label="Rimuovi fase">
+          <Icon name="x" />
+        </button>
+      </div>
+      <input className="input small" value={phase.description} placeholder="Descrizione (facoltativa)" onChange={(e) => onPhase({ description: e.target.value })} aria-label="Descrizione fase" />
+      {phase.waiting ? (
+        <div className="faint small">
+          ⏸ Fase di attesa{phase.durationMinutes ? ` di ${fmtDuration(phase.durationMinutes)}` : ''}: nessuno lavora, conta solo nel tempo di preparazione. Se avviene in frigorifero o in cella puoi aggiungerlo con la quota di spazio occupato.
+        </div>
+      ) : null}
+      <div className="stack tight">
+        {uses.map(({ u, i }) => renderUse(u, i))}
+        {labor.map(({ a, i }) => renderLabor(a, i))}
+      </div>
+      <div className="grid-2">
+        <AsyncPicker queryKey="equipment" fetchOptions={equipmentOptions} value={null} onSelect={addUse} placeholder={phase.waiting ? '+ Frigorifero o cella (facoltativo)…' : '+ Strumento usato in questa fase…'} ariaLabel="Aggiungi strumento alla fase" />
+        {!phase.waiting ? <AsyncPicker queryKey="employees" fetchOptions={employeeOptions} value={null} onSelect={addLabor} placeholder="+ Persona che lavora in questa fase…" ariaLabel="Aggiungi dipendente alla fase" /> : <span />}
+      </div>
+      {subtotal && (uses.length || labor.length) ? (
+        <div className="small faint" style={{ textAlign: 'right' }}>
+          Subtotale fase: energia <strong>{euro(String(subtotal.energy))}</strong>
+          {labor.length && salariesVisible ? (
+            <>
+              {' '}
+              · manodopera <strong>{euro(String(subtotal.labor))}</strong>
+            </>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

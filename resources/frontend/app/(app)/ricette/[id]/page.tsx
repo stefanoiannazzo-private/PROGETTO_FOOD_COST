@@ -11,6 +11,7 @@ import { SEGMENT_LABEL } from '@/lib/labels'
 import { date, dateTime, euro, euroPer, minutes, num, percent, todayIso, unitLabel } from '@/lib/num'
 import { PageHead } from '@/components/AppShell'
 import { CostSummary } from '@/components/CostSummary'
+import { fmtDuration, phaseTotals } from '@/components/RecipeEditor'
 import { Confirm, ErrorBox, errorMessage, Icon, NumberInput, Skeleton, StatusBadge, useToast } from '@/components/ui'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -43,6 +44,7 @@ interface Detail {
   usedBy: Array<{ id: string; code: string; title: string; status: string }>
   permissions: { canEdit: boolean; costsVisible: boolean; salariesVisible: boolean; canSnapshot: boolean; canSetMenuPrice?: boolean }
   menuPrice?: { menuPrice: string; vatPercent: string } | null
+  subrecipeLeadTimes?: Array<{ recipeId: string; title: string; minutes: string; waitingMinutes: string }>
 }
 
 export default function RecipeDetailPage() {
@@ -65,6 +67,8 @@ export default function RecipeDetailPage() {
   const v = r.valuation
   const rev = r.revision
   const phaseName = (pid: string | null) => rev?.phases.find((p: any) => p.key === pid)?.name ?? null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const totals = phaseTotals((rev?.phases ?? []).map((p: any) => ({ durationMinutes: p.durationMinutes ?? null, waiting: !!p.waiting })))
 
   const action = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true)
@@ -197,13 +201,31 @@ export default function RecipeDetailPage() {
               <div className="k-sub">{rev?.finalWeightKg && rev?.portions ? `${num((Number(rev.finalWeightKg) / Number(rev.portions)) * 1000, 0)} g a porzione` : ''}</div>
             </div>
             <div className="kpi">
-              <div className="k-label">Durata dichiarata</div>
-              <div className="k-value">{rev?.declaredDurationMinutes ? minutes(rev.declaredDurationMinutes) : '—'}</div>
+              <div className="k-label">Tempo di preparazione</div>
+              <div className="k-value">{rev?.declaredDurationMinutes ? fmtDuration(rev.declaredDurationMinutes) : '—'}</div>
               <div className="k-sub">
-                macchina {minutes(v?.machineMinutes ?? null)} · persone {minutes(v?.personMinutes ?? null)}
+                {totals?.waiting ? `di cui ${fmtDuration(totals.waiting)} di attesa · ` : ''}lavoro persone {minutes(v?.personMinutes ?? null)}
               </div>
             </div>
           </div>
+
+          {/* NUOVO: semilavorati da preparare in anticipo */}
+          {r.subrecipeLeadTimes?.length ? (
+            <div className="alert info">
+              <Icon name="alert" />
+              <div>
+                {r.subrecipeLeadTimes.map((x) => (
+                  <div key={x.recipeId}>
+                    Usa{' '}
+                    <Link className="link" href={`/ricette/${x.recipeId}`}>
+                      {x.title}
+                    </Link>
+                    : va preparato almeno <strong>{fmtDuration(x.minutes)}</strong> prima{Number(x.waitingMinutes) > 0 ? ` (di cui ${fmtDuration(x.waitingMinutes)} di attesa)` : ''}.
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {/* composizione */}
           <div className="card">
@@ -272,107 +294,115 @@ export default function RecipeDetailPage() {
               <h2>Fasi, strumenti e manodopera</h2>
             </div>
             <div className="card-body stack">
-              {rev?.phases.length ? (
-                <ol style={{ margin: 0, paddingLeft: 18 }}>
-                  {rev.phases.map((p: any) => (
-                    <li key={p.key}>
-                      <strong>{p.name}</strong>
-                      {p.description ? <span className="muted"> — {p.description}</span> : null}
-                    </li>
-                  ))}
-                </ol>
-              ) : null}
-              {rev?.equipmentUses.length ? (
-                <div className="table-wrap">
-                  <table className="table compact">
-                    <thead>
-                      <tr>
-                        <th>Strumento</th>
-                        <th>Fase / segmento</th>
-                        <th className="num">Minuti</th>
-                        <th className="num">Quota</th>
-                        {v ? (
-                          <>
-                            <th>Consumo</th>
-                            <th className="num">Costo</th>
-                          </>
-                        ) : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rev.equipmentUses.map((u: any) => {
-                        const line = v?.equipmentLines.find((l) => l.useId === u.id)
-                        return (
-                          <tr key={u.id}>
-                            <td>
-                              <Link className="link" href={`/strumenti/${u.equipmentId}`}>
-                                {u.ref.name}
-                              </Link>
-                            </td>
-                            <td className="small">
-                              {phaseName(u.phaseKey) ? `${phaseName(u.phaseKey)} · ` : ''}
-                              {SEGMENT_LABEL[u.segment]}
-                            </td>
-                            <td className="num">{u.minutes ? num(u.minutes) : <span className="badge err">mancante</span>}</td>
-                            <td className="num">{percent(u.sharePercent, 1)}</td>
-                            {v ? (
-                              <>
-                                <td className="small">
-                                  {line?.manual
-                                    ? 'manuale'
-                                    : line?.sources.map((s, k) => (
-                                        <div key={k}>
-                                          {s.consumption ? `${num(s.consumption, 3)} ${unitLabel(s.consumptionUnit)}` : '—'} {s.estimated ? <span className="faint">stimato{s.coefficient ? ` (coeff. ${num(s.coefficient, 2)})` : ''}</span> : <span className="badge info">misurato</span>}
-                                          {s.tariffPrice ? <span className="faint"> × {euro(s.tariffPrice, 4)}/{unitLabel(s.tariffUnit)}</span> : null}
-                                        </div>
-                                      ))}
-                                </td>
-                                <td className="num">{euro(line?.cost)}</td>
-                              </>
-                            ) : null}
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="muted small">Nessuno strumento associato.</p>
-              )}
-              {rev?.labor.length ? (
-                <div className="table-wrap">
-                  <table className="table compact">
-                    <thead>
-                      <tr>
-                        <th>Dipendente</th>
-                        <th>Fase</th>
-                        <th className="num">Minuti attivi</th>
-                        <th className="num">Quota</th>
-                        {v && r.permissions.salariesVisible ? <th className="num">Costo</th> : null}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rev.labor.map((a: any) => {
-                        const line = v?.laborLines.find((l) => l.assignmentId === a.id)
-                        return (
-                          <tr key={a.id}>
-                            <td>
-                              {a.ref.name} <span className="faint small">{a.ref.jobTitle ?? ''}</span>
-                              {line?.basis === 'gross_only' && r.permissions.salariesVisible ? <span className="badge warn"> solo lordo</span> : null}
-                            </td>
-                            <td className="small">{phaseName(a.phaseKey) ?? '—'}</td>
-                            <td className="num">{a.activeMinutes ? num(a.activeMinutes) : <span className="badge err">mancante</span>}</td>
-                            <td className="num">{percent(a.sharePercent, 1)}</td>
-                            {v && r.permissions.salariesVisible ? <td className="num">{euro(line?.cost)}</td> : null}
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="muted small">Nessuna manodopera associata.</p>
-              )}
+              {/* NUOVO: strumenti e persone raggruppati per fase, con durata, attese e subtotale */}
+              {(() => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const phases: any[] = rev?.phases ?? []
+                const keys = new Set(phases.map((p) => p.key))
+                const groups = [
+                  ...phases.map((p, i) => ({ key: p.key as string | null, title: `${i + 1} · ${p.name}`, phase: p })),
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  ...((rev?.equipmentUses ?? []).some((u: any) => !u.phaseKey || !keys.has(u.phaseKey)) || (rev?.labor ?? []).some((a: any) => !a.phaseKey || !keys.has(a.phaseKey))
+                    ? [{ key: null, title: phases.length ? 'Senza fase' : 'Strumenti e persone', phase: null }]
+                    : []),
+                ]
+                if (!groups.length) return <p className="muted small">Nessuna fase, nessuno strumento e nessuna persona associati.</p>
+                const showLabCost = !!v && r.permissions.salariesVisible
+                return (
+                  <div className="table-wrap">
+                    <table className="table compact">
+                      <thead>
+                        <tr>
+                          <th>Voce</th>
+                          <th>Dettaglio</th>
+                          <th className="num">Minuti</th>
+                          <th className="num">Quota</th>
+                          {v ? <th className="num">Costo</th> : null}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {groups.map((g) => {
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const uses = (rev?.equipmentUses ?? []).filter((u: any) => (g.key ? u.phaseKey === g.key : !u.phaseKey || !keys.has(u.phaseKey)))
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          const labs = (rev?.labor ?? []).filter((a: any) => (g.key ? a.phaseKey === g.key : !a.phaseKey || !keys.has(a.phaseKey)))
+                          const energy = uses.reduce((t: number, u: { id: string }) => t + Number(v?.equipmentLines.find((l) => l.useId === u.id)?.cost ?? 0), 0)
+                          const labor = labs.reduce((t: number, a: { id: string }) => t + Number(v?.laborLines.find((l) => l.assignmentId === a.id)?.cost ?? 0), 0)
+                          return [
+                            <tr key={`h-${g.key ?? 'none'}`} className="phase-row">
+                              <td colSpan={v ? 5 : 4}>
+                                <div className="row between wrap" style={{ gap: 6 }}>
+                                  <span>
+                                    <strong>{g.title}</strong>
+                                    {g.phase?.durationMinutes ? <span className="faint"> · {fmtDuration(g.phase.durationMinutes)}</span> : null}
+                                    {g.phase?.waiting ? <span className="badge info" style={{ marginLeft: 6 }}>⏸ attesa</span> : null}
+                                    {g.phase?.description ? <span className="muted small"> — {g.phase.description}</span> : null}
+                                  </span>
+                                  {v && (uses.length || labs.length) ? (
+                                    <span className="small faint">
+                                      energia {euro(String(energy))}
+                                      {showLabCost && labs.length ? ` · manodopera ${euro(String(labor))}` : ''}
+                                    </span>
+                                  ) : g.phase?.waiting ? (
+                                    <span className="small faint">nessuno lavora</span>
+                                  ) : null}
+                                </div>
+                              </td>
+                            </tr>,
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            ...uses.map((u: any) => {
+                              const line = v?.equipmentLines.find((l) => l.useId === u.id)
+                              return (
+                                <tr key={u.id}>
+                                  <td>
+                                    <span className="faint">🔧 </span>
+                                    <Link className="link" href={`/strumenti/${u.equipmentId}`}>
+                                      {u.ref.name}
+                                    </Link>
+                                  </td>
+                                  <td className="small">
+                                    {SEGMENT_LABEL[u.segment]}
+                                    {v
+                                      ? line?.manual
+                                        ? ' · manuale'
+                                        : line?.sources.map((src, k) => (
+                                            <div key={k}>
+                                              {src.consumption ? `${num(src.consumption, 3)} ${unitLabel(src.consumptionUnit)}` : '—'} {src.estimated ? <span className="faint">stimato{src.coefficient ? ` (coeff. ${num(src.coefficient, 2)})` : ''}</span> : <span className="badge info">misurato</span>}
+                                              {src.tariffPrice ? <span className="faint"> × {euro(src.tariffPrice, 4)}/{unitLabel(src.tariffUnit)}</span> : null}
+                                            </div>
+                                          ))
+                                      : null}
+                                  </td>
+                                  <td className="num">{u.minutes ? num(u.minutes) : <span className="badge err">mancante</span>}</td>
+                                  <td className="num">{percent(u.sharePercent, 1)}</td>
+                                  {v ? <td className="num">{euro(line?.cost)}</td> : null}
+                                </tr>
+                              )
+                            }),
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            ...labs.map((a: any) => {
+                              const line = v?.laborLines.find((l) => l.assignmentId === a.id)
+                              return (
+                                <tr key={a.id}>
+                                  <td>
+                                    <span className="faint">👤 </span>
+                                    {a.ref.name} <span className="faint small">{a.ref.jobTitle ?? ''}</span>
+                                    {line?.basis === 'gross_only' && r.permissions.salariesVisible ? <span className="badge warn"> solo lordo</span> : null}
+                                  </td>
+                                  <td className="small">lavoro attivo</td>
+                                  <td className="num">{a.activeMinutes ? num(a.activeMinutes) : <span className="badge err">mancante</span>}</td>
+                                  <td className="num">{percent(a.sharePercent, 1)}</td>
+                                  {v ? <td className="num">{showLabCost ? euro(line?.cost) : '—'}</td> : null}
+                                </tr>
+                              )
+                            }),
+                          ]
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              })()}
             </div>
           </div>
 
