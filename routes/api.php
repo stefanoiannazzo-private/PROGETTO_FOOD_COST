@@ -74,6 +74,8 @@ Route::post('/tariffs', [TariffController::class, 'store']);
 Route::patch('/tariffs/{id}', [TariffController::class, 'update']);
 Route::post('/tariffs/{id}/versions', [TariffController::class, 'addVersion']);
 Route::delete('/tariffs/{id}/versions/{versionId}', [TariffController::class, 'deleteVersion']);
+Route::put('/tariffs/{id}/versions/{versionId}', [TariffController::class, 'updateVersion']);
+Route::delete('/tariffs/{id}', [TariffController::class, 'destroy']);
 Route::post('/tariffs/{id}/archive', [TariffController::class, 'archive']);
 Route::post('/tariffs/{id}/restore', [TariffController::class, 'restore']);
 // NUOVO — bollette delle utenze (archivio e lettura automatica)

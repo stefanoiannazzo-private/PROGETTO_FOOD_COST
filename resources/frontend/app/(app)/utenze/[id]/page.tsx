@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type AffectedRecipe } from '@/lib/api'
@@ -85,13 +85,39 @@ export default function TariffDetailPage() {
   const [affected, setAffected] = useState<AffectedRecipe[]>([])
   const qc = useQueryClient()
   const toast = useToast()
+  const router = useRouter()
+  // NUOVO: valore in modifica (riapre il modulo con i dati registrati)
+  const [editing, setEditing] = useState<Version | null>(null)
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />
   if (!q.data) return <Skeleton rows={8} />
   const t = q.data
   const u = unitLabel(t.unit)
   return (
     <>
-      <PageHead title={t.name} sub={`${KIND_LABEL[t.kind]} · prezzo in €/${u}`} />
+      <PageHead
+        title={t.name}
+        sub={`${KIND_LABEL[t.kind]} · prezzo in €/${u}`}
+        actions={
+          can('tariffs.manage') ? (
+            <button
+              className="btn"
+              onClick={async () => {
+                if (!window.confirm(`Eliminare definitivamente l’utenza «${t.name}» con tutti i suoi valori e le bollette caricate? L’operazione non si può annullare.`)) return
+                try {
+                  await api.del(`/tariffs/${t.id}`)
+                  toast(`Utenza «${t.name}» eliminata.`)
+                  await qc.invalidateQueries({ queryKey: ['tariffs'] })
+                  router.push('/utenze')
+                } catch (e) {
+                  toast(errorMessage(e), 'err')
+                }
+              }}
+            >
+              <Icon name="trash" /> Elimina utenza
+            </button>
+          ) : null
+        }
+      />
       <div className="stack loose">
         <AffectedNotice recipes={affected} />
         <div className="kpis">
@@ -111,7 +137,7 @@ export default function TariffDetailPage() {
             </div>
           ) : null}
         </div>
-        {can('tariffs.manage') ? <NewVersion t={t} onDone={(r) => setAffected(r)} /> : null}
+        {can('tariffs.manage') ? <NewVersion key={editing?.id ?? 'nuovo'} t={t} editing={editing} onCancelEdit={() => setEditing(null)} onDone={(r) => { setAffected(r); setEditing(null) }} /> : null}
         <div className="card">
           <div className="card-head">
             <h2>Storico valori</h2>
@@ -132,7 +158,7 @@ export default function TariffDetailPage() {
               </thead>
               <tbody>
                 {t.versions.map((v) => (
-                  <tr key={v.id}>
+                  <tr key={v.id} style={editing?.id === v.id ? { background: 'var(--info-soft)' } : undefined}>
                     <td>
                       {date(v.valid_from)} {v.future ? <span className="badge info">futuro</span> : t.current?.id === v.id ? <span className="badge ok">corrente</span> : null}
                     </td>
@@ -153,7 +179,18 @@ export default function TariffDetailPage() {
                     </td>
                     {/* NUOVO: eliminazione di un valore inserito per errore (l'API esisteva già nell'originale) */}
                     {can('tariffs.manage') ? (
-                      <td className="num">
+                      <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                        <button
+                          className="btn ghost icon sm"
+                          aria-label="Modifica valore"
+                          title="Modifica questo valore"
+                          onClick={() => {
+                            setEditing(v)
+                            setTimeout(() => document.getElementById('nuovo-valore')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+                          }}
+                        >
+                          <Icon name="edit" />
+                        </button>
                         <button
                           className="btn ghost icon sm"
                           aria-label="Elimina valore"
@@ -202,16 +239,17 @@ export default function TariffDetailPage() {
   )
 }
 
-function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) => void }) {
+function NewVersion({ t, onDone, editing = null, onCancelEdit }: { t: Detail; onDone: (r: AffectedRecipe[]) => void; editing?: Version | null; onCancelEdit?: () => void }) {
   const qc = useQueryClient()
   const toast = useToast()
-  const [mode, setMode] = useState<'direct' | 'bill'>('direct')
-  const [validFrom, setValidFrom] = useState(todayIso())
-  const [price, setPrice] = useState<string | null>(null)
-  const [m3ToSmc, setM3ToSmc] = useState<string | null>(t.current?.m3_to_smc ?? null)
-  const [smcToKwh, setSmcToKwh] = useState<string | null>(t.current?.smc_to_kwh ?? null)
-  const [bill, setBill] = useState({ periodFrom: '', periodTo: '', consumption: null as string | null })
-  const [comps, setComps] = useState<BillComponent[]>([
+  const ed = editing
+  const [mode, setMode] = useState<'direct' | 'bill'>(ed?.origin ?? 'direct')
+  const [validFrom, setValidFrom] = useState(ed?.valid_from?.slice(0, 10) ?? todayIso())
+  const [price, setPrice] = useState<string | null>(ed && ed.origin === 'direct' ? ed.price_per_unit : null)
+  const [m3ToSmc, setM3ToSmc] = useState<string | null>((ed ?? t.current)?.m3_to_smc ?? null)
+  const [smcToKwh, setSmcToKwh] = useState<string | null>((ed ?? t.current)?.smc_to_kwh ?? null)
+  const [bill, setBill] = useState({ periodFrom: ed?.bill?.periodFrom ?? '', periodTo: ed?.bill?.periodTo ?? '', consumption: (ed?.bill?.consumption ?? null) as string | null })
+  const [comps, setComps] = useState<BillComponent[]>(ed?.bill?.components?.length ? ed.bill.components : [
     { label: 'Spesa per i consumi', amount: null, kind: 'variable', include: true },
     { label: 'Quote fisse e potenza', amount: null, kind: 'fixed', include: true },
     { label: 'Imposte e IVA', amount: null, kind: 'variable', include: true },
@@ -284,9 +322,11 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
     try {
       const conv = t.kind === 'gas' ? { m3ToSmc, smcToKwh } : {}
       const body = mode === 'direct' ? { mode, validFrom, pricePerUnit: price ?? '', ...conv } : { ...billBody, ...conv, ...(read ? { billFileId: read.id } : {}) }
-      const r = await api.post<{ affectedRecipes: AffectedRecipe[] }>(`/tariffs/${t.id}/versions`, body)
+      const r = ed
+        ? await api.put<{ affectedRecipes: AffectedRecipe[] }>(`/tariffs/${t.id}/versions/${ed.id}`, body)
+        : await api.post<{ affectedRecipes: AffectedRecipe[] }>(`/tariffs/${t.id}/versions`, body)
       onDone(r.affectedRecipes)
-      toast('Nuovo valore registrato. I valori precedenti restano nello storico.')
+      toast(ed ? 'Valore modificato. Le ricette che lo usano sono state ricalcolate.' : 'Nuovo valore registrato. I valori precedenti restano nello storico.')
       setPrice(null)
       setRead(null)
       await qc.invalidateQueries({ queryKey: ['tariffs'] })
@@ -300,9 +340,9 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
   }
 
   return (
-    <div className="card">
+    <div className="card" id="nuovo-valore" style={ed ? { outline: '2px solid var(--info)' } : undefined}>
       <div className="card-head">
-        <h2>Nuovo valore della tariffa</h2>
+        <h2>{ed ? `Modifica il valore dal ${date(ed.valid_from)}` : 'Nuovo valore della tariffa'}</h2>
       </div>
       <div className="card-body stack">
         <div className="alert info" style={{ alignItems: 'center' }}>
@@ -450,8 +490,13 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
         ) : null}
         <div>
           <button className="btn primary" onClick={submit} disabled={busy}>
-            {busy ? <span className="spinner" /> : null} {read && mode === 'bill' ? 'Conferma e registra valore' : 'Registra valore'}
+            {busy ? <span className="spinner" /> : null} {ed ? 'Salva modifiche' : read && mode === 'bill' ? 'Conferma e registra valore' : 'Registra valore'}
           </button>
+          {ed ? (
+            <button className="btn" style={{ marginLeft: 8 }} onClick={onCancelEdit} disabled={busy}>
+              Annulla
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

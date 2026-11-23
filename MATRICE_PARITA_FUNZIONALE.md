@@ -159,6 +159,8 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 | Con il servizio in errore la bolletta si archivia comunque e si compila a mano; limite mensile di letture per azienda (`BILL_AI_MONTHLY_LIMIT`, 40) | ➕ | `test_senza_chiave_archivia_senza_leggere`, `test_errore_del_servizio_non_perde_il_file`, `test_limite_mensile` |
 | Permessi (`tariffs.manage` per caricare/eliminare, `tariffs.read` per consultare) e isolamento tra aziende | ➕ | `test_permessi_e_isolamento` |
 | Eliminazione di un valore di tariffa o di una configurazione di costo del dipendente inserita per errore (API già presenti nell'originale, mancava il pulsante) | ✅ | E `tariffa.mjs` |
+| Modifica di un valore già registrato (riapre il modulo con i dati, ricalcola le ricette; `PUT /tariffs/{id}/versions/{versionId}`) | ➕ | `test_modifica_di_un_valore_registrato`, E `modifica.mjs` |
+| Eliminazione di un'utenza creata per errore con valori e bollette (`DELETE /tariffs/{id}`); rifiutata se uno strumento la usa | ➕ | `test_eliminazione_utenza`, E |
 
 ## Differenze rimaste rispetto all'originale
 

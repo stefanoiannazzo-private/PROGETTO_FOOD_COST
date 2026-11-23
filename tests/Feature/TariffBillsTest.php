@@ -298,4 +298,51 @@ class TariffBillsTest extends TestCase
         $this->assertSame(422, $res->status);
         $this->assertSame(0, DB::table('tariff_versions')->where('tariff_id', $altra)->count());
     }
+
+    public function test_modifica_di_un_valore_registrato(): void
+    {
+        $b = ['mode' => 'bill', 'vatBasis' => 'net', 'validFrom' => '2026-10-01', 'periodFrom' => '2026-10-01', 'periodTo' => '2026-10-31', 'consumption' => '63', 'consumptionUnit' => 'kwh',
+            'components' => [['label' => 'Consumi', 'amount' => '14.65', 'kind' => 'variable', 'include' => true], ['label' => 'Canone', 'amount' => '9', 'kind' => 'fixed', 'include' => false]]];
+        $v = $this->ok($this->a->post("/api/tariffs/{$this->luce}/versions", $b))['id'];
+        $this->ok($this->a->post("/api/tariffs/{$this->luce}/versions", ['mode' => 'direct', 'validFrom' => '2026-11-01', 'pricePerUnit' => '0.5']));
+        // correzione: canone incluso → (14,65 + 9) / 63
+        $b['components'][1]['include'] = true;
+        $this->ok($this->a->put("/api/tariffs/{$this->luce}/versions/{$v}", $b));
+        $row = DB::table('tariff_versions')->where('id', $v)->first();
+        $this->assertSame('0.37539683', $row->price_per_unit);
+        $this->assertTrue(json_decode($row->bill, true)['components'][1]['include']);
+        // stessa data dell'altro valore: rifiutata; la propria data è ammessa (appena fatto)
+        $this->assertSame(409, $this->a->put("/api/tariffs/{$this->luce}/versions/{$v}", [...$b, 'validFrom' => '2026-11-01'])->status);
+        // da bolletta a prezzo diretto
+        $this->ok($this->a->put("/api/tariffs/{$this->luce}/versions/{$v}", ['mode' => 'direct', 'validFrom' => '2026-10-01', 'pricePerUnit' => '0.7']));
+        $row = DB::table('tariff_versions')->where('id', $v)->first();
+        $this->assertSame(['0.70000000', 'direct', null], [$row->price_per_unit, $row->origin, $row->bill]);
+
+        $op = $this->loginAs('op@bol.test');
+        $this->assertSame(403, $op->put("/api/tariffs/{$this->luce}/versions/{$v}", $b)->status);
+        $other = $this->createCompany('Altra2');
+        $this->addMember($other, $this->createUser('y@altra.test', 'Y'), 'admin');
+        $this->assertSame(404, $this->loginAs('y@altra.test')->put("/api/tariffs/{$this->luce}/versions/{$v}", $b)->status);
+    }
+
+    public function test_eliminazione_utenza(): void
+    {
+        $this->fakeAi($this->luceLetta());
+        $bill = $this->ok($this->upload($this->luce))['id'];
+        $this->ok($this->a->post("/api/tariffs/{$this->luce}/versions", ['mode' => 'direct', 'validFrom' => '2026-10-01', 'pricePerUnit' => '0.5']));
+        $path = storage_path('app/'.DB::table('tariff_bills')->where('id', $bill)->value('storage_path'));
+        // collegata a uno strumento: non si elimina
+        $eq = $this->ok($this->a->post('/api/equipment', ['code' => 'F1', 'name' => 'Forno pizza', 'powerType' => 'electric', 'electricPowerKw' => '3', 'usageCoefficient' => '1', 'electricTariffId' => $this->luce]))['id'];
+        $r = $this->a->request('DELETE', "/api/tariffs/{$this->luce}");
+        $this->assertSame([409, 'tariff_in_use'], [$r->status, $r->body['error']['code']]);
+        $this->assertStringContainsString('Forno pizza', $r->body['error']['message']);
+        $this->assertSame(403, $this->loginAs('op@bol.test')->request('DELETE', "/api/tariffs/{$this->gas}")->status);
+        // scollegato lo strumento si elimina tutto, file compreso
+        DB::table('equipment')->where('id', $eq)->update(['electric_tariff_id' => null]);
+        $this->ok($this->a->request('DELETE', "/api/tariffs/{$this->luce}"));
+        $this->assertSame(0, DB::table('tariff_versions')->where('tariff_id', $this->luce)->count());
+        $this->assertSame(0, DB::table('tariff_bills')->where('tariff_id', $this->luce)->count());
+        $this->assertFileDoesNotExist($path);
+        $this->assertSame(404, $this->a->get("/api/tariffs/{$this->luce}")->status);
+    }
 }

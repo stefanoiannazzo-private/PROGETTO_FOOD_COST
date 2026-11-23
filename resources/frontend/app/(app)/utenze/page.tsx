@@ -9,7 +9,7 @@ import { date, euro, unitLabel, todayIso } from '@/lib/num'
 import { useCan } from '@/lib/session'
 import { KIND_LABEL } from '@/lib/labels'
 import { PageHead } from '@/components/AppShell'
-import { Drawer, Empty, ErrorBox, errorMessage, Field, fieldErrors, Icon, NumberInput, Skeleton } from '@/components/ui'
+import { Drawer, Empty, ErrorBox, errorMessage, Field, fieldErrors, Icon, NumberInput, Skeleton, useToast } from '@/components/ui'
 
 interface TariffRow {
   id: string
@@ -25,12 +25,25 @@ export default function TariffsPage() {
   const can = useCan()
   const [archived, setArchived] = useState('0')
   const [creating, setCreating] = useState(false)
+  const qc = useQueryClient()
+  const toast = useToast()
+  // NUOVO: eliminazione di un'utenza creata per errore (con i suoi valori e le bollette archiviate)
+  const remove = async (t: TariffRow) => {
+    if (!window.confirm(`Eliminare definitivamente l’utenza «${t.name}» con tutti i suoi valori e le bollette caricate? L’operazione non si può annullare.`)) return
+    try {
+      await api.del(`/tariffs/${t.id}`)
+      toast(`Utenza «${t.name}» eliminata.`)
+      qc.invalidateQueries({ queryKey: ['tariffs'] })
+    } catch (e) {
+      toast(errorMessage(e), 'err')
+    }
+  }
   const q = useQuery({ queryKey: ['tariffs', archived], queryFn: () => api.get<{ data: TariffRow[] }>('/tariffs', { archived }) })
   return (
     <>
       <PageHead
         title="Utenze e tariffe"
-        sub="Elettricità in €/kWh (energia consumata, non kW di potenza); gas in €/m³, €/Smc o €/kWh. Valori netti IVA."
+        sub="Elettricità in €/kWh (energia consumata, non kW di potenza); gas in €/m³, €/Smc o €/kWh. Dalla bolletta: quanto paghi davvero, voci escludibili una per una."
         actions={
           can('tariffs.manage') ? (
             <button className="btn primary" onClick={() => setCreating(true)}>
@@ -66,6 +79,7 @@ export default function TariffsPage() {
                 <th className="num">Valore corrente</th>
                 <th>Valido dal</th>
                 <th>Origine</th>
+                {can('tariffs.manage') ? <th /> : null}
               </tr>
             </thead>
             <tbody>
@@ -80,6 +94,13 @@ export default function TariffsPage() {
                   <td className="num">{t.current ? `${euro(t.current.pricePerUnit, 4)}/${unitLabel(t.unit)}` : <span className="badge err">Nessun valore</span>}</td>
                   <td>{date(t.current?.validFrom)}</td>
                   <td>{t.current ? (t.current.origin === 'bill' ? <span className="badge info">Media da bolletta</span> : 'Diretta') : '—'}</td>
+                  {can('tariffs.manage') ? (
+                    <td className="num">
+                      <button className="btn ghost icon sm" aria-label={`Elimina ${t.name}`} title="Elimina utenza" onClick={() => void remove(t)}>
+                        <Icon name="trash" />
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

@@ -265,6 +265,74 @@ final class TariffController extends Controller
         return ['ok' => true, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }
 
+    /** NUOVO — modifica di un valore già registrato (correzione di un errore): stesso modulo dell'inserimento. */
+    public function updateVersion(Request $req, string $id, string $versionId): array
+    {
+        $ctx = $this->requireCompany($req, 'tariffs.manage');
+        [$id, $versionId] = $this->uuids(['id' => $id, 'versionId' => $versionId]);
+        $body = $this->parseBody($req, self::versionBody());
+        $cid = $ctx->companyId();
+        $t = DB::table('utility_tariffs')->where('id', $id)->where('company_id', $cid)->first(['id', 'unit', 'kind']);
+        $old = $t ? DB::table('tariff_versions')->where('id', $versionId)->where('tariff_id', $id)->where('company_id', $cid)->first(['id', 'price_per_unit', 'valid_from']) : null;
+        if (! $t || ! $old) {
+            throw AppError::notFound('Valore della tariffa');
+        }
+        [$price, $bill] = self::priceAndBill((array) $t, $body);
+        if (DB::table('tariff_versions')->where('tariff_id', $id)->where('valid_from', $body['validFrom'])->where('id', '<>', $versionId)->exists()) {
+            throw AppError::conflict('version_date_conflict', 'Esiste già un valore con questa data di validità.', ['fields' => ['validFrom' => 'Data già usata.']]);
+        }
+        DB::transaction(function () use ($versionId, $price, $bill, $body, $cid, $id) {
+            DB::table('tariff_versions')->where('id', $versionId)->update([
+                'price_per_unit' => Dec::of($price)->toFixed(8),
+                'valid_from' => $body['validFrom'],
+                'origin' => $body['mode'],
+                'm3_to_smc' => $body['m3ToSmc'] ?? null,
+                'smc_to_kwh' => $body['smcToKwh'] ?? null,
+                'bill' => $bill ? json_encode($bill, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
+                'notes' => $body['notes'] ?? null,
+            ]);
+            if (! empty($body['billFileId'])) {
+                TariffBillController::attach($cid, $id, $body['billFileId'], $versionId);
+            }
+        });
+        Audit::log($cid, $ctx->userId(), 'tariff_version', $versionId, 'updated', ['before' => ['pricePerUnit' => $old->price_per_unit, 'validFrom' => $old->valid_from], 'after' => ['pricePerUnit' => $price, 'validFrom' => $body['validFrom']]]);
+        $affected = Costing::invalidate($cid, 'tariffs', [$id]);
+
+        return ['ok' => true, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
+    }
+
+    /**
+     * NUOVO — eliminazione di un'utenza creata per errore, con valori e bollette archiviate.
+     * Non è possibile se uno strumento la usa (si scollega lo strumento o si archivia l'utenza).
+     */
+    public function destroy(Request $req, string $id): array
+    {
+        $ctx = $this->requireCompany($req, 'tariffs.manage');
+        $id = $this->uuid($id);
+        $cid = $ctx->companyId();
+        $t = DB::table('utility_tariffs')->where('id', $id)->where('company_id', $cid)->first(['id', 'name']);
+        if (! $t) {
+            throw AppError::notFound('Tariffa');
+        }
+        $eq = DB::table('equipment')->where('company_id', $cid)->where(fn ($q) => $q->where('electric_tariff_id', $id)->orWhere('gas_tariff_id', $id))->orderBy('name')->pluck('name');
+        if ($eq->isNotEmpty()) {
+            $names = $eq->take(3)->implode(', ').($eq->count() > 3 ? ' e altri '.($eq->count() - 3) : '');
+            throw AppError::conflict('tariff_in_use', "L’utenza è collegata a {$eq->count()} strumenti ({$names}): collega gli strumenti a un’altra utenza oppure archiviala.");
+        }
+        $files = DB::table('tariff_bills')->where('tariff_id', $id)->where('company_id', $cid)->pluck('storage_path');
+        DB::transaction(function () use ($id) {
+            DB::table('tariff_bills')->where('tariff_id', $id)->delete();
+            DB::table('tariff_versions')->where('tariff_id', $id)->delete();
+            DB::table('utility_tariffs')->where('id', $id)->delete();
+        });
+        foreach ($files as $f) {
+            @unlink(storage_path('app/'.$f));
+        }
+        Audit::log($cid, $ctx->userId(), 'tariff', $id, 'deleted', ['name' => $t->name, 'bills' => $files->count()]);
+
+        return ['ok' => true];
+    }
+
     public function archive(Request $req, string $id): array
     {
         return $this->setArchived($req, $id, true);
@@ -288,7 +356,8 @@ final class TariffController extends Controller
         return ['ok' => true];
     }
 
-    private static function insertVersion(string $companyId, string $userId, array $t, array $body): string
+    /** Prezzo e dettaglio da bolletta di un valore (comune a inserimento e modifica). @return array{0:string,1:?array} */
+    private static function priceAndBill(array $t, array $body): array
     {
         $bill = null;
         if ($body['mode'] === 'direct') {
@@ -318,6 +387,13 @@ final class TariffController extends Controller
         if ($t['kind'] !== 'gas' && (! empty($body['m3ToSmc']) || ! empty($body['smcToKwh']))) {
             throw AppError::badRequest('validation_failed', 'I coefficienti di conversione si applicano solo alle tariffe gas.');
         }
+
+        return [$price, $bill];
+    }
+
+    private static function insertVersion(string $companyId, string $userId, array $t, array $body): string
+    {
+        [$price, $bill] = self::priceAndBill($t, $body);
         if (DB::table('tariff_versions')->where('tariff_id', $t['id'])->where('valid_from', $body['validFrom'])->exists()) {
             throw AppError::conflict('version_date_conflict', 'Esiste già un valore con questa data di validità.', ['fields' => ['validFrom' => 'Data già usata.']]);
         }
