@@ -116,21 +116,43 @@ export default function ProfitabilityPage() {
                   className="input"
                   value={refId ?? ''}
                   onChange={(e) => saveSettings({ referenceRecipeId: e.target.value || null })}
-                  disabled={priced.length === 0}
+                  disabled={d.dishes.length === 0}
                   style={{ minWidth: 280 }}
                 >
-                  {priced.length === 0 ? <option value="">Nessun piatto con prezzo in menu</option> : null}
-                  {priced.map((x) => (
-                    <option key={x.recipeId} value={x.recipeId}>
-                      {x.title} — {euro(x.menuPrice)}
-                    </option>
-                  ))}
+                  {/* NUOVO: tutte le ricette sono selezionabili; quelle senza prezzo si completano qui sotto */}
+                  {d.dishes.length === 0 ? <option value="">Nessuna ricetta: creane una</option> : !ref ? <option value="">— scegli un piatto —</option> : null}
+                  {priced.length ? (
+                    <optgroup label="Con prezzo in menu">
+                      {priced.map((x) => (
+                        <option key={x.recipeId} value={x.recipeId}>
+                          {x.title} — {euro(x.menuPrice)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  {d.dishes.some((x) => x.menuPrice === null) ? (
+                    <optgroup label="Senza prezzo in menu (lo inserisci subito dopo)">
+                      {d.dishes
+                        .filter((x) => x.menuPrice === null)
+                        .map((x) => (
+                          <option key={x.recipeId} value={x.recipeId}>
+                            {x.title}
+                            {x.status === 'draft' ? ' (bozza)' : ''}
+                          </option>
+                        ))}
+                    </optgroup>
+                  ) : null}
                 </select>
               </Field>
+              {ref && ref.menuPrice === null ? <QuickPrice key={ref.recipeId} dish={ref} onSaved={refresh} /> : null}
             </div>
             {!ref ? (
               <p className="muted" style={{ marginTop: 16 }}>
-                Inserisci il prezzo in menu di almeno un piatto (sezione «Prezzi in menu» qui sotto) per vedere il risultato.
+                {d.dishes.length === 0 ? 'Crea almeno una ricetta per vedere il risultato.' : 'Scegli il piatto da usare come unità di misura.'}
+              </p>
+            ) : ref.issue === 'missing_price' ? (
+              <p className="muted" style={{ marginTop: 16 }}>
+                Inserisci qui sopra il prezzo in menu di <strong>{ref.title}</strong> (IVA inclusa) e premi «Salva prezzo»: il risultato compare subito.
               </p>
             ) : ref.issue ? (
               <div className="alert warn" style={{ marginTop: 16 }}>
@@ -544,5 +566,47 @@ function FixedCostDrawer({ cost, categories, onClose, onSaved }: { cost: FixedCo
         </Field>
       </div>
     </Drawer>
+  )
+}
+
+/** NUOVO — prezzo in menu inserito direttamente accanto alla scelta del piatto. */
+function QuickPrice({ dish, onSaved }: { dish: Dish; onSaved: () => void }) {
+  const toast = useToast()
+  const [price, setPrice] = useState<string | null>(null)
+  const [vat, setVat] = useState(dish.vatPercent ?? '10')
+  const [busy, setBusy] = useState(false)
+  return (
+    <>
+      <Field label="Prezzo in menu (IVA inclusa)" htmlFor="ref-price">
+        <NumberInput id="ref-price" value={price} onChange={setPrice} suffix="€" />
+      </Field>
+      <Field label="IVA" htmlFor="ref-vat">
+        <select id="ref-vat" className="input" value={vat} onChange={(e) => setVat(e.target.value)} style={{ width: 90 }}>
+          {VAT_RATES.map((r) => (
+            <option key={r} value={r}>
+              {r}%
+            </option>
+          ))}
+        </select>
+      </Field>
+      <button
+        className="btn primary"
+        disabled={busy || !price}
+        onClick={async () => {
+          setBusy(true)
+          try {
+            await api.put(`/profitability/prices/${dish.recipeId}`, { menuPrice: price, vatPercent: vat })
+            toast(`Prezzo di «${dish.title}» salvato.`)
+            onSaved()
+          } catch (e) {
+            toast(errorMessage(e), 'err')
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        {busy ? <span className="spinner" /> : null} Salva prezzo
+      </button>
+    </>
   )
 }
