@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { api } from '@/lib/api'
 import type { Me } from '@/lib/session'
 import { useQueryParam } from '@/lib/hooks'
-import { ErrorBox, errorMessage, Field, Skeleton } from '@/components/ui'
+import { ErrorBox, errorMessage, Field, Skeleton, PasswordInput } from '@/components/ui'
 
 export default function InvitePage() {
   const token = useQueryParam('token')
@@ -47,7 +47,7 @@ export default function InvitePage() {
             </p>
             {error ? <div className="alert err">{error}</div> : null}
             <Field label={info.data.existingUser ? 'La password del tuo account' : 'Scegli una password'} htmlFor="pw" hint={info.data.existingUser ? `Account esistente: ${info.data.email}` : 'Almeno 10 caratteri.'}>
-              <input id="pw" className="input" type="password" autoComplete={info.data.existingUser ? 'current-password' : 'new-password'} required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordInput id="pw" className="input" autoComplete={info.data.existingUser ? 'current-password' : 'new-password'} required value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
             <button className="btn primary" type="submit">
               Accetta l’invito

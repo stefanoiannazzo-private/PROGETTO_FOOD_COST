@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useCan, useMe } from '@/lib/session'
 import { PageHead } from '@/components/AppShell'
-import { errorMessage, Field, fieldErrors, useToast } from '@/components/ui'
+import { errorMessage, Field, fieldErrors, useToast, PasswordInput } from '@/components/ui'
 
 export default function SettingsPage() {
   const { data: me } = useMe()
@@ -74,10 +74,10 @@ export default function SettingsPage() {
           <div className="card-body stack">
             <div className="grid-2">
               <Field label="Password attuale" htmlFor="pw-c" error={errors.currentPassword}>
-                <input id="pw-c" className="input" type="password" autoComplete="current-password" value={pw.currentPassword} onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })} />
+                <PasswordInput id="pw-c" className="input" autoComplete="current-password" value={pw.currentPassword} onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })} />
               </Field>
               <Field label="Nuova password" htmlFor="pw-n" hint="Almeno 10 caratteri" error={errors.newPassword}>
-                <input id="pw-n" className="input" type="password" autoComplete="new-password" value={pw.newPassword} onChange={(e) => setPw({ ...pw, newPassword: e.target.value })} />
+                <PasswordInput id="pw-n" className="input" autoComplete="new-password" value={pw.newPassword} onChange={(e) => setPw({ ...pw, newPassword: e.target.value })} />
               </Field>
             </div>
             <div>

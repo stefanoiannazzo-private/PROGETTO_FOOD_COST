@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { api } from '@/lib/api'
 import { useQueryParam } from '@/lib/hooks'
-import { errorMessage, Field, fieldErrors } from '@/components/ui'
+import { errorMessage, Field, fieldErrors, PasswordInput } from '@/components/ui'
 
 export default function ResetPage() {
   const token = useQueryParam('token')
@@ -38,10 +38,10 @@ export default function ResetPage() {
           <>
             {error ? <div className="alert err">{error}</div> : null}
             <Field label="Nuova password" htmlFor="pw" hint="Almeno 10 caratteri." error={fields.password}>
-              <input id="pw" className="input" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              <PasswordInput id="pw" className="input" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
             <Field label="Ripeti la password" htmlFor="pw2" error={fields.confirm}>
-              <input id="pw2" className="input" type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+              <PasswordInput id="pw2" className="input" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
             </Field>
             <button className="btn primary" type="submit" disabled={!token}>
               Salva password

@@ -7,7 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type { Me } from '@/lib/session'
 import { useQueryParam } from '@/lib/hooks'
-import { errorMessage, Field } from '@/components/ui'
+import { errorMessage, Field, PasswordInput } from '@/components/ui'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -50,7 +50,7 @@ export default function LoginPage() {
           <input id="email" className="input" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
         </Field>
         <Field label="Password" htmlFor="password">
-          <input id="password" className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput id="password" className="input" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         <button className="btn primary" type="submit" disabled={busy}>
           {busy ? <span className="spinner" /> : null} Accedi

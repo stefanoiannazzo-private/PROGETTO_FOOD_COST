@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import { toApiNumber, toInputText } from '@/lib/num'
 import { ApiError } from '@/lib/api'
 
@@ -32,6 +32,9 @@ const paths: Record<string, string> = {
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
   layers: 'M12 2 2 7l10 5 10-5zM2 17l10 5 10-5M2 12l10 5 10-5',
+  // NUOVO: icone di "mostra / nascondi password"
+  eye: 'M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  eyeOff: 'M17.9 17.9A10 10 0 0 1 12 19c-7 0-11-7-11-7a18 18 0 0 1 5.1-5.9M9.9 5.2A9 9 0 0 1 12 5c7 0 11 7 11 7a18 18 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M1 1l22 22',
   // NUOVO: icona del coefficiente di redditività
   trend: 'M3 3v18h18M7 15l4-4 3 3 6-6M15 8h5v5',
 }
@@ -288,6 +291,30 @@ export function AffectedNotice({ recipes }: { recipes: Array<{ id: string; code:
         <strong>Ricette interessate dalla modifica ({recipes.length}):</strong> {recipes.slice(0, 8).map((r) => r.title).join(', ')}
         {recipes.length > 8 ? ` e altre ${recipes.length - 8}` : ''}. Le valorizzazioni correnti sono state aggiornate; gli snapshot salvati restano invariati.
       </div>
+    </div>
+  )
+}
+
+/**
+ * NUOVO: campo password con il pulsante "mostra / nascondi", per verificare di aver scritto la password giusta.
+ * Accetta le stesse proprietà di un <input>; il tipo passa da "password" a "text" e viceversa.
+ */
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const [visible, setVisible] = useState(false)
+  return (
+    <div style={{ position: 'relative' }}>
+      <input {...props} type={visible ? 'text' : 'password'} style={{ ...props.style, paddingRight: 40, width: '100%' }} />
+      <button
+        type="button"
+        className="btn ghost icon sm"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? 'Nascondi password' : 'Mostra password'}
+        aria-pressed={visible}
+        title={visible ? 'Nascondi password' : 'Mostra password'}
+        style={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)' }}
+      >
+        <Icon name={visible ? 'eyeOff' : 'eye'} />
+      </button>
     </div>
   )
 }
