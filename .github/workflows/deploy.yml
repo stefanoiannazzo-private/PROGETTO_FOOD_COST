@@ -1,4 +1,4 @@
-# Verifica il codice e pubblica l'applicazione sull'hosting (Aruba Linux) via FTPS a ogni push su main,
+# Verifica il codice a ogni push su main e su laravel; pubblica sull'hosting (Aruba Linux) via FTPS solo dai push su main,
 # come per ACAT (acat-sito/.github/workflows/deploy.yml).
 #
 # Secrets (GitHub > Settings > Secrets and variables > Actions):
@@ -18,7 +18,7 @@ name: Verifica e pubblica
 
 on:
   push:
-    branches: [main]
+    branches: [main, laravel]
   pull_request:
   workflow_dispatch:
 
