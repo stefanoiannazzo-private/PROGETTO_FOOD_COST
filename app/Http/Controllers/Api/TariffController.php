@@ -74,6 +74,8 @@ final class TariffController extends Controller
                 'include' => S::bool(),
             ]))->min(1, 'Inserisci almeno una voce di costo.'),
             'notes' => S::optText(500),
+            // NUOVO: bolletta caricata da cui sono stati letti i dati (resta nell'archivio collegata a questo valore)
+            'billFileId' => S::uuid()->optional(),
             ...self::conversions(),
         ]);
     }
@@ -235,7 +237,14 @@ final class TariffController extends Controller
         if (! $t) {
             throw AppError::notFound('Tariffa');
         }
-        $v = DB::transaction(fn () => self::insertVersion($cid, $ctx->userId(), (array) $t, $body));
+        $v = DB::transaction(function () use ($cid, $ctx, $t, $body, $id) {
+            $v = self::insertVersion($cid, $ctx->userId(), (array) $t, $body);
+            if (! empty($body['billFileId'])) {
+                TariffBillController::attach($cid, $id, $body['billFileId'], $v);
+            }
+
+            return $v;
+        });
         $affected = Costing::invalidate($cid, 'tariffs', [$id]);
 
         return ['id' => $v, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];

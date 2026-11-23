@@ -8,6 +8,7 @@
 #   CRON_KEY                                 chiave del cron dell'hosting (https://<sito>/api/cron?k=<CRON_KEY>)
 #   DEPLOY_KEY                               chiave del passo finale (migrazioni) dopo il caricamento
 #   SMTP_USER, SMTP_PASS                     facoltativi: casella del dominio che invia gli inviti (smtps.aruba.it, porta 465)
+#   ANTHROPIC_API_KEY                        facoltativo: lettura automatica delle bollette (senza, le bollette si archiviano e si compilano a mano)
 # Variabili (stessa pagina, scheda Variables):
 #   APP_URL       obbligatoria: indirizzo pubblico, es. https://foodcost.example.it
 #   FTP_DIR       cartella del sito sul server (predefinita "/www.ricettaquadra.it/")
@@ -129,6 +130,8 @@ jobs:
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_HOST: ${{ vars.SMTP_HOST || 'smtps.aruba.it' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BILL_AI_MODEL: ${{ vars.BILL_AI_MODEL }}
         run: |
           php -r '
             foreach (["APP_URL","APP_KEY","DB_HOST","DB_NAME","DB_USER","DB_PASS","CRON_KEY","DEPLOY_KEY"] as $k)
@@ -157,6 +160,10 @@ jobs:
               $e["MAIL_MAILER"] = "smtp";
               $e += ["MAIL_SCHEME" => "smtps", "MAIL_HOST" => getenv("SMTP_HOST"), "MAIL_PORT" => "465",
                      "MAIL_USERNAME" => getenv("SMTP_USER"), "MAIL_PASSWORD" => getenv("SMTP_PASS"), "MAIL_FROM_ADDRESS" => getenv("SMTP_USER")];
+            }
+            if (getenv("ANTHROPIC_API_KEY")) {
+              $e["ANTHROPIC_API_KEY"] = getenv("ANTHROPIC_API_KEY");
+              if (getenv("BILL_AI_MODEL")) $e["BILL_AI_MODEL"] = getenv("BILL_AI_MODEL");
             }
             $out = "# Creato dalla pubblicazione automatica: non modificare (si rigenera a ogni push).\n";
             foreach ($e as $k => $v) $out .= "$k=" . $q($v) . "\n";
@@ -187,6 +194,7 @@ jobs:
             storage/logs/*.log
             storage/app/imports/**
             storage/app/outbox/**
+            storage/app/bills/**
             storage/framework/cache/data/**
             storage/framework/views/*.php
             bootstrap/cache/*.php

@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\IngredientController;
 use App\Http\Controllers\Api\PlatformController;
 use App\Http\Controllers\Api\RecipeController;
 use App\Http\Controllers\Api\SystemController;
+use App\Http\Controllers\Api\TariffBillController;
 use App\Http\Controllers\Api\TariffController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -75,6 +76,11 @@ Route::post('/tariffs/{id}/versions', [TariffController::class, 'addVersion']);
 Route::delete('/tariffs/{id}/versions/{versionId}', [TariffController::class, 'deleteVersion']);
 Route::post('/tariffs/{id}/archive', [TariffController::class, 'archive']);
 Route::post('/tariffs/{id}/restore', [TariffController::class, 'restore']);
+// NUOVO — bollette delle utenze (archivio e lettura automatica)
+Route::get('/tariffs/{id}/bills', [TariffBillController::class, 'index']);
+Route::post('/tariffs/{id}/bills', [TariffBillController::class, 'upload']);
+Route::get('/tariffs/{id}/bills/{billId}/file', [TariffBillController::class, 'file']);
+Route::delete('/tariffs/{id}/bills/{billId}', [TariffBillController::class, 'destroy']);
 
 // Strumenti
 Route::get('/equipment', [EquipmentController::class, 'index']);

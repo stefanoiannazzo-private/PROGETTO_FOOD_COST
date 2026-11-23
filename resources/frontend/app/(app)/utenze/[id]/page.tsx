@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type AffectedRecipe } from '@/lib/api'
 import { date, dateTime, euro, num, todayIso, unitLabel } from '@/lib/num'
@@ -40,6 +40,39 @@ interface Detail {
   versions: Version[]
   current: Version | null
   equipment: Array<{ id: string; code: string; name: string }>
+}
+
+/** NUOVO — bollette caricate (archivio) e risultato della lettura automatica */
+interface BillRow {
+  id: string
+  fileName: string
+  mime: string
+  size: number
+  supplier: string | null
+  periodFrom: string | null
+  periodTo: string | null
+  totalAmount: string | null
+  readStatus: 'ok' | 'failed' | 'off' | 'limit'
+  version: { id: string; validFrom: string; pricePerUnit: string } | null
+  createdAt: string
+  createdBy: string | null
+}
+interface BillRead {
+  id: string
+  readStatus: BillRow['readStatus']
+  message: string
+  form: {
+    validFrom: string | null
+    periodFrom: string | null
+    periodTo: string | null
+    consumption: string | null
+    consumptionUnit: string
+    components: BillComponent[]
+    m3ToSmc: string | null
+    smcToKwh: string | null
+  } | null
+  info: { supplier: string | null; billNumber: string | null; issueDate: string | null; totalAmount: string | null } | null
+  warnings: string[]
 }
 
 export default function TariffDetailPage() {
@@ -144,6 +177,7 @@ export default function TariffDetailPage() {
             </table>
           )}
         </div>
+        <Bills t={t} />
         <div className="card">
           <div className="card-head">
             <h2>Strumenti collegati</h2>
@@ -182,7 +216,39 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
   const [preview, setPreview] = useState<{ pricePerUnit: string; variableOnlyPricePerUnit: string; includesFixed: boolean } | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
+  // NUOVO: bolletta caricata e letta automaticamente
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [reading, setReading] = useState(false)
+  const [read, setRead] = useState<BillRead | null>(null)
   const u = unitLabel(t.unit)
+
+  const uploadBill = async (file: File) => {
+    setReading(true)
+    setRead(null)
+    setErrors({})
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await api.upload<BillRead>(`/tariffs/${t.id}/bills`, fd)
+      setRead(r)
+      setMode('bill')
+      if (r.form) {
+        const f = r.form
+        if (f.validFrom) setValidFrom(f.validFrom)
+        setBill({ periodFrom: f.periodFrom ?? '', periodTo: f.periodTo ?? '', consumption: f.consumption })
+        if (f.components.length) setComps(f.components)
+        if (t.kind === 'gas') {
+          if (f.m3ToSmc) setM3ToSmc(f.m3ToSmc)
+          if (f.smcToKwh) setSmcToKwh(f.smcToKwh)
+        }
+      }
+      qc.invalidateQueries({ queryKey: ['tariffs', 'bills', t.id] })
+    } catch (e) {
+      toast(errorMessage(e), 'err')
+    } finally {
+      setReading(false)
+    }
+  }
 
   const billBody = {
     mode: 'bill',
@@ -211,11 +277,12 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
     setErrors({})
     try {
       const conv = t.kind === 'gas' ? { m3ToSmc, smcToKwh } : {}
-      const body = mode === 'direct' ? { mode, validFrom, pricePerUnit: price ?? '', ...conv } : { ...billBody, ...conv }
+      const body = mode === 'direct' ? { mode, validFrom, pricePerUnit: price ?? '', ...conv } : { ...billBody, ...conv, ...(read ? { billFileId: read.id } : {}) }
       const r = await api.post<{ affectedRecipes: AffectedRecipe[] }>(`/tariffs/${t.id}/versions`, body)
       onDone(r.affectedRecipes)
       toast('Nuovo valore registrato. I valori precedenti restano nello storico.')
       setPrice(null)
+      setRead(null)
       await qc.invalidateQueries({ queryKey: ['tariffs'] })
       qc.invalidateQueries({ queryKey: ['recipes'] })
     } catch (e) {
@@ -232,6 +299,52 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
         <h2>Nuovo valore della tariffa</h2>
       </div>
       <div className="card-body stack">
+        <div className="alert info" style={{ alignItems: 'center' }}>
+          <Icon name="upload" />
+          <div className="grow">
+            <strong>Hai la bolletta?</strong> Caricala in PDF o come foto: leggiamo noi periodo, consumi e voci di costo. Tu controlli e confermi; la bolletta resta nell’archivio.
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void uploadBill(f)
+              e.target.value = ''
+            }}
+          />
+          <button className="btn primary" disabled={reading} onClick={() => fileRef.current?.click()}>
+            {reading ? <span className="spinner" /> : <Icon name="upload" />} {reading ? 'Lettura in corso…' : 'Carica bolletta'}
+          </button>
+        </div>
+        {reading ? <div className="muted small">Sto leggendo la bolletta: può richiedere fino a 40 secondi.</div> : null}
+        {read ? (
+          <div className={`alert ${read.readStatus === 'ok' ? 'ok' : 'warn'}`}>
+            <Icon name={read.readStatus === 'ok' ? 'check' : 'alert'} />
+            <div>
+              <div>
+                <strong>{read.message}</strong>
+              </div>
+              {read.info && (read.info.supplier || read.info.totalAmount) ? (
+                <div className="small">
+                  {[read.info.supplier, read.info.billNumber ? `fattura ${read.info.billNumber}` : null, read.info.issueDate ? `del ${date(read.info.issueDate)}` : null, read.info.totalAmount ? `totale ${euro(read.info.totalAmount)} IVA inclusa` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
+              ) : null}
+              {read.warnings.length ? (
+                <ul className="small" style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                  {read.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {read.form ? <div className="small faint" style={{ marginTop: 4 }}>Le quote fisse sono proposte escluse: le trovi già nei costi fissi della pagina Redditività. Spunta «Includi» se vuoi la tariffa “tutto compreso”.</div> : null}
+            </div>
+          </div>
+        ) : null}
         <div className="tabs" role="tablist">
           <button role="tab" aria-selected={mode === 'direct'} onClick={() => setMode('direct')}>
             Conosco il prezzo unitario
@@ -317,10 +430,104 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
         ) : null}
         <div>
           <button className="btn primary" onClick={submit} disabled={busy}>
-            {busy ? <span className="spinner" /> : null} Registra valore
+            {busy ? <span className="spinner" /> : null} {read && mode === 'bill' ? 'Conferma e registra valore' : 'Registra valore'}
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** NUOVO — archivio delle bollette caricate per questa utenza. */
+function Bills({ t }: { t: Detail }) {
+  const can = useCan()
+  const qc = useQueryClient()
+  const toast = useToast()
+  const q = useQuery({ queryKey: ['tariffs', 'bills', t.id], queryFn: () => api.get<{ data: BillRow[]; meta: { aiEnabled: boolean } }>(`/tariffs/${t.id}/bills`) })
+  const u = unitLabel(t.unit)
+  const fileUrl = (b: BillRow, download = false) => `/api/tariffs/${t.id}/bills/${b.id}/file${download ? '?download=1' : ''}`
+  return (
+    <div className="card">
+      <div className="card-head">
+        <h2>Bollette caricate</h2>
+        {q.data && !q.data.meta.aiEnabled ? <span className="badge">lettura automatica non attiva</span> : null}
+      </div>
+      {q.error ? (
+        <div className="card-body">
+          <ErrorBox error={q.error} retry={() => q.refetch()} />
+        </div>
+      ) : !q.data ? (
+        <div className="card-body">
+          <Skeleton rows={2} />
+        </div>
+      ) : q.data.data.length === 0 ? (
+        <div className="card-body muted">Nessuna bolletta caricata. Usa «Carica bolletta» qui sopra: il file resta archiviato e consultabile in ogni momento.</div>
+      ) : (
+        <table className="table compact">
+          <thead>
+            <tr>
+              <th>Periodo</th>
+              <th>Fornitore</th>
+              <th className="num">Totale IVA incl.</th>
+              <th>Valore generato</th>
+              <th>Caricata</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {q.data.data.map((b) => (
+              <tr key={b.id}>
+                <td>{b.periodFrom && b.periodTo ? `${date(b.periodFrom)}–${date(b.periodTo)}` : <span className="faint">—</span>}</td>
+                <td>
+                  {b.supplier ?? <span className="faint">—</span>}
+                  <div className="faint small" title={b.fileName} style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {b.fileName}
+                  </div>
+                </td>
+                <td className="num">{b.totalAmount ? euro(b.totalAmount) : '—'}</td>
+                <td className="small">
+                  {b.version ? (
+                    <>
+                      {euro(b.version.pricePerUnit, 5)}/{u} dal {date(b.version.validFrom)}
+                    </>
+                  ) : (
+                    <span className="faint">non usata per un valore</span>
+                  )}
+                </td>
+                <td className="faint small">
+                  {dateTime(b.createdAt)} {b.createdBy ? `· ${b.createdBy}` : ''}
+                </td>
+                <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                  <a className="btn ghost icon sm" href={fileUrl(b)} target="_blank" rel="noopener" aria-label="Apri bolletta" title="Apri">
+                    <Icon name="eye" />
+                  </a>
+                  <a className="btn ghost icon sm" href={fileUrl(b, true)} aria-label="Scarica bolletta" title="Scarica">
+                    <Icon name="download" />
+                  </a>
+                  {can('tariffs.manage') ? (
+                    <button
+                      className="btn ghost icon sm"
+                      aria-label="Elimina bolletta"
+                      title="Elimina il file dall’archivio"
+                      onClick={async () => {
+                        if (!window.confirm(`Eliminare definitivamente il file «${b.fileName}» dall’archivio? Il valore della tariffa eventualmente generato resta.`)) return
+                        try {
+                          await api.del(`/tariffs/${t.id}/bills/${b.id}`)
+                          qc.invalidateQueries({ queryKey: ['tariffs', 'bills', t.id] })
+                        } catch (e) {
+                          toast(errorMessage(e), 'err')
+                        }
+                      }}
+                    >
+                      <Icon name="trash" />
+                    </button>
+                  ) : null}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }

@@ -47,6 +47,7 @@ Legenda: ✅ fatta · 🔒 in attesa di una tua autorizzazione · ⏳ da fare ·
 | S06 | Statistiche dei prezzi per prodotto, fornitore, agente, azienda | ✅ | `PlatformTest`, E |
 | S07 | Agente del fornitore sul prezzo (modulo, storico, importazione) | ✅ | `PlatformTest`, E |
 | S08 | Voce extra della retribuzione (modulo, storico, importazione, calcolo) | ✅ | `PlatformTest`, E |
+| S12 | Bollette delle utenze: caricamento PDF/foto, lettura automatica con Claude, modulo precompilato da confermare, archivio scaricabile | ✅ | `TariffBillsTest` (9), E `bolletta.mjs` |
 | S11 | Coefficiente di redditività: costi fissi con scadenza, personale e quote fisse delle bollette automatici, giorni di chiusura, prezzo in menu con IVA, piatti a settimana e per giorno (solo amministratore) | ✅ | `BreakEvenTest`, `ProfitabilityTest`, E `redditivita.mjs` |
 | S09 | Unificazione dei prodotti doppi tra aziende | ⏸ | tua decisione: "per il momento lasciali così" |
 | S10 | Abbonamenti e pagamenti | ⏸ | tua decisione: non per ora |

@@ -20,4 +20,14 @@ return [
     'cron_key' => (string) env('CRON_KEY', ''),
     // chiave del passo finale del deploy automatico (POST /api/system/deploy, header X-Deploy-Key); vuota = disattivato
     'deploy_key' => (string) env('DEPLOY_KEY', ''),
+    // NUOVO — bollette delle utenze: archivio dei file e lettura automatica con Claude (Anthropic)
+    'bill_max_bytes' => (int) env('BILL_MAX_BYTES', 10 * 1024 * 1024),
+    'bill_ai' => [
+        'key' => (string) env('ANTHROPIC_API_KEY', ''),
+        'url' => (string) env('BILL_AI_URL', 'https://api.anthropic.com/v1/messages'),
+        'model' => (string) env('BILL_AI_MODEL', 'claude-sonnet-5-5'),
+        'timeout' => (int) env('BILL_AI_TIMEOUT', 80),
+        // letture automatiche per azienda in un mese (controllo dei costi del servizio)
+        'monthly_limit' => (int) env('BILL_AI_MONTHLY_LIMIT', 40),
+    ],
 ];

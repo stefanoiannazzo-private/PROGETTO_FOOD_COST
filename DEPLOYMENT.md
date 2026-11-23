@@ -37,6 +37,7 @@ Alcune cose da sapere:
 - **Primo caricamento:** circa 70 minuti per circa 6.800 file. L'FTP di Aruba è lento con molti file piccoli. Dalle pubblicazioni successive vengono caricati solo i file cambiati.
 - **HiSpeed Cache:** dopo la prima pubblicazione la home mostrava ancora la pagina d'attesa di Aruba, rimasta nella sua cache. Si risolve con *Velocità → Caching → Cancella cache*. Le pagine dell'app sono `no-store`, quindi non si ripete.
 - **Email:** casella `no-reply@ricettaquadra.it` (secrets `SMTP_USER` e `SMTP_PASS`, server `smtps.aruba.it:465`): inviti e recupero password partono in automatico.
+- **Bollette:** la lettura automatica usa il secret `ANTHROPIC_API_KEY` (chiave creata su console.anthropic.com, con credito prepagato). Senza la chiave le bollette si caricano e archiviano lo stesso, ma i dati si compilano a mano. I file stanno in `storage/app/bills/` sul server (fuori dalla cartella pubblica, esclusa dalla sincronizzazione FTP): includila nei backup.
 - **Database:** Aruba crea da sé i 5 database (`Sql…_1` … `Sql…_5`) con un solo utente. Usiamo il primo.
 
 ## 1. Sul pannello Aruba
@@ -58,6 +59,7 @@ In *Settings → Secrets and variables → Actions*.
 | `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` | accesso FTP |
 | `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASS` | database Aruba |
 | `APP_KEY` | chiave dell'applicazione (vedi sotto) |
+| `ANTHROPIC_API_KEY` | facoltativo: lettura automatica delle bollette (variabile facoltativa `BILL_AI_MODEL`, predefinito `claude-sonnet-5-5`) |
 | `CRON_KEY` | stringa casuale di almeno 24 caratteri |
 | `DEPLOY_KEY` | un'altra stringa casuale di almeno 24 caratteri |
 | `SMTP_USER`, `SMTP_PASS` | facoltativi: casella del dominio che invia inviti e recupero password (`smtps.aruba.it`, porta 465). Senza di essi il link di invito viene mostrato all'amministratore, che lo inoltra |

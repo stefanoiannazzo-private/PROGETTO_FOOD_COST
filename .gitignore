@@ -33,3 +33,4 @@ Thumbs.db
 
 /public/app
 /resources/frontend/node_modules
+/storage/app/bills
