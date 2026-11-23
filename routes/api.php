@@ -118,6 +118,7 @@ Route::post('/recipes/{id}/duplicate', [RecipeController::class, 'duplicate']);
 Route::post('/recipes/{id}/archive', [RecipeController::class, 'archive']);
 Route::post('/recipes/{id}/restore', [RecipeController::class, 'restore']);
 Route::post('/recipes/{id}/activate', [RecipeController::class, 'activate']);
+Route::post('/recipes/{id}/draft', [RecipeController::class, 'toDraft']);
 Route::get('/recipes/{id}/valuation', [RecipeController::class, 'valuation']);
 Route::get('/recipes/{id}/revisions', [RecipeController::class, 'revisions']);
 Route::get('/recipes/{id}/revisions/{revisionId}', [RecipeController::class, 'revision']);

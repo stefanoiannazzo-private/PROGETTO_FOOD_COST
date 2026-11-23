@@ -188,6 +188,12 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 | Costo orario = (costo × mensilità + extra × mensilità extra) ÷ 12 + altri costi, diviso le ore produttive; riepilogo con costo annuo | ➕ | `EmployeeMonthsTest` (2700 × 14 + 200 × 12 + 50 × 12 = 40.800 €/anno → 21,25 €/h) |
 | Configurazioni esistenti (senza mensilità) calcolate come prima: 12 su 12 | ✅ | suite di parità invariata |
 
+## 16. Novità: stato della ricetta dalla scheda
+
+| Funzionalità | Stato | Prove |
+|---|---|---|
+| Selettore «Stato: Bozza / Attiva» accanto a Modifica nella scheda ricetta (`POST /recipes/{id}/activate` dell'originale e nuovo `POST /recipes/{id}/draft`) | ➕ | `RecipeStatusTest`, E `stato.mjs` |
+
 ## Differenze rimaste rispetto all'originale
 
 1. **Ordinamento con valori uguali** (`/ingredients?sort=category`). A parità di categoria entrambe le API ordinano per ID interno, cioè per UUID casuali diversi nei due database. Non è una differenza di logica.

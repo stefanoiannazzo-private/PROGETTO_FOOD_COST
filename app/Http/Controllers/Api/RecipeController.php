@@ -335,6 +335,12 @@ final class RecipeController extends Controller
         return $this->setStatus($req, $id, 'activate', 'active');
     }
 
+    /** NUOVO — riporta in bozza una ricetta attiva (dal selettore di stato nella scheda). */
+    public function toDraft(Request $req, string $id)
+    {
+        return $this->setStatus($req, $id, 'to_draft', 'draft');
+    }
+
     private function setStatus(Request $req, string $id, string $action, string $status)
     {
         $ctx = $this->requireCompany($req, 'recipes.manage');

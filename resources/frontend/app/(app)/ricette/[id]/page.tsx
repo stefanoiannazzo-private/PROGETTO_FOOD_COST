@@ -96,6 +96,30 @@ export default function RecipeDetailPage() {
         }
         actions={
           <>
+            {/* NUOVO: stato della ricetta modificabile dalla scheda (bozza ↔ attiva) */}
+            {r.permissions.canEdit && r.status !== 'archived' ? (
+              <select
+                className="input"
+                style={{ width: 'auto', fontWeight: 600 }}
+                aria-label="Stato della ricetta"
+                title="Stato della ricetta"
+                value={r.status}
+                disabled={busy}
+                onChange={(e) => {
+                  const to = e.target.value
+                  void action(
+                    () => api.post(`/recipes/${id}/${to === 'active' ? 'activate' : 'draft'}`),
+                    to === 'active' ? 'Ricetta attivata.' : 'Ricetta riportata in bozza.',
+                  ).then(() => {
+                    q.refetch()
+                    qc.invalidateQueries({ queryKey: ['recipes'] })
+                  })
+                }}
+              >
+                <option value="draft">Stato: Bozza</option>
+                <option value="active">Stato: Attiva</option>
+              </select>
+            ) : null}
             {r.permissions.canEdit && r.status !== 'archived' ? (
               <Link className="btn primary" href={`/ricette/${id}/modifica`} prefetch>
                 <Icon name="edit" /> Modifica
