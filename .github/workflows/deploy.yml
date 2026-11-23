@@ -137,13 +137,17 @@ jobs:
             if (strlen(getenv("CRON_KEY")) < 24 || strlen(getenv("DEPLOY_KEY")) < 24) { fwrite(STDERR, "CRON_KEY e DEPLOY_KEY: almeno 24 caratteri\n"); exit(1); }
             $q = fn ($v) => "\"" . addcslashes((string) $v, "\"\\\$") . "\"";
             $url = rtrim(getenv("APP_URL"), "/");
+            // il sito risponde sia con sia senza www (Aruba reindirizza al www): entrambe le origini sono ammesse
+            $host = parse_url($url, PHP_URL_HOST);
+            $other = str_starts_with($host, "www.") ? substr($host, 4) : "www." . $host;
+            $origins = $url . ",https://" . $other;
             $e = [
               "APP_NAME" => "Food Cost", "APP_ENV" => "production", "APP_DEBUG" => "false", "APP_KEY" => getenv("APP_KEY"),
               "APP_URL" => $url, "APP_TZ" => "Europe/Rome", "APP_LOCALE" => "it", "APP_FALLBACK_LOCALE" => "it",
               "LOG_CHANNEL" => "daily", "LOG_LEVEL" => "warning",
               "DB_CONNECTION" => "mysql", "DB_HOST" => getenv("DB_HOST"), "DB_PORT" => "3306",
               "DB_DATABASE" => getenv("DB_NAME"), "DB_USERNAME" => getenv("DB_USER"), "DB_PASSWORD" => getenv("DB_PASS"),
-              "SESSION_DRIVER" => "array", "SESSION_DAYS" => "14", "COOKIE_SECURE" => "true", "ALLOWED_ORIGINS" => $url,
+              "SESSION_DRIVER" => "array", "SESSION_DAYS" => "14", "COOKIE_SECURE" => "true", "ALLOWED_ORIGINS" => $origins,
               "CACHE_STORE" => "database", "QUEUE_CONNECTION" => "sync", "JOB_SLICE_SECONDS" => "4",
               "CRON_KEY" => getenv("CRON_KEY"), "DEPLOY_KEY" => getenv("DEPLOY_KEY"),
               "IMPORT_MAX_BYTES" => "10485760", "IMPORT_MAX_ROWS" => "20000", "IMPORT_RETENTION_DAYS" => "30",
@@ -195,6 +199,7 @@ jobs:
           APP_URL: ${{ vars.APP_URL }}
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         run: |
-          curl --fail-with-body -sS -X POST "${APP_URL%/}/api/system/deploy" \
+          # -L --post301/302: segue il reindirizzamento dell'hosting (es. dominio → www) mantenendo la POST
+          curl --fail-with-body -sS -L --post301 --post302 -X POST "${APP_URL%/}/api/system/deploy" \
             -H "X-Requested-With: foodcost" -H "X-Deploy-Key: $DEPLOY_KEY" -H "Accept: application/json"
-          curl --fail -sS "${APP_URL%/}/api/health"
+          curl --fail -sS -L "${APP_URL%/}/api/health"
