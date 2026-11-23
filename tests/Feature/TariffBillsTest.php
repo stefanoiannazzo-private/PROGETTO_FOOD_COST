@@ -32,7 +32,7 @@ class TariffBillsTest extends TestCase
         $this->a = $this->loginAs('admin@bol.test');
         $this->luce = $this->ok($this->a->post('/api/tariffs', ['name' => 'Elettricità', 'kind' => 'electricity', 'unit' => 'kwh']))['id'];
         $this->gas = $this->ok($this->a->post('/api/tariffs', ['name' => 'Gas cucina', 'kind' => 'gas', 'unit' => 'smc']))['id'];
-        config(['foodcost.bill_ai.key' => 'chiave-di-prova', 'foodcost.bill_ai.monthly_limit' => 40]);
+        config(['foodcost.bill_ai.key' => 'chiave-di-prova', 'foodcost.bill_ai.url' => 'https://api.anthropic.com/v1/messages', 'foodcost.bill_ai.monthly_limit' => 40]);
     }
 
     protected function tearDown(): void
