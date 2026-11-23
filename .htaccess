@@ -17,6 +17,10 @@ DirectoryIndex index.php
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # un solo indirizzo per il sito: www.dominio → dominio (l'app accetta le modifiche solo dall'indirizzo di APP_URL)
+    RewriteCond %{HTTP_HOST} ^www\.(.+)$ [NC]
+    RewriteRule ^ https://%1%{REQUEST_URI} [L,R=301]
+
     # HTTPS obbligatorio (rispetta anche un proxy che termina TLS)
     RewriteCond %{HTTPS} !=on
     RewriteCond %{HTTP:X-Forwarded-Proto} !=https
