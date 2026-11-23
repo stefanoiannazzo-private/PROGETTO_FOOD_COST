@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\PlatformController;
 use App\Http\Controllers\Api\RecipeController;
 use App\Http\Controllers\Api\SystemController;
 use App\Http\Controllers\Api\TariffBillController;
+use App\Http\Controllers\Api\SupplierInvoiceController;
 use App\Http\Controllers\Api\TariffController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -128,6 +129,13 @@ Route::delete('/recipes/{id}', [RecipeController::class, 'destroy']);
 Route::get('/snapshots/{id}', [RecipeController::class, 'showSnapshot']);
 
 // Importazioni
+// NUOVO — fatture elettroniche dei fornitori (XML / P7M / ZIP) caricate dalla pagina Importazioni
+Route::get('/supplier-invoices', [SupplierInvoiceController::class, 'index']);
+Route::post('/supplier-invoices', [SupplierInvoiceController::class, 'upload']);
+Route::get('/supplier-invoices/{id}', [SupplierInvoiceController::class, 'show']);
+Route::get('/supplier-invoices/{id}/file', [SupplierInvoiceController::class, 'file']);
+Route::post('/supplier-invoices/{id}/confirm', [SupplierInvoiceController::class, 'confirm']);
+Route::delete('/supplier-invoices/{id}', [SupplierInvoiceController::class, 'destroy']);
 Route::get('/imports/fields/{type}', [ImportController::class, 'fields']);
 Route::get('/imports/templates/{file}', [ImportController::class, 'template']);
 Route::get('/imports', [ImportController::class, 'index']);

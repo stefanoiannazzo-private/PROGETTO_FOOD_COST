@@ -62,8 +62,8 @@ const STEPS: Step[] = [
     path: '/importazioni',
     target: () => Array.from(document.querySelectorAll('.card')).find((el) => el.textContent?.includes('Carica il file')) ?? null,
     perm: 'imports.manage',
-    title: 'Hai già un elenco in Excel?',
-    body: 'Prodotti e dipendenti si possono caricare tutti insieme: scarica il modello, compilalo e caricalo qui. Prima di salvare ti mostriamo cosa verrà importato.',
+    title: 'Excel e fatture dei fornitori',
+    body: 'Prodotti e dipendenti si caricano tutti insieme da Excel. Qui puoi anche caricare le fatture elettroniche (XML) dei fornitori: abbini ogni riga a un prodotto una volta sola e i prezzi si aggiornano da soli.',
   },
   {
     path: '/ricette',

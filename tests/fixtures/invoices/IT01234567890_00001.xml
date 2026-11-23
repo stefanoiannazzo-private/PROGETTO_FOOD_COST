@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica versione="FPR12" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <FatturaElettronicaHeader>
+    <DatiTrasmissione>
+      <IdTrasmittente><IdPaese>IT</IdPaese><IdCodice>01234567890</IdCodice></IdTrasmittente>
+      <ProgressivoInvio>00001</ProgressivoInvio>
+      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+      <CodiceDestinatario>0000000</CodiceDestinatario>
+    </DatiTrasmissione>
+    <CedentePrestatore>
+      <DatiAnagrafici>
+        <IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>01234567890</IdCodice></IdFiscaleIVA>
+        <Anagrafica><Denominazione>Caseificio Esempio S.r.l.</Denominazione></Anagrafica>
+        <RegimeFiscale>RF01</RegimeFiscale>
+      </DatiAnagrafici>
+      <Sede><Indirizzo>Via Prova 1</Indirizzo><CAP>00100</CAP><Comune>Roma</Comune><Nazione>IT</Nazione></Sede>
+    </CedentePrestatore>
+    <CessionarioCommittente>
+      <DatiAnagrafici>
+        <IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>09876543210</IdCodice></IdFiscaleIVA>
+        <Anagrafica><Denominazione>Trattoria Demo</Denominazione></Anagrafica>
+      </DatiAnagrafici>
+      <Sede><Indirizzo>Via Demo 2</Indirizzo><CAP>00100</CAP><Comune>Roma</Comune><Nazione>IT</Nazione></Sede>
+    </CessionarioCommittente>
+  </FatturaElettronicaHeader>
+  <FatturaElettronicaBody>
+    <DatiGenerali>
+      <DatiGeneraliDocumento>
+        <TipoDocumento>TD01</TipoDocumento>
+        <Divisa>EUR</Divisa>
+        <Data>2026-11-10</Data>
+        <Numero>FT/1234</Numero>
+        <ImportoTotaleDocumento>128.37</ImportoTotaleDocumento>
+      </DatiGeneraliDocumento>
+    </DatiGenerali>
+    <DatiBeniServizi>
+      <DettaglioLinee>
+        <NumeroLinea>1</NumeroLinea>
+        <CodiceArticolo><CodiceTipo>INTERNO</CodiceTipo><CodiceValore>MOZ01</CodiceValore></CodiceArticolo>
+        <Descrizione>MOZZ. FIORDILATTE FILONE LOTTO 4455</Descrizione>
+        <Quantita>5.00</Quantita>
+        <UnitaMisura>KG</UnitaMisura>
+        <PrezzoUnitario>8.00</PrezzoUnitario>
+        <ScontoMaggiorazione><Tipo>SC</Tipo><Percentuale>10.00</Percentuale></ScontoMaggiorazione>
+        <PrezzoTotale>36.00</PrezzoTotale>
+        <AliquotaIVA>4.00</AliquotaIVA>
+      </DettaglioLinee>
+      <DettaglioLinee>
+        <NumeroLinea>2</NumeroLinea>
+        <Descrizione>PASSATA DI POMODORO 700G</Descrizione>
+        <Quantita>12.00</Quantita>
+        <UnitaMisura>NR</UnitaMisura>
+        <PrezzoUnitario>1.10</PrezzoUnitario>
+        <PrezzoTotale>13.20</PrezzoTotale>
+        <AliquotaIVA>4.00</AliquotaIVA>
+      </DettaglioLinee>
+      <DettaglioLinee>
+        <NumeroLinea>3</NumeroLinea>
+        <Descrizione>OLIO EVO</Descrizione>
+        <Quantita>5.00</Quantita>
+        <UnitaMisura>LT</UnitaMisura>
+        <PrezzoUnitario>9.50</PrezzoUnitario>
+        <PrezzoTotale>47.50</PrezzoTotale>
+        <AliquotaIVA>4.00</AliquotaIVA>
+      </DettaglioLinee>
+      <DettaglioLinee>
+        <NumeroLinea>4</NumeroLinea>
+        <Descrizione>ACQUA NAT. 6X1,5L</Descrizione>
+        <Quantita>2.00</Quantita>
+        <UnitaMisura>CT</UnitaMisura>
+        <PrezzoUnitario>3.00</PrezzoUnitario>
+        <PrezzoTotale>6.00</PrezzoTotale>
+        <AliquotaIVA>22.00</AliquotaIVA>
+      </DettaglioLinee>
+      <DettaglioLinee>
+        <NumeroLinea>5</NumeroLinea>
+        <Descrizione>SPESE DI TRASPORTO</Descrizione>
+        <Quantita>1.00</Quantita>
+        <PrezzoUnitario>5.00</PrezzoUnitario>
+        <PrezzoTotale>5.00</PrezzoTotale>
+        <AliquotaIVA>22.00</AliquotaIVA>
+      </DettaglioLinee>
+      <DettaglioLinee>
+        <NumeroLinea>6</NumeroLinea>
+        <TipoCessionePrestazione>SC</TipoCessionePrestazione>
+        <Descrizione>SCONTO MERCE</Descrizione>
+        <PrezzoUnitario>-2.00</PrezzoUnitario>
+        <PrezzoTotale>-2.00</PrezzoTotale>
+        <AliquotaIVA>4.00</AliquotaIVA>
+      </DettaglioLinee>
+      <DatiRiepilogo><AliquotaIVA>4.00</AliquotaIVA><ImponibileImporto>94.70</ImponibileImporto><Imposta>3.79</Imposta></DatiRiepilogo>
+    </DatiBeniServizi>
+  </FatturaElettronicaBody>
+</p:FatturaElettronica>

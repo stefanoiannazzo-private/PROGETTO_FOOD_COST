@@ -265,3 +265,17 @@ Erano tutti nel clone, non nell'originale:
 | Percorso: benvenuto → Utenze → Strumenti → Dipendenti → Prodotti → Importazioni → Ricette → Redditività → pulsante Guida; passi filtrati per permessi | ✅ |
 | Chiusura o completamento registrati sull'utente (`users.tour_completed_at`, `POST /api/auth/tour`, `tourDone` in `/auth/me`) | ✅ |
 | Pulsante "Guida" nella barra in alto per riaprirla; Esc chiude, frecce per navigare; su mobile la vignetta sta in basso o in alto | ✅ |
+
+## 21. Fatture elettroniche dei fornitori (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| In Importazioni, terza scelta «Fatture dei fornitori (XML)»: più file insieme, .xml, .xml.p7m (anche in base64) e .zip (anche annidati, file di metadati SDI ignorati) | ✅ |
+| Lettura sul server senza servizi esterni: fornitore e partita IVA, numero, data, totale, righe con codice articolo, quantità, unità, prezzo netto (totale riga ÷ quantità, sconti di riga compresi), IVA | ✅ |
+| Fatture già importate riconosciute (fornitore + numero + data) e saltate | ✅ |
+| Per ogni riga: Nuovo prodotto (nome, **categoria obbligatoria**, **come lo paghi** obbligatorio) / Prodotto esistente / Ignora. KG → al kg, LT → al litro, N/NR/PZ/CT → a confezione, con il contenuto letto dalla descrizione (es. 700G, 6X1,5L → 9 l) | ✅ |
+| Sconti, abbuoni e righe senza prezzo proposti come «Ignora» | ✅ |
+| Prezzi registrati alla data della fattura, senza IVA, con fonte «Fattura N del …» e il fornitore; prezzi già presenti in quella data non toccati | ✅ |
+| Memoria degli abbinamenti per fornitore (codice articolo o descrizione): dalla fattura successiva le righe sono «Riconosciute» | ✅ |
+| Tutto o niente: con errori su una riga non viene scritto nulla e la riga è evidenziata | ✅ |
+| Archivio: elenco delle fatture (da abbinare / importate), XML originale scaricabile, bozze scartabili | ✅ |
