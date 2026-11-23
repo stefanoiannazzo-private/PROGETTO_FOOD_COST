@@ -55,8 +55,8 @@ Legenda: ✅ fatta · 🔒 in attesa di una tua autorizzazione · ⏳ da fare ·
 
 | # | Attività | Stato | Cosa serve |
 |---|---|---|---|
-| P01 | Creare il repository GitHub indipendente e fare il primo push | 🔒 | la tua autorizzazione e il nome del repository (consigliato: privato) |
-| P02 | Configurare secrets e variabili e fare la prima pubblicazione su Aruba | 🔒 | dati FTP e database del piano Aruba; DEPLOYMENT.md §1–3 |
+| P01 | Salvare il progetto su GitHub | ✅ | ramo `laravel` di `PROGETTO_FOOD_COST` (22 novembre) |
+| P02 | Configurare secrets e variabili e fare la prima pubblicazione su Aruba | ⏳ | dominio `ricettaquadra.it` (Easy Linux) attivo, secrets inseriti il 23 novembre; prima pubblicazione avviata |
 | P03 | Primo superadmin in produzione e prima azienda cliente | 🔒 | dopo P02 (DEPLOYMENT.md §3) |
 | P04 | Cron ogni 5 minuti sul pannello Aruba | 🔒 | dopo P02 (DEPLOYMENT.md §4) |
 | P05 | Prova dell'invio email SMTP (inviti, recupero password) | ⏳ | una casella del dominio |
