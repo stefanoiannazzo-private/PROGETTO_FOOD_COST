@@ -58,7 +58,7 @@ In *Settings → Secrets and variables → Actions*.
 | Nome | Valore |
 |---|---|
 | `APP_URL` | **obbligatoria**, per esempio `https://foodcost.tuodominio.it` |
-| `FTP_DIR` | cartella del sito sul server (predefinita `/`) |
+| `FTP_DIR` | cartella del sito sul server (predefinita `/www.ricettaquadra.it/`: su Aruba l'utente FTP è quello dell'account e la radice FTP elenca le cartelle dei domini) |
 | `FTP_PROTOCOL` | `ftps` (predefinito) oppure `ftp` |
 | `SMTP_HOST` | predefinito `smtps.aruba.it` |
 

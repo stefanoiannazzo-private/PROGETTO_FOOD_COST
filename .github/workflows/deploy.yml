@@ -10,7 +10,7 @@
 #   SMTP_USER, SMTP_PASS                     facoltativi: casella del dominio che invia gli inviti (smtps.aruba.it, porta 465)
 # Variabili (stessa pagina, scheda Variables):
 #   APP_URL       obbligatoria: indirizzo pubblico, es. https://foodcost.example.it
-#   FTP_DIR       cartella del sito sul server (predefinita "/")
+#   FTP_DIR       cartella del sito sul server (predefinita "/www.ricettaquadra.it/")
 #   FTP_PROTOCOL  "ftps" (predefinito) o "ftp"
 #   SMTP_HOST     predefinito smtps.aruba.it
 # Finché FTP_SERVER non è impostato il workflow esegue solo i test: nessuna pubblicazione.
@@ -168,7 +168,8 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
           local-dir: ./
-          server-dir: ${{ vars.FTP_DIR || '/' }}
+          # su Aruba l'utente FTP è quello dell'account: la radice FTP elenca le cartelle dei domini
+          server-dir: ${{ vars.FTP_DIR || '/www.ricettaquadra.it/' }}
           exclude: |
             **/.git*
             **/.git*/**
