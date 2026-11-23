@@ -36,6 +36,7 @@ Alcune cose da sapere:
 - **www:** Aruba reindirizza `ricettaquadra.it` → `www.ricettaquadra.it` già nel suo proxy. Il sito è quindi `https://www.ricettaquadra.it`. L'app accetta entrambe le origini, e il passo finale del workflow segue il reindirizzamento. Non aggiungere regole `.htaccess` che reindirizzano verso la versione senza www: si creerebbe un ciclo.
 - **Primo caricamento:** circa 70 minuti per circa 6.800 file. L'FTP di Aruba è lento con molti file piccoli. Dalle pubblicazioni successive vengono caricati solo i file cambiati.
 - **HiSpeed Cache:** dopo la prima pubblicazione la home mostrava ancora la pagina d'attesa di Aruba, rimasta nella sua cache. Si risolve con *Velocità → Caching → Cancella cache*. Le pagine dell'app sono `no-store`, quindi non si ripete.
+- **Email:** casella `no-reply@ricettaquadra.it` (secrets `SMTP_USER` e `SMTP_PASS`, server `smtps.aruba.it:465`): inviti e recupero password partono in automatico.
 - **Database:** Aruba crea da sé i 5 database (`Sql…_1` … `Sql…_5`) con un solo utente. Usiamo il primo.
 
 ## 1. Sul pannello Aruba
