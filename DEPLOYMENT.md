@@ -30,6 +30,14 @@ Alcune cose da sapere:
   ```
   Se non basta, chiedi all'assistenza Aruba di consentire le richieste verso `/api/system/deploy`.
 
+### Cosa abbiamo imparato con ricettaquadra.it (23 novembre 2026)
+
+- **Cartella FTP:** l'utente FTP è quello dell'account Aruba, quindi la radice FTP elenca le cartelle di tutti i domini. Il sito va caricato in `/www.ricettaquadra.it/`, che è il valore predefinito di `FTP_DIR` nel workflow.
+- **www:** Aruba reindirizza `ricettaquadra.it` → `www.ricettaquadra.it` già nel suo proxy. Il sito è quindi `https://www.ricettaquadra.it`. L'app accetta entrambe le origini, e il passo finale del workflow segue il reindirizzamento. Non aggiungere regole `.htaccess` che reindirizzano verso la versione senza www: si creerebbe un ciclo.
+- **Primo caricamento:** circa 70 minuti per circa 6.800 file. L'FTP di Aruba è lento con molti file piccoli. Dalle pubblicazioni successive vengono caricati solo i file cambiati.
+- **HiSpeed Cache:** dopo la prima pubblicazione la home mostrava ancora la pagina d'attesa di Aruba, rimasta nella sua cache. Si risolve con *Velocità → Caching → Cancella cache*. Le pagine dell'app sono `no-store`, quindi non si ripete.
+- **Database:** Aruba crea da sé i 5 database (`Sql…_1` … `Sql…_5`) con un solo utente. Usiamo il primo.
+
 ## 1. Sul pannello Aruba
 
 1. **PHP:** per il dominio scegli **PHP 8.3 o superiore**. Servono le estensioni `pdo_mysql`, `mbstring`, `zip`, `xmlreader` e, consigliata, `intl`.
@@ -57,7 +65,7 @@ In *Settings → Secrets and variables → Actions*.
 
 | Nome | Valore |
 |---|---|
-| `APP_URL` | **obbligatoria**, per esempio `https://foodcost.tuodominio.it` |
+| `APP_URL` | **obbligatoria**, per esempio `https://foodcost.tuodominio.it` (oggi: `https://ricettaquadra.it`; Aruba reindirizza al www) |
 | `FTP_DIR` | cartella del sito sul server (predefinita `/www.ricettaquadra.it/`: su Aruba l'utente FTP è quello dell'account e la radice FTP elenca le cartelle dei domini) |
 | `FTP_PROTOCOL` | `ftps` (predefinito) oppure `ftp` |
 | `SMTP_HOST` | predefinito `smtps.aruba.it` |
