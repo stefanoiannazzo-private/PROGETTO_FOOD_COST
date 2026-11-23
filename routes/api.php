@@ -57,6 +57,8 @@ Route::patch('/companies/current', [CompanyController::class, 'updateCurrent']);
 // Ingredienti
 Route::get('/ingredients', [IngredientController::class, 'index']);
 Route::get('/ingredients/categories', [IngredientController::class, 'categories']);
+Route::get('/ingredients/suppliers', [IngredientController::class, 'suppliers']);
+Route::get('/ingredients/agents', [IngredientController::class, 'agents']);
 Route::get('/ingredients/{id}', [IngredientController::class, 'show']);
 Route::post('/ingredients', [IngredientController::class, 'store']);
 Route::patch('/ingredients/{id}', [IngredientController::class, 'update']);

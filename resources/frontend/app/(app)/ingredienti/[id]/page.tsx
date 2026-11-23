@@ -8,7 +8,7 @@ import { api, type AffectedRecipe } from '@/lib/api'
 import { date, dateTime, euro, euroPer, num, todayIso } from '@/lib/num'
 import { useCan } from '@/lib/session'
 import { PageHead } from '@/components/AppShell'
-import { IngredientFields, ingredientPayload, UNITS, type IngredientFormValue } from '@/components/IngredientForm'
+import { AgentSelect, BuyBlock, inferMode, IngredientFields, ingredientPayload, packageOf, validateIngredient, type BuyMode, type IngredientFormValue } from '@/components/IngredientForm'
 import { AffectedNotice, Confirm, ErrorBox, errorMessage, Field, fieldErrors, Icon, NumberInput, Skeleton, StatusBadge, useToast } from '@/components/ui'
 
 interface Price {
@@ -27,7 +27,9 @@ interface Price {
   baseUnit: string
   future: boolean
 }
-interface Detail extends Omit<IngredientFormValue, 'code'> {
+const dimOf = (u: string): 'mass' | 'volume' | 'count' => (['g', 'kg'].includes(u) ? 'mass' : ['ml', 'cl', 'l'].includes(u) ? 'volume' : 'count')
+
+interface Detail extends Omit<IngredientFormValue, 'code' | 'mode'> {
   id: string
   code: string
   archived: boolean
@@ -62,6 +64,7 @@ export default function IngredientDetailPage() {
         category: d.category ?? '',
         supplier: d.supplier ?? '',
         notes: d.notes ?? '',
+        mode: inferMode(d.purchaseUnit, d.packageContent, d.packageUnit),
         purchaseUnit: d.purchaseUnit,
         packageContent: d.packageContent,
         packageUnit: d.packageUnit,
@@ -78,14 +81,19 @@ export default function IngredientDetailPage() {
   const d = q.data
 
   const save = async () => {
+    const local = validateIngredient(v)
+    setErrors(local)
+    if (Object.keys(local).length) {
+      toast('Completa i campi evidenziati.', 'err')
+      return
+    }
     setSaving(true)
-    setErrors({})
     try {
       const r = await api.patch<{ affectedRecipes: AffectedRecipe[] }>(`/ingredients/${id}`, { ...ingredientPayload(v), code: v.code, lockVersion: d.lockVersion })
       setAffected(r.affectedRecipes)
       await qc.invalidateQueries({ queryKey: ['ingredients'] })
       await qc.invalidateQueries({ queryKey: ['recipes'] })
-      toast('Ingrediente salvato.')
+      toast('Prodotto salvato.')
     } catch (e) {
       setErrors(fieldErrors(e))
       toast(errorMessage(e), 'err')
@@ -142,7 +150,7 @@ export default function IngredientDetailPage() {
             }}
           >
             <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }}>
-              <IngredientFields v={v} set={(p) => setV((x) => ({ ...x!, ...p }))} errors={errors} />
+              <IngredientFields v={v} set={(p) => setV((x) => ({ ...x!, ...p }))} errors={errors} lockDimension={d.prices.length ? dimOf(d.packageUnit) : undefined} />
             </fieldset>
             {editable ? (
               <div className="row">
@@ -221,11 +229,24 @@ export default function IngredientDetailPage() {
 function PricesCard({ d, editable, onAffected }: { d: Detail; editable: boolean; onAffected: (r: AffectedRecipe[]) => void }) {
   const qc = useQueryClient()
   const toast = useToast()
-  const [form, setForm] = useState({ packagePrice: null as string | null, validFrom: todayIso(), source: '', agentName: '', notes: '', packageContent: d.packageContent as string | null, packageUnit: d.packageUnit })
+  // NUOVO: il nuovo prezzo parte da "come lo paghi" dell'ultimo prezzo (o dell'anagrafica)
+  const startPu = d.purchaseUnit
+  const startContent = (d.currentPrice?.package_content ?? d.packageContent) as string | null
+  const startUnit = d.currentPrice?.package_unit ?? d.packageUnit
+  const [form, setForm] = useState({
+    packagePrice: null as string | null,
+    validFrom: todayIso(),
+    source: '',
+    agentName: d.currentPrice?.agent_name ?? '',
+    notes: '',
+    mode: inferMode(startPu, startContent, startUnit) as BuyMode,
+    purchaseUnit: startPu,
+    packageContent: startContent,
+    packageUnit: startUnit,
+  })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
   const [open, setOpen] = useState(false)
-  const unitPreview = form.packagePrice && form.packageContent ? Number(form.packagePrice) / Number(form.packageContent) : null
 
   return (
     <div className="card">
@@ -270,13 +291,15 @@ function PricesCard({ d, editable, onAffected }: { d: Detail; editable: boolean;
                   source: form.source || null,
                   agentName: form.agentName || null,
                   notes: form.notes || null,
-                  packageContent: form.packageContent,
-                  packageUnit: form.packageUnit,
+                  ...(() => {
+                    const pk = packageOf(form.mode, form)
+                    return { packageContent: pk.packageContent, packageUnit: pk.packageUnit }
+                  })(),
                 })
                 onAffected(r.affectedRecipes)
                 toast('Prezzo registrato nello storico.')
                 setOpen(false)
-                setForm((f) => ({ ...f, packagePrice: null, source: '', agentName: '', notes: '' }))
+                setForm((f) => ({ ...f, packagePrice: null, source: '', notes: '' }))
                 await qc.invalidateQueries({ queryKey: ['ingredients'] })
                 await qc.invalidateQueries({ queryKey: ['recipes'] })
                 qc.invalidateQueries({ queryKey: ['dashboard'] })
@@ -288,35 +311,29 @@ function PricesCard({ d, editable, onAffected }: { d: Detail; editable: boolean;
               }
             }}
           >
-            <div className="grid-4">
-              <Field label="Prezzo confezione (netto IVA)" htmlFor="p-price" required error={errors.packagePrice}>
-                <NumberInput id="p-price" value={form.packagePrice} onChange={(x) => setForm((f) => ({ ...f, packagePrice: x }))} suffix="€" invalid={!!errors.packagePrice} />
-              </Field>
-              <Field label="Contenuto confezione" htmlFor="p-cont" error={errors.packageContent}>
-                <NumberInput
-                  id="p-cont"
-                  value={form.packageContent}
-                  onChange={(x) => setForm((f) => ({ ...f, packageContent: x }))}
-                  suffix={
-                    <select className="addon" value={form.packageUnit} onChange={(e) => setForm((f) => ({ ...f, packageUnit: e.target.value }))} aria-label="Unità">
-                      {UNITS.map((u) => (
-                        <option key={u.value}>{u.value}</option>
-                      ))}
-                    </select>
-                  }
-                />
-              </Field>
-              <Field label="Valido dal" htmlFor="p-vf" required error={errors.validFrom}>
+            <BuyBlock
+              mode={form.mode}
+              purchaseUnit={form.purchaseUnit}
+              content={form.packageContent}
+              unit={form.packageUnit}
+              errors={errors}
+              idPrefix="p"
+              lockDimension={dimOf(d.packageUnit)}
+              price={form.packagePrice}
+              onPrice={(x) => setForm((f) => ({ ...f, packagePrice: x }))}
+              onChange={(p) => setForm((f) => ({ ...f, ...p }))}
+            />
+            <div className="grid-3">
+              <Field label="Data del prezzo" htmlFor="p-vf" required error={errors.validFrom} hint="Di solito la data della fattura">
                 <input id="p-vf" type="date" className="input" value={form.validFrom} onChange={(e) => setForm((f) => ({ ...f, validFrom: e.target.value }))} />
               </Field>
-              <Field label="Fonte" htmlFor="p-src" hint="fattura, listino…">
+              <Field label="Agente" htmlFor="p-agent" hint={d.supplier ? `Prima quelli di ${d.supplier}` : 'Facoltativo'}>
+                <AgentSelect id="p-agent" supplier={d.supplier ?? ''} value={form.agentName} onChange={(x) => setForm((f) => ({ ...f, agentName: x }))} />
+              </Field>
+              <Field label="Fonte" htmlFor="p-src" hint="es. fattura n. 123, listino">
                 <input id="p-src" className="input" value={form.source} onChange={(e) => setForm((f) => ({ ...f, source: e.target.value }))} />
               </Field>
-              <Field label="Agente" htmlFor="p-agent" hint="facoltativo: agente del fornitore">
-                <input id="p-agent" className="input" value={form.agentName} onChange={(e) => setForm((f) => ({ ...f, agentName: e.target.value }))} />
-              </Field>
             </div>
-            {unitPreview !== null && Number.isFinite(unitPreview) ? <div className="small muted">Prezzo normalizzato risultante: circa {euro(String(unitPreview), 4)} per unità della confezione.</div> : null}
             <div className="row">
               <button className="btn primary" type="submit" disabled={busy}>
                 {busy ? <span className="spinner" /> : null} Registra prezzo

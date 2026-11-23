@@ -162,6 +162,16 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 | Modifica di un valore già registrato (riapre il modulo con i dati, ricalcola le ricette; `PUT /tariffs/{id}/versions/{versionId}`) | ➕ | `test_modifica_di_un_valore_registrato`, E `modifica.mjs` |
 | Eliminazione di un'utenza creata per errore con valori e bollette (`DELETE /tariffs/{id}`); rifiutata se uno strumento la usa | ➕ | `test_eliminazione_utenza`, E |
 
+## 13. Novità: modulo prodotto semplificato
+
+| Funzionalità | Stato | Prove |
+|---|---|---|
+| «Come lo paghi?»: al kg, al litro, al pezzo (con il peso del pezzo) o a confezione (tipo e contenuto), tradotto nei campi esistenti (`purchaseUnit`, `packageContent`, `packageUnit`): nessuna modifica al database né alle API | ➕ | E `prodotto.mjs` (girello 45 € / 3,2 kg = 14,0625 €/kg; uova 6 € / 30 pz = 0,20 €/pz) |
+| Prezzo senza IVA con anteprima immediata del prezzo al kg/litro/pezzo; esempi sotto ogni campo; campi tecnici in «Altri dettagli» | ➕ | E |
+| Categoria e fornitore obbligatori nel modulo, con suggerimenti di quelli già usati (`GET /ingredients/suppliers`) | ➕ | `IngredientSuggestionsTest`, E |
+| Agente da tendina, prima quelli del fornitore (`GET /ingredients/agents`), con «nuovo agente» | ➕ | `IngredientSuggestionsTest`, E |
+| Nuovo prezzo con lo stesso blocco; le modalità incompatibili con i prezzi registrati (peso/volume/pezzi) sono disattivate | ➕ | E |
+
 ## Differenze rimaste rispetto all'originale
 
 1. **Ordinamento con valori uguali** (`/ingredients?sort=category`). A parità di categoria entrambe le API ordinano per ID interno, cioè per UUID casuali diversi nei due database. Non è una differenza di logica.

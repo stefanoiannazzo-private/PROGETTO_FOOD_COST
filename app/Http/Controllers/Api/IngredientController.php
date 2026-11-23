@@ -165,6 +165,25 @@ final class IngredientController extends Controller
         return ['data' => DB::table('ingredients')->where('company_id', $ctx->companyId())->whereNotNull('category')->distinct()->orderBy('category')->pluck('category')->all()];
     }
 
+    /** NUOVO — fornitori già usati dall'azienda, per i suggerimenti del modulo. */
+    public function suppliers(Request $req): array
+    {
+        $ctx = $this->requireCompany($req, 'recipes.read');
+
+        return ['data' => DB::table('ingredients')->where('company_id', $ctx->companyId())->whereNotNull('supplier')->where('supplier', '<>', '')->distinct()->orderBy('supplier')->pluck('supplier')->all()];
+    }
+
+    /** NUOVO — agenti già usati sui prezzi, con il fornitore di riferimento (per suggerirli per fornitore). */
+    public function agents(Request $req): array
+    {
+        $ctx = $this->requireCompany($req, 'recipes.read', 'costs.read');
+        $rows = DB::table('ingredient_prices')->where('company_id', $ctx->companyId())->whereNotNull('agent_name')->where('agent_name', '<>', '')
+            ->groupBy('agent_name', 'supplier')->orderBy('agent_name')
+            ->get(['agent_name', 'supplier', DB::raw('MAX(valid_from) as last_used')]);
+
+        return ['data' => $rows->map(fn ($r) => ['name' => $r->agent_name, 'supplier' => $r->supplier, 'lastUsed' => $r->last_used])->all()];
+    }
+
     public function show(Request $req, string $id): array
     {
         $ctx = $this->requireCompany($req, 'recipes.read');

@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useState, type ReactNode } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { todayIso } from '@/lib/num'
+import { euro, todayIso } from '@/lib/num'
 import { useCan } from '@/lib/session'
-import { Drawer, errorMessage, Field, fieldErrors, NumberInput, useToast } from './ui'
+import { Drawer, errorMessage, Field, fieldErrors, Icon, NumberInput, useToast } from './ui'
 
 export const UNITS = [
   { value: 'g', label: 'g' },
@@ -16,12 +16,26 @@ export const UNITS = [
   { value: 'pz', label: 'pz' },
 ]
 
+/** NUOVO — come il ristoratore paga il prodotto: al kg, al litro, al pezzo (con il suo peso) o a confezione. */
+export type BuyMode = 'kg' | 'l' | 'pz' | 'conf'
+
+const MODES: Array<{ value: BuyMode; title: string; ex: string }> = [
+  { value: 'kg', title: 'Al kg', ex: 'carne, pesce, formaggi al taglio, frutta e verdura' },
+  { value: 'l', title: 'Al litro', ex: 'latte sfuso, olio o vino alla spina' },
+  { value: 'pz', title: 'Al pezzo', ex: 'un girello intero, una forma di formaggio, un’anguria' },
+  { value: 'conf', title: 'A confezione', ex: 'cartone, bottiglia, sacco, barattolo, vaschetta' },
+]
+
+const PACK_TYPES = ['confezione', 'cartone', 'bottiglia', 'sacco', 'barattolo', 'vaschetta', 'latta', 'busta', 'scatola', 'tanica', 'fusto', 'cassetta', 'vasetto']
+
 export interface IngredientFormValue {
   code: string
   name: string
   category: string
   supplier: string
   notes: string
+  /** NUOVO: modalità di acquisto (ricavata da purchaseUnit/packageContent/packageUnit per i prodotti esistenti) */
+  mode: BuyMode | null
   purchaseUnit: string
   packageContent: string | null
   packageUnit: string
@@ -37,6 +51,7 @@ export const emptyIngredient = (name = ''): IngredientFormValue => ({
   category: '',
   supplier: '',
   notes: '',
+  mode: null,
   purchaseUnit: 'confezione',
   packageContent: null,
   packageUnit: 'kg',
@@ -47,51 +62,321 @@ export const emptyIngredient = (name = ''): IngredientFormValue => ({
 })
 
 const dim = (u: string) => (['g', 'kg'].includes(u) ? 'mass' : ['ml', 'cl', 'l'].includes(u) ? 'volume' : 'count')
+const toBase: Record<string, number> = { g: 0.001, kg: 1, ml: 0.001, cl: 0.01, l: 1, pz: 1 }
+const baseLabel = (u: string) => (dim(u) === 'mass' ? 'kg' : dim(u) === 'volume' ? 'l' : 'pz')
 
-/** Campi anagrafici dell'ingrediente, condivisi tra creazione, modifica e creazione rapida dall'editor ricetta. */
-export function IngredientFields({ v, set, errors, isNew }: { v: IngredientFormValue; set: (p: Partial<IngredientFormValue>) => void; errors: Record<string, string>; isNew?: boolean }) {
-  const needDensity = dim(v.packageUnit) !== dim(v.usageUnit) && [dim(v.packageUnit), dim(v.usageUnit)].includes('volume')
-  const needUnitWeight = dim(v.packageUnit) !== dim(v.usageUnit) && [dim(v.packageUnit), dim(v.usageUnit)].includes('count')
+/** Modalità di un prodotto già registrato, dai campi che esistono nel database. */
+export function inferMode(purchaseUnit: string | null | undefined, content: string | number | null | undefined, unit: string): BuyMode {
+  const pu = (purchaseUnit ?? '').trim().toLowerCase()
+  if (Number(content) === 1 && unit === 'kg' && pu === 'kg') return 'kg'
+  if (Number(content) === 1 && unit === 'l' && (pu === 'litro' || pu === 'l')) return 'l'
+  if (pu === 'pezzo' && dim(unit) === 'mass') return 'pz'
+  return 'conf'
+}
+
+/** Confezione equivalente alla modalità scelta. */
+export function packageOf(mode: BuyMode, v: { purchaseUnit: string; packageContent: string | null; packageUnit: string }) {
+  if (mode === 'kg') return { purchaseUnit: 'kg', packageContent: '1', packageUnit: 'kg' }
+  if (mode === 'l') return { purchaseUnit: 'litro', packageContent: '1', packageUnit: 'l' }
+  if (mode === 'pz') return { purchaseUnit: 'pezzo', packageContent: v.packageContent, packageUnit: dim(v.packageUnit) === 'mass' ? v.packageUnit : 'kg' }
+  return { purchaseUnit: v.purchaseUnit && !['kg', 'litro', 'pezzo'].includes(v.purchaseUnit) ? v.purchaseUnit : 'confezione', packageContent: v.packageContent, packageUnit: v.packageUnit }
+}
+
+/** Prezzo al kg / litro / pezzo, solo per mostrarlo mentre si scrive (il calcolo vero lo fa il server). */
+export function unitPricePreview(price: string | null, mode: BuyMode | null, content: string | null, unit: string): string | null {
+  if (!price || !mode) return null
+  const p = Number(price)
+  if (!Number.isFinite(p) || p <= 0) return null
+  if (mode === 'kg' || mode === 'l') return null
+  const c = Number(content) * (toBase[unit] ?? 1)
+  if (!Number.isFinite(c) || c <= 0) return null
+  return `= ${euro(String(p / c), 2)} al ${baseLabel(unit) === 'pz' ? 'pezzo' : baseLabel(unit)}`
+}
+
+const defaultUsage = (mode: BuyMode, unit: string) => (mode === 'l' ? 'ml' : mode === 'kg' || mode === 'pz' ? 'g' : dim(unit) === 'volume' ? 'ml' : dim(unit) === 'count' ? 'pz' : 'g')
+
+/** Blocco "Come lo paghi?": modalità, prezzo (facoltativo nel blocco) e peso/contenuto. Usato da creazione, modifica e nuovo prezzo. */
+export function BuyBlock({
+  mode,
+  purchaseUnit,
+  content,
+  unit,
+  onChange,
+  price,
+  onPrice,
+  errors,
+  idPrefix = 'buy',
+  lockDimension,
+}: {
+  mode: BuyMode | null
+  purchaseUnit: string
+  content: string | null
+  unit: string
+  onChange: (p: { mode?: BuyMode; purchaseUnit?: string; packageContent?: string | null; packageUnit?: string }) => void
+  price?: string | null
+  onPrice?: (x: string | null) => void
+  errors: Record<string, string>
+  idPrefix?: string
+  /** con prezzi già registrati la grandezza (peso, volume, pezzi) non può cambiare */
+  lockDimension?: 'mass' | 'volume' | 'count'
+}) {
+  const allowed = (m: BuyMode) => !lockDimension || (m === 'kg' || m === 'pz' ? lockDimension === 'mass' : m === 'l' ? lockDimension === 'volume' : true)
+  const units = UNITS.filter((u) => !lockDimension || dim(u.value) === lockDimension)
+  const preview = price !== undefined ? unitPricePreview(price, mode, content, unit) : null
+  const priceLabel = mode === 'kg' ? 'Prezzo al kg' : mode === 'l' ? 'Prezzo al litro' : mode === 'pz' ? 'Prezzo del pezzo' : 'Prezzo della confezione'
   return (
     <div className="stack">
-      <div className="grid-2">
-        <Field label="Nome" htmlFor="ing-name" required error={errors.name}>
-          <input id="ing-name" className="input" value={v.name} onChange={(e) => set({ name: e.target.value })} autoFocus={isNew} />
-        </Field>
-        <Field label="Codice articolo" htmlFor="ing-code" hint={isNew ? 'Lascia vuoto per generarlo' : undefined} error={errors.code}>
-          <input id="ing-code" className="input mono" value={v.code} onChange={(e) => set({ code: e.target.value })} />
-        </Field>
-        <Field label="Categoria" htmlFor="ing-cat">
-          <input id="ing-cat" className="input" value={v.category} onChange={(e) => set({ category: e.target.value })} list="ingredient-categories" />
-        </Field>
-        <Field label="Fornitore" htmlFor="ing-sup">
-          <input id="ing-sup" className="input" value={v.supplier} onChange={(e) => set({ supplier: e.target.value })} />
-        </Field>
+      <div className="field">
+        <label>
+          Come lo paghi?<span aria-hidden="true"> *</span>
+        </label>
+        <div className="buy-modes" role="group" aria-label="Come lo paghi">
+          {MODES.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              className="buy-mode"
+              aria-pressed={mode === m.value}
+              disabled={!allowed(m.value)}
+              style={!allowed(m.value) ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+              title={!allowed(m.value) ? 'Non compatibile con i prezzi già registrati (peso, volume o pezzi)' : undefined}
+              onClick={() => {
+                const next = packageOf(m.value, { purchaseUnit, packageContent: m.value === mode ? content : m.value === 'pz' || m.value === 'conf' ? (mode === 'pz' || mode === 'conf' ? content : null) : null, packageUnit: m.value === 'conf' && lockDimension ? (units[0]?.value ?? unit) : m.value === 'pz' ? 'kg' : unit })
+                onChange({ mode: m.value, ...next })
+              }}
+            >
+              <span className="bm-title">{m.title}</span>
+              <span className="bm-ex">{m.ex}</span>
+            </button>
+          ))}
+        </div>
+        {errors.mode ? (
+          <span className="error" role="alert">
+            {errors.mode}
+          </span>
+        ) : null}
       </div>
-      <div className="section-title">Confezione di acquisto</div>
+      {mode ? (
+        <div className="grid-3">
+          {onPrice ? (
+            <Field label={`${priceLabel} (senza IVA)`} htmlFor={`${idPrefix}-price`} required error={errors.packagePrice ?? errors['initialPrice.packagePrice']} hint={preview ? <span className="price-preview">{preview}</span> : 'L’imponibile della fattura, IVA esclusa'}>
+              <NumberInput id={`${idPrefix}-price`} value={price ?? null} onChange={onPrice} suffix="€" invalid={!!(errors.packagePrice ?? errors['initialPrice.packagePrice'])} />
+            </Field>
+          ) : null}
+          {mode === 'pz' ? (
+            <Field label="Quanto pesa un pezzo (circa)?" htmlFor={`${idPrefix}-cont`} required error={errors.packageContent} hint="es. girello 3,2 kg · forma di parmigiano 38 kg">
+              <NumberInput
+                id={`${idPrefix}-cont`}
+                value={content}
+                onChange={(x) => onChange({ packageContent: x })}
+                invalid={!!errors.packageContent}
+                suffix={
+                  <select className="addon" value={dim(unit) === 'mass' ? unit : 'kg'} onChange={(e) => onChange({ packageUnit: e.target.value })} aria-label="Unità del peso">
+                    <option value="kg">kg</option>
+                    <option value="g">g</option>
+                  </select>
+                }
+              />
+            </Field>
+          ) : null}
+          {mode === 'conf' ? (
+            <>
+              <Field label="Che confezione è?" htmlFor={`${idPrefix}-pu`} hint="es. cartone, bottiglia, sacco">
+                <input id={`${idPrefix}-pu`} className="input" value={purchaseUnit} onChange={(e) => onChange({ purchaseUnit: e.target.value })} list={`${idPrefix}-pack-types`} />
+                <datalist id={`${idPrefix}-pack-types`}>
+                  {PACK_TYPES.map((p) => (
+                    <option key={p} value={p} />
+                  ))}
+                </datalist>
+              </Field>
+              <Field label="Quanto contiene?" htmlFor={`${idPrefix}-cont`} required error={errors.packageContent} hint="es. sacco 25 kg · cartone 6 bottiglie da 0,75 l → 4,5 l · 30 uova → 30 pz">
+                <NumberInput
+                  id={`${idPrefix}-cont`}
+                  value={content}
+                  onChange={(x) => onChange({ packageContent: x })}
+                  invalid={!!errors.packageContent}
+                  suffix={
+                    <select className="addon" value={unit} onChange={(e) => onChange({ packageUnit: e.target.value })} aria-label="Unità del contenuto">
+                      {units.map((u) => (
+                        <option key={u.value} value={u.value}>
+                          {u.label}
+                        </option>
+                      ))}
+                    </select>
+                  }
+                />
+              </Field>
+            </>
+          ) : null}
+        </div>
+      ) : (
+        <div className="faint small">Scegli come lo paghi: poi ti chiediamo solo i dati che servono.</div>
+      )}
+    </div>
+  )
+}
+
+/** Suggerimenti di categorie e fornitori già usati. */
+function useSuggestions() {
+  const cats = useQuery({ queryKey: ['ingredients', 'categories'], queryFn: () => api.get<{ data: string[] }>('/ingredients/categories'), staleTime: 60_000 })
+  const sups = useQuery({ queryKey: ['ingredients', 'suppliers'], queryFn: () => api.get<{ data: string[] }>('/ingredients/suppliers'), staleTime: 60_000 })
+  return { categories: cats.data?.data ?? [], suppliers: sups.data?.data ?? [] }
+}
+
+/** Agente: tendina con quelli già usati (prima quelli del fornitore) più "nuovo agente". */
+export function AgentSelect({ id, supplier, value, onChange }: { id: string; supplier: string; value: string; onChange: (x: string) => void }) {
+  const q = useQuery({ queryKey: ['ingredients', 'agents'], queryFn: () => api.get<{ data: Array<{ name: string; supplier: string | null }> }>('/ingredients/agents'), staleTime: 60_000 })
+  const all = q.data?.data ?? []
+  const sup = supplier.trim().toLowerCase()
+  const mine = [...new Set(all.filter((a) => sup && (a.supplier ?? '').trim().toLowerCase() === sup).map((a) => a.name))]
+  const others = [...new Set(all.map((a) => a.name))].filter((n) => !mine.includes(n))
+  const known = mine.includes(value) || others.includes(value)
+  const [adding, setAdding] = useState(false)
+  if (adding || (value !== '' && !known)) {
+    return (
+      <div className="row" style={{ gap: 6 }}>
+        <input id={id} className="input grow" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Nome e cognome dell’agente" autoFocus={adding} />
+        <button
+          type="button"
+          className="btn ghost icon sm"
+          aria-label="Scegli dall’elenco"
+          title="Scegli dall’elenco"
+          onClick={() => {
+            setAdding(false)
+            onChange('')
+          }}
+        >
+          <Icon name="x" />
+        </button>
+      </div>
+    )
+  }
+  return (
+    <select
+      id={id}
+      className="input"
+      value={value}
+      onChange={(e) => {
+        if (e.target.value === '__new__') {
+          setAdding(true)
+          onChange('')
+        } else onChange(e.target.value)
+      }}
+    >
+      <option value="">— nessun agente —</option>
+      {mine.length ? (
+        <optgroup label={`Agenti di ${supplier.trim()}`}>
+          {mine.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+      {others.length ? (
+        <optgroup label={mine.length ? 'Altri agenti' : 'Agenti già inseriti'}>
+          {others.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </optgroup>
+      ) : null}
+      <option value="__new__">+ Nuovo agente…</option>
+    </select>
+  )
+}
+
+/** Controlli del modulo prima dell'invio: categoria e fornitore obbligatori, come lo paghi e peso/contenuto. */
+export function validateIngredient(v: IngredientFormValue): Record<string, string> {
+  const e: Record<string, string> = {}
+  if (!v.name.trim()) e.name = 'Inserisci il nome del prodotto.'
+  if (!v.category.trim()) e.category = 'Scegli o scrivi la categoria.'
+  if (!v.supplier.trim()) e.supplier = 'Scegli o scrivi il fornitore.'
+  if (!v.mode) e.mode = 'Scegli come lo paghi.'
+  if ((v.mode === 'pz' || v.mode === 'conf') && !(Number(v.packageContent) > 0)) e.packageContent = v.mode === 'pz' ? 'Indica il peso del pezzo.' : 'Indica quanto contiene la confezione.'
+  return e
+}
+
+/**
+ * Campi dell'ingrediente, condivisi tra creazione, modifica e creazione rapida dall'editor ricetta.
+ * NUOVO: impostati sul modo di ragionare del ristoratore ("come lo paghi?"); i campi tecnici sono in "Altri dettagli".
+ */
+export function IngredientFields({
+  v,
+  set,
+  errors,
+  isNew,
+  price,
+  agent,
+  moreDetails,
+  lockDimension,
+}: {
+  v: IngredientFormValue
+  set: (p: Partial<IngredientFormValue>) => void
+  errors: Record<string, string>
+  isNew?: boolean
+  price?: { value: string | null; onChange: (x: string | null) => void }
+  agent?: { value: string; onChange: (x: string) => void }
+  moreDetails?: ReactNode
+  lockDimension?: 'mass' | 'volume' | 'count'
+}) {
+  const s = useSuggestions()
+  const [usageTouched, setUsageTouched] = useState(!isNew)
+  const needDensity = dim(v.packageUnit) !== dim(v.usageUnit) && [dim(v.packageUnit), dim(v.usageUnit)].includes('volume')
+  const needUnitWeight = dim(v.packageUnit) !== dim(v.usageUnit) && [dim(v.packageUnit), dim(v.usageUnit)].includes('count') && v.mode !== 'pz'
+  return (
+    <div className="stack">
+      {isNew ? (
+        <div className="alert info small">
+          <Icon name="book" />
+          <div>
+            Inserisci il prodotto <strong>come lo trovi in fattura</strong>: il nome, come lo paghi (al kg, al litro, al pezzo o a confezione) e il prezzo senza IVA. Se lo compri a confezione ti chiediamo quanto contiene: il prezzo al kg lo calcoliamo noi.
+          </div>
+        </div>
+      ) : null}
+      <Field label="Nome del prodotto" htmlFor="ing-name" required error={errors.name} hint="es. Girello di vitello, Passata di pomodoro, Uova fresche">
+        <input id="ing-name" className="input" value={v.name} onChange={(e) => set({ name: e.target.value })} autoFocus={isNew} />
+      </Field>
+      <BuyBlock
+        mode={v.mode}
+        purchaseUnit={v.purchaseUnit}
+        content={v.packageContent}
+        unit={v.packageUnit}
+        errors={errors}
+        idPrefix="ing"
+        lockDimension={lockDimension}
+        price={price?.value}
+        onPrice={price?.onChange}
+        onChange={(p) => {
+          const next: Partial<IngredientFormValue> = { ...p }
+          if (!usageTouched && (p.mode || p.packageUnit)) next.usageUnit = defaultUsage(p.mode ?? v.mode ?? 'conf', p.packageUnit ?? v.packageUnit)
+          set(next)
+        }}
+      />
+      {!isNew && v.mode ? <div className="faint small">Vale per i prossimi prezzi: quelli già registrati restano con la loro confezione.</div> : null}
       <div className="grid-3">
-        <Field label="Acquistato in" htmlFor="ing-pu" hint="es. sacco, bottiglia, confezione">
-          <input id="ing-pu" className="input" value={v.purchaseUnit} onChange={(e) => set({ purchaseUnit: e.target.value })} />
+        <Field label="Resa" htmlFor="ing-yield" hint="Facoltativa. Su 10 kg te ne restano 8 dopo la pulizia? Scrivi 80%" error={errors.edibleYieldPercent}>
+          <NumberInput id="ing-yield" value={v.edibleYieldPercent} onChange={(x) => set({ edibleYieldPercent: x })} suffix="%" invalid={!!errors.edibleYieldPercent} />
         </Field>
-        <Field label="Contenuto" htmlFor="ing-pc" required error={errors.packageContent}>
-          <NumberInput
-            id="ing-pc"
-            value={v.packageContent}
-            onChange={(x) => set({ packageContent: x })}
-            invalid={!!errors.packageContent}
-            suffix={
-              <select className="addon" value={v.packageUnit} onChange={(e) => set({ packageUnit: e.target.value })} aria-label="Unità del contenuto">
-                {UNITS.map((u) => (
-                  <option key={u.value} value={u.value}>
-                    {u.label}
-                  </option>
-                ))}
-              </select>
-            }
-          />
+        <Field label="Categoria" htmlFor="ing-cat" required error={errors.category} hint="Scrivi e scegli tra quelle già usate, es. Carne, Latticini">
+          <input id="ing-cat" className="input" value={v.category} onChange={(e) => set({ category: e.target.value })} list="ing-cat-list" autoComplete="off" />
+          <datalist id="ing-cat-list">
+            {s.categories.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
         </Field>
         <Field label="Unità in ricetta" htmlFor="ing-uu" hint="Unità proposta quando lo dosi">
-          <select id="ing-uu" className="input" value={v.usageUnit} onChange={(e) => set({ usageUnit: e.target.value })}>
+          <select
+            id="ing-uu"
+            className="input"
+            value={v.usageUnit}
+            onChange={(e) => {
+              setUsageTouched(true)
+              set({ usageUnit: e.target.value })
+            }}
+          >
             {UNITS.map((u) => (
               <option key={u.value} value={u.value}>
                 {u.label}
@@ -100,44 +385,68 @@ export function IngredientFields({ v, set, errors, isNew }: { v: IngredientFormV
           </select>
         </Field>
       </div>
-      <div className="grid-3">
-        <Field label="Resa edibile" htmlFor="ing-yield" hint="100% se non ci sono scarti" error={errors.edibleYieldPercent}>
-          <NumberInput id="ing-yield" value={v.edibleYieldPercent} onChange={(x) => set({ edibleYieldPercent: x })} suffix="%" invalid={!!errors.edibleYieldPercent} />
+      <div className="grid-2">
+        <Field label="Fornitore" htmlFor="ing-sup" required error={errors.supplier} hint="Scrivi e scegli tra quelli già usati">
+          <input id="ing-sup" className="input" value={v.supplier} onChange={(e) => set({ supplier: e.target.value })} list="ing-sup-list" autoComplete="off" />
+          <datalist id="ing-sup-list">
+            {s.suppliers.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
         </Field>
-        <Field label="Densità" htmlFor="ing-dens" hint={needDensity ? 'Necessaria per convertire volume e peso' : 'Facoltativa'} error={errors.densityKgPerL}>
-          <NumberInput id="ing-dens" value={v.densityKgPerL} onChange={(x) => set({ densityKgPerL: x })} suffix="kg/l" invalid={!!errors.densityKgPerL || (needDensity && !v.densityKgPerL)} />
-        </Field>
-        <Field label="Peso medio unitario" htmlFor="ing-uw" hint={needUnitWeight ? 'Necessario per convertire pezzi e peso' : 'Facoltativo'} error={errors.unitWeightKg}>
-          <NumberInput
-            id="ing-uw"
-            value={v.unitWeightKg ? String(Number(v.unitWeightKg) * 1000) : null}
-            onChange={(x) => set({ unitWeightKg: x ? String(Number(x) / 1000) : null })}
-            suffix="g/pz"
-            invalid={!!errors.unitWeightKg || (needUnitWeight && !v.unitWeightKg)}
-          />
-        </Field>
+        {agent ? (
+          <Field label="Agente" htmlFor="ing-agent" hint="Facoltativo: prima quelli di questo fornitore">
+            <AgentSelect id="ing-agent" supplier={v.supplier} value={agent.value} onChange={agent.onChange} />
+          </Field>
+        ) : null}
       </div>
       <Field label="Note" htmlFor="ing-notes">
         <textarea id="ing-notes" className="input" rows={2} value={v.notes} onChange={(e) => set({ notes: e.target.value })} />
       </Field>
+      <details className="more" open={!!(errors.code || errors.densityKgPerL || errors.unitWeightKg || needDensity || (needUnitWeight && !v.unitWeightKg))}>
+        <summary>Altri dettagli (facoltativi)</summary>
+        <div className="stack">
+          <div className="grid-3">
+            <Field label="Codice articolo" htmlFor="ing-code" hint={isNew ? 'Lascia vuoto per generarlo' : undefined} error={errors.code}>
+              <input id="ing-code" className="input mono" value={v.code} onChange={(e) => set({ code: e.target.value })} />
+            </Field>
+            <Field label="Densità" htmlFor="ing-dens" hint={needDensity ? 'Necessaria per passare da litri a grammi' : 'es. olio 0,92 kg/l'} error={errors.densityKgPerL}>
+              <NumberInput id="ing-dens" value={v.densityKgPerL} onChange={(x) => set({ densityKgPerL: x })} suffix="kg/l" invalid={!!errors.densityKgPerL || (needDensity && !v.densityKgPerL)} />
+            </Field>
+            <Field label="Peso medio di un pezzo" htmlFor="ing-uw" hint={needUnitWeight ? 'Necessario per passare da pezzi a grammi' : 'es. un uovo 60 g'} error={errors.unitWeightKg}>
+              <NumberInput
+                id="ing-uw"
+                value={v.unitWeightKg ? String(Number(v.unitWeightKg) * 1000) : null}
+                onChange={(x) => set({ unitWeightKg: x ? String(Number(x) / 1000) : null })}
+                suffix="g/pz"
+                invalid={!!errors.unitWeightKg || (needUnitWeight && !v.unitWeightKg)}
+              />
+            </Field>
+          </div>
+          {moreDetails}
+        </div>
+      </details>
     </div>
   )
 }
 
 export function ingredientPayload(v: IngredientFormValue) {
+  const pack = packageOf(v.mode ?? 'conf', v)
+  // al pezzo: il peso del pezzo serve anche per dosarlo a pezzi in ricetta
+  const pieceKg = v.mode === 'pz' && pack.packageContent ? String(Number(pack.packageContent) * (toBase[pack.packageUnit] ?? 1)) : null
   return {
     code: v.code || null,
     name: v.name,
-    category: v.category || null,
-    supplier: v.supplier || null,
+    category: v.category.trim() || null,
+    supplier: v.supplier.trim() || null,
     notes: v.notes || null,
-    purchaseUnit: v.purchaseUnit || 'confezione',
-    packageContent: v.packageContent ?? '',
-    packageUnit: v.packageUnit,
+    purchaseUnit: pack.purchaseUnit,
+    packageContent: pack.packageContent ?? '',
+    packageUnit: pack.packageUnit,
     usageUnit: v.usageUnit,
     edibleYieldPercent: v.edibleYieldPercent ?? '100',
     densityKgPerL: v.densityKgPerL,
-    unitWeightKg: v.unitWeightKg,
+    unitWeightKg: v.mode === 'pz' ? pieceKg : v.unitWeightKg,
   }
 }
 
@@ -155,16 +464,23 @@ export function CreateIngredientDrawer({ initialName = '', onClose, onCreated }:
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const set = (p: Partial<IngredientFormValue>) => setV((x) => ({ ...x, ...p }))
+  const showPrice = can('costs.read')
 
   const save = async () => {
-    setBusy(true)
     setError('')
-    setErrors({})
+    const local = validateIngredient(v)
+    if (showPrice && !(Number(price.packagePrice) > 0)) local.packagePrice = 'Inserisci il prezzo (senza IVA).'
+    setErrors(local)
+    if (Object.keys(local).length) {
+      setError('Completa i campi evidenziati.')
+      return
+    }
+    setBusy(true)
     try {
-      const body = { ...ingredientPayload(v), ...(can('costs.read') && price.packagePrice !== null ? { initialPrice: { packagePrice: price.packagePrice, validFrom: price.validFrom, source: price.source || null, agentName: price.agentName || null } } : {}) }
+      const body = { ...ingredientPayload(v), ...(showPrice && price.packagePrice !== null ? { initialPrice: { packagePrice: price.packagePrice, validFrom: price.validFrom, source: price.source || null, agentName: price.agentName || null } } : {}) }
       const created = await api.post<{ id: string; code: string; name: string; usageUnit: string; packageUnit: string }>('/ingredients', body)
       await qc.invalidateQueries({ queryKey: ['ingredients'] })
-      toast(`Ingrediente “${created.name}” creato.`)
+      toast(`Prodotto “${created.name}” creato.`)
       onCreated?.(created)
       onClose()
     } catch (e) {
@@ -177,7 +493,7 @@ export function CreateIngredientDrawer({ initialName = '', onClose, onCreated }:
 
   return (
     <Drawer
-      title="Nuovo ingrediente"
+      title="Nuovo prodotto"
       onClose={onClose}
       wide
       footer={
@@ -199,26 +515,26 @@ export function CreateIngredientDrawer({ initialName = '', onClose, onCreated }:
         }}
       >
         {error ? <div className="alert err">{error}</div> : null}
-        <IngredientFields v={v} set={set} errors={errors} isNew />
-        {can('costs.read') ? (
-          <>
-            <div className="section-title">Prezzo di acquisto (netto IVA)</div>
-            <div className="grid-3">
-              <Field label="Prezzo della confezione" htmlFor="ing-price" error={errors['initialPrice.packagePrice']} hint="Lascia vuoto se non lo conosci ancora">
-                <NumberInput id="ing-price" value={price.packagePrice} onChange={(x) => setPrice((p) => ({ ...p, packagePrice: x }))} suffix="€" />
-              </Field>
-              <Field label="Valido dal" htmlFor="ing-vf">
-                <input id="ing-vf" type="date" className="input" value={price.validFrom} onChange={(e) => setPrice((p) => ({ ...p, validFrom: e.target.value }))} />
-              </Field>
-              <Field label="Fonte" htmlFor="ing-src" hint="es. fattura, listino">
-                <input id="ing-src" className="input" value={price.source} onChange={(e) => setPrice((p) => ({ ...p, source: e.target.value }))} />
-              </Field>
-              <Field label="Agente" htmlFor="ing-agent" hint="facoltativo">
-                <input id="ing-agent" className="input" value={price.agentName} onChange={(e) => setPrice((p) => ({ ...p, agentName: e.target.value }))} />
-              </Field>
-            </div>
-          </>
-        ) : null}
+        <IngredientFields
+          v={v}
+          set={set}
+          errors={errors}
+          isNew
+          price={showPrice ? { value: price.packagePrice, onChange: (x) => setPrice((p) => ({ ...p, packagePrice: x })) } : undefined}
+          agent={showPrice ? { value: price.agentName, onChange: (x) => setPrice((p) => ({ ...p, agentName: x })) } : undefined}
+          moreDetails={
+            showPrice ? (
+              <div className="grid-3">
+                <Field label="Data del prezzo" htmlFor="ing-vf" hint="Di solito la data della fattura">
+                  <input id="ing-vf" type="date" className="input" value={price.validFrom} onChange={(e) => setPrice((p) => ({ ...p, validFrom: e.target.value }))} />
+                </Field>
+                <Field label="Fonte del prezzo" htmlFor="ing-src" hint="es. fattura n. 123, listino">
+                  <input id="ing-src" className="input" value={price.source} onChange={(e) => setPrice((p) => ({ ...p, source: e.target.value }))} />
+                </Field>
+              </div>
+            ) : null
+          }
+        />
         <button type="submit" hidden />
       </form>
     </Drawer>
