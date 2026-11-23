@@ -367,3 +367,12 @@ details.more[open] > summary { margin-bottom: 12px; }
 @media (max-width: 1100px) {
   .summary-panel.summary-static { position: static !important; max-height: none; box-shadow: none; border-radius: var(--radius, 12px); }
 }
+
+/* NUOVO — iPhone/iPad: Safari ingrandisce la pagina quando si attiva un campo con testo sotto i 16 px
+   (e il modulo apre il primo campo da solo). Su schermi touch i campi usano 16 px: niente zoom. */
+@media (max-width: 900px), (hover: none) and (pointer: coarse) {
+  input, select, textarea, .input, select.input, textarea.input, select.addon, .input-group select.addon { font-size: 16px; }
+  .input, select.input { height: 40px; }
+  .btn.sm { height: 34px; }
+  .drawer-body { overflow-x: hidden; }
+}
