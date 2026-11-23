@@ -30,6 +30,8 @@ export default function PlatformPage() {
   const toast = useToast()
   const switchCompany = useSwitchCompany()
   const [creating, setCreating] = useState(false)
+  // NUOVO: link di invito rigenerato per un amministratore che non l'ha ancora usato
+  const [renewed, setRenewed] = useState<{ id: string; email: string; inviteLink: string; company: string } | null>(null)
   const [archived, setArchived] = useState(false)
   const ov = useQuery({ queryKey: ['platform', 'overview'], queryFn: () => api.get<Overview>('/platform/overview') })
   const q = useQuery({ queryKey: ['platform', 'companies'], queryFn: () => api.get<{ data: Company[] }>('/platform/companies') })
@@ -117,7 +119,24 @@ export default function PlatformPage() {
                       ))}
                       {c.pendingAdminInvitations.map((i) => (
                         <div key={i.email}>
-                          <span className={`badge ${i.expired ? 'err' : 'info'}`}>{i.expired ? 'invito scaduto' : 'invito in attesa'}</span> <span className="faint">{i.email}</span>
+                          <span className={`badge ${i.expired ? 'err' : 'info'}`}>{i.expired ? 'invito scaduto' : 'invito in attesa'}</span> <span className="faint">{i.email}</span>{' '}
+                          <button
+                            type="button"
+                            className="btn ghost sm"
+                            title="Crea un nuovo link di invito (il precedente smette di valere)"
+                            onClick={async () => {
+                              if (!window.confirm(`Creare un nuovo link di invito per ${i.email}? Il link precedente smetterà di funzionare.`)) return
+                              try {
+                                const r = await api.post<{ id: string; email: string; inviteLink: string }>(`/platform/invitations/${i.id}/renew`)
+                                setRenewed({ ...r, company: c.name })
+                                qc.invalidateQueries({ queryKey: ['platform'] })
+                              } catch (e) {
+                                toast(errorMessage(e), 'err')
+                              }
+                            }}
+                          >
+                            Nuovo link
+                          </button>
                         </div>
                       ))}
                       {c.admins.length + c.pendingAdminInvitations.length === 0 ? <span className="badge warn">nessun amministratore</span> : null}
@@ -176,6 +195,19 @@ export default function PlatformPage() {
         )}
       </div>
       {creating ? <CreateCompany onClose={() => setCreating(false)} /> : null}
+      {renewed ? (
+        <Drawer
+          title={`Nuovo link di invito — ${renewed.company}`}
+          onClose={() => setRenewed(null)}
+          footer={
+            <button className="btn primary" onClick={() => setRenewed(null)}>
+              Chiudi
+            </button>
+          }
+        >
+          <InviteLinkPanel invitationId={renewed.id} email={renewed.email} link={renewed.inviteLink} />
+        </Drawer>
+      ) : null}
     </>
   )
 }
@@ -186,7 +218,7 @@ function CreateCompany({ onClose }: { onClose: () => void }) {
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState<{ name: string; invitation: { mail: string; inviteLink?: string } } | null>(null)
+  const [done, setDone] = useState<{ name: string; invitation: { id: string; mail: string; email: string; inviteLink?: string } } | null>(null)
   return (
     <Drawer
       title="Nuova azienda"
@@ -209,7 +241,7 @@ function CreateCompany({ onClose }: { onClose: () => void }) {
                 setError('')
                 setBusy(true)
                 try {
-                  const r = await api.post<{ name: string; invitation: { mail: string; inviteLink?: string } }>('/platform/companies', v)
+                  const r = await api.post<{ name: string; invitation: { id: string; mail: string; email: string; inviteLink?: string } }>('/platform/companies', { ...v, sendEmail: false })
                   qc.invalidateQueries({ queryKey: ['platform'] })
                   setDone(r)
                 } catch (e) {
@@ -220,7 +252,7 @@ function CreateCompany({ onClose }: { onClose: () => void }) {
                 }
               }}
             >
-              {busy ? <span className="spinner" /> : null} Crea e invita
+              {busy ? <span className="spinner" /> : null} Crea e genera il link
             </button>
           </>
         )
@@ -229,13 +261,11 @@ function CreateCompany({ onClose }: { onClose: () => void }) {
       {done ? (
         <div className="stack">
           <div className="alert ok">
-            Azienda <strong>{done.name}</strong> creata. {done.invitation.mail === 'sent' ? 'L’invito è stato inviato per email.' : 'L’email non è configurata: invia tu il link all’amministratore.'}
+            <div>
+              Azienda <strong>{done.name}</strong> creata. Ecco il link di invito per l’amministratore: copialo e mandalo come preferisci (WhatsApp, email tua…) oppure fallo inviare da qui.
+            </div>
           </div>
-          {done.invitation.inviteLink ? (
-            <Field label="Link di invito" htmlFor="inv-link" hint="Valido per un periodo limitato, utilizzabile una sola volta">
-              <input id="inv-link" className="input" readOnly value={done.invitation.inviteLink} onFocus={(e) => e.target.select()} />
-            </Field>
-          ) : null}
+          {done.invitation.inviteLink ? <InviteLinkPanel invitationId={done.invitation.id} email={done.invitation.email} link={done.invitation.inviteLink} /> : null}
         </div>
       ) : (
         <div className="stack">
@@ -244,7 +274,7 @@ function CreateCompany({ onClose }: { onClose: () => void }) {
             <input id="co-name" className="input" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="es. Trattoria da Mario" autoFocus />
           </Field>
           <div className="section-title">Amministratore dell’azienda</div>
-          <p className="small muted">Riceve un invito per impostare la password e gestire utenti, ricette e costi della propria azienda.</p>
+          <p className="small muted">Riceve un link per impostare la password e gestire utenti, ricette e costi della propria azienda. Dopo la creazione ti mostriamo il link: decidi tu se copiarlo o inviarlo per email.</p>
           <div className="grid-2">
             <Field label="Nome e cognome" htmlFor="co-admin" required error={errors.adminName}>
               <input id="co-admin" className="input" value={v.adminName} onChange={(e) => setV({ ...v, adminName: e.target.value })} />
@@ -256,5 +286,60 @@ function CreateCompany({ onClose }: { onClose: () => void }) {
         </div>
       )}
     </Drawer>
+  )
+}
+
+/** NUOVO — link di invito: copia negli appunti e invio per email su richiesta del superadmin. */
+function InviteLinkPanel({ invitationId, email, link }: { invitationId: string; email: string; link: string }) {
+  const toast = useToast()
+  const [copied, setCopied] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState<null | 'sent' | 'outbox'>(null)
+  const token = new URL(link).searchParams.get('token') ?? ''
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link)
+    } catch {
+      const el = document.getElementById('inv-link') as HTMLInputElement | null
+      el?.select()
+      document.execCommand('copy')
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2500)
+  }
+  return (
+    <div className="stack">
+      <Field label="Link di invito" htmlFor="inv-link" hint="Valido 7 giorni, utilizzabile una sola volta">
+        <div className="row" style={{ gap: 8 }}>
+          <input id="inv-link" className="input grow mono small" readOnly value={link} onFocus={(e) => e.target.select()} />
+          <button type="button" className="btn primary" onClick={() => void copy()}>
+            <Icon name={copied ? 'check' : 'copy'} /> {copied ? 'Copiato' : 'Copia'}
+          </button>
+        </div>
+      </Field>
+      <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+        <button
+          type="button"
+          className="btn"
+          disabled={sending || sent === 'sent'}
+          onClick={async () => {
+            setSending(true)
+            try {
+              const r = await api.post<{ mail: 'sent' | 'outbox' }>(`/platform/invitations/${invitationId}/send`, { token })
+              setSent(r.mail)
+              if (r.mail === 'sent') toast(`Invito inviato a ${email}.`)
+            } catch (e) {
+              toast(errorMessage(e), 'err')
+            } finally {
+              setSending(false)
+            }
+          }}
+        >
+          {sending ? <span className="spinner" /> : <Icon name="upload" />} {sent === 'sent' ? `Inviato a ${email}` : `Invia per email a ${email}`}
+        </button>
+        {sent === 'outbox' ? <span className="small" style={{ color: 'var(--warn)' }}>L’email non è configurata sul server: copia il link e invialo tu.</span> : null}
+        {sent === 'sent' ? <span className="badge ok">email inviata</span> : null}
+      </div>
+    </div>
   )
 }

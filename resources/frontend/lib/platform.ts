@@ -39,5 +39,5 @@ export interface Company {
   ingredients: number
   users: number
   admins: Array<{ name: string; email: string }>
-  pendingAdminInvitations: Array<{ email: string; expired: boolean }>
+  pendingAdminInvitations: Array<{ id: string; email: string; expired: boolean }>
 }

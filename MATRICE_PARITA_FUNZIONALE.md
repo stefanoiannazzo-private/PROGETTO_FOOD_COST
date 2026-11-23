@@ -194,6 +194,13 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 |---|---|---|
 | Selettore «Stato: Bozza / Attiva» accanto a Modifica nella scheda ricetta (`POST /recipes/{id}/activate` dell'originale e nuovo `POST /recipes/{id}/draft`) | ➕ | `RecipeStatusTest`, E `stato.mjs` |
 
+## 17. Novità: link di invito dalla console del superadmin
+
+| Funzionalità | Stato | Prove |
+|---|---|---|
+| Creazione azienda: il link di invito viene sempre mostrato con il pulsante «Copia»; l'email parte solo se il superadmin clicca «Invia per email» (`POST /platform/invitations/{id}/send`, con verifica del token) | ➕ | `PlatformTest::test_link_di_invito_sempre_visibile_e_invio_su_richiesta`, E `invito.mjs` |
+| «Nuovo link» per un invito in attesa o scaduto: il link precedente smette di valere, il nuovo vale 7 giorni (`POST /platform/invitations/{id}/renew`) | ➕ | stesso test, E |
+
 ## Differenze rimaste rispetto all'originale
 
 1. **Ordinamento con valori uguali** (`/ingredients?sort=category`). A parità di categoria entrambe le API ordinano per ID interno, cioè per UUID casuali diversi nei due database. Non è una differenza di logica.

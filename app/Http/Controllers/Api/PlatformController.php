@@ -8,6 +8,7 @@ use App\Domain\Costing\Calculators;
 use App\Domain\Costing\Dec;
 use App\Domain\Costing\Units;
 use App\Http\Controllers\Controller;
+use App\Auth\Crypto;
 use App\Services\Audit;
 use App\Services\Costing;
 use App\Support\AppError;
@@ -16,6 +17,7 @@ use App\Support\Row;
 use App\Support\Validation\S;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -70,7 +72,7 @@ final class PlatformController extends Controller
         $users = DB::table('memberships')->where('is_active', 1)->groupBy('company_id')->selectRaw('company_id, count(*) as n')->pluck('n', 'company_id');
         $admins = DB::table('memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')->where('m.role', 'admin')->where('m.is_active', 1)
             ->orderBy('u.name')->get(['m.company_id', 'u.name', 'u.email'])->groupBy('company_id');
-        $pending = DB::table('invitations')->whereNull('accepted_at')->where('role', 'admin')->get(['company_id', 'email', 'expires_at'])->groupBy('company_id');
+        $pending = DB::table('invitations')->whereNull('accepted_at')->where('role', 'admin')->get(['id', 'company_id', 'email', 'expires_at'])->groupBy('company_id');
 
         return ['data' => $rows->map(fn ($c) => [
             'id' => $c->id,
@@ -81,7 +83,7 @@ final class PlatformController extends Controller
             'ingredients' => (int) ($ingredients[$c->id] ?? 0),
             'users' => (int) ($users[$c->id] ?? 0),
             'admins' => ($admins[$c->id] ?? collect())->map(fn ($a) => ['name' => $a->name, 'email' => $a->email])->values()->all(),
-            'pendingAdminInvitations' => ($pending[$c->id] ?? collect())->map(fn ($i) => ['email' => $i->email, 'expired' => Clock::isPast($i->expires_at)])->values()->all(),
+            'pendingAdminInvitations' => ($pending[$c->id] ?? collect())->map(fn ($i) => ['id' => $i->id, 'email' => $i->email, 'expired' => Clock::isPast($i->expires_at)])->values()->all(),
         ])->all()];
     }
 
@@ -93,16 +95,71 @@ final class PlatformController extends Controller
             'name' => S::string()->trim()->min(2, 'Il nome dell’azienda è obbligatorio.')->max(160),
             'adminName' => S::string()->trim()->min(2, 'Indica il nome dell’amministratore.')->max(120),
             'adminEmail' => S::string()->trim()->toLowerCase()->refine(fn ($v) => filter_var($v, FILTER_VALIDATE_EMAIL) !== false, 'Email non valida.'),
+            'sendEmail' => S::bool()->default(false),
         ]));
 
         return DB::transaction(function () use ($auth, $body) {
             $id = (string) Str::uuid();
             DB::table('companies')->insert(['id' => $id, 'name' => $body['name'], 'created_at' => Clock::now()]);
             Audit::log($id, $auth->userId(), 'company', $id, 'created', ['name' => $body['name'], 'by' => 'platform']);
-            $inv = UserController::createInvitation($id, $body['name'], $auth->userId(), $auth->user['name'], $body['adminEmail'], $body['adminName'], 'admin', []);
+            // NUOVO: il link è sempre restituito al superadmin, che sceglie se inviarlo anche per email
+            $inv = UserController::createInvitation($id, $body['name'], $auth->userId(), $auth->user['name'], $body['adminEmail'], $body['adminName'], 'admin', [], $body['sendEmail'], true);
 
-            return ['id' => $id, 'name' => $body['name'], 'invitation' => $inv];
+            return ['id' => $id, 'name' => $body['name'], 'invitation' => [...$inv, 'email' => $body['adminEmail']]];
         });
+    }
+
+    /**
+     * NUOVO — invia per email un invito già creato. Il token arriva dal superadmin (il server ne conserva solo l'impronta):
+     * si verifica che corrisponda all'invito prima di spedirlo.
+     */
+    public function sendInvitation(Request $req, string $id): array
+    {
+        $auth = $this->requirePlatformAdmin($req);
+        $id = $this->uuid($id);
+        $body = $this->parseBody($req, S::object(['token' => S::string()->min(10)->max(200)]));
+        $inv = $this->pendingInvitation($id);
+        if (! hash_equals((string) $inv->token_hash, Crypto::hashToken($body['token']))) {
+            throw AppError::badRequest('invalid_token', 'Il link non corrisponde a questo invito.');
+        }
+        $link = config('foodcost.app_url')."/invito?token={$body['token']}";
+        try {
+            $mail = UserController::sendInviteMail($inv->email, $inv->company_name, $auth->user['name'], $inv->role, $link);
+        } catch (\Throwable $e) {
+            Log::error('invio email di invito non riuscito', ['err' => $e->getMessage()]);
+            throw new AppError(502, 'mail_failed', 'L’email non è partita: riprova più tardi oppure invia tu il link.');
+        }
+        Audit::log($inv->company_id, $auth->userId(), 'invitation', $id, 'emailed', ['email' => $inv->email]);
+
+        return ['mail' => $mail, 'email' => $inv->email];
+    }
+
+    /** NUOVO — nuovo link per un invito in attesa (il precedente smette di valere), valido altri 7 giorni. */
+    public function renewInvitation(Request $req, string $id): array
+    {
+        $auth = $this->requirePlatformAdmin($req);
+        $id = $this->uuid($id);
+        $inv = $this->pendingInvitation($id, true);
+        $token = Crypto::newToken();
+        DB::table('invitations')->where('id', $id)->update(['token_hash' => Crypto::hashToken($token), 'expires_at' => Clock::plusSeconds(7 * 86400)]);
+        Audit::log($inv->company_id, $auth->userId(), 'invitation', $id, 'renewed', ['email' => $inv->email]);
+
+        return ['id' => $id, 'email' => $inv->email, 'inviteLink' => config('foodcost.app_url')."/invito?token={$token}"];
+    }
+
+    private function pendingInvitation(string $id, bool $allowExpired = false): object
+    {
+        $inv = DB::table('invitations as i')->join('companies as c', 'c.id', '=', 'i.company_id')
+            ->where('i.id', $id)->whereNull('i.accepted_at')
+            ->first(['i.id', 'i.company_id', 'i.email', 'i.role', 'i.token_hash', 'i.expires_at', 'c.name as company_name']);
+        if (! $inv) {
+            throw AppError::notFound('Invito');
+        }
+        if (! $allowExpired && Clock::isPast($inv->expires_at)) {
+            throw AppError::conflict('invitation_expired', 'L’invito è scaduto: crea un nuovo link.');
+        }
+
+        return $inv;
     }
 
     public function updateCompany(Request $req, string $id): array

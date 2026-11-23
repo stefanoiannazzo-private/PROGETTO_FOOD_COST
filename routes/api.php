@@ -148,6 +148,8 @@ Route::prefix('platform')->group(function () {
     Route::get('/companies', [PlatformController::class, 'companies']);
     Route::post('/companies', [PlatformController::class, 'createCompany']);
     Route::patch('/companies/{id}', [PlatformController::class, 'updateCompany']);
+    Route::post('/invitations/{id}/send', [PlatformController::class, 'sendInvitation']);
+    Route::post('/invitations/{id}/renew', [PlatformController::class, 'renewInvitation']);
     Route::get('/recipes', [PlatformController::class, 'recipes']);
     Route::get('/ingredients', [PlatformController::class, 'ingredients']);
     Route::get('/suppliers', [PlatformController::class, 'suppliers']);

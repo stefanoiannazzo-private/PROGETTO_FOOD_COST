@@ -141,4 +141,38 @@ class PlatformTest extends TestCase
         $bad = $a->post("/api/employees/{$emp['id']}/costs", ['validFrom' => '2026-05-01', 'grossMonthly' => '2400', 'extraMonthly' => '-1', 'contributionsMode' => 'none', 'productiveHours' => '160']);
         $this->assertSame(422, $bad->status);
     }
+
+    public function test_link_di_invito_sempre_visibile_e_invio_su_richiesta(): void
+    {
+        config(['foodcost.dev_expose_tokens' => false]);
+        $outbox = storage_path('app/outbox');
+        $count = fn () => count(glob($outbox.'/*bar.mario@example.test.eml') ?: []);
+        $before = $count();
+        $s = $this->loginAs('super@example.test');
+        // senza invio: il link c'è, nessuna email
+        $r = $this->ok($s->post('/api/platform/companies', ['name' => 'Bar Mario', 'adminName' => 'Mario Bar', 'adminEmail' => 'bar.mario@example.test']));
+        $inv = $r['invitation'];
+        $this->assertSame(['skipped', 'bar.mario@example.test'], [$inv['mail'], $inv['email']]);
+        $this->assertStringContainsString('/invito?token=', $inv['inviteLink']);
+        $this->assertSame($before, $count());
+        $token = substr($inv['inviteLink'], strpos($inv['inviteLink'], 'token=') + 6);
+
+        // invio su richiesta, solo con il token giusto
+        $this->assertSame(422, $s->post("/api/platform/invitations/{$inv['id']}/send", ['token' => str_repeat('x', 40)])->status);
+        $this->assertSame('outbox', $this->ok($s->post("/api/platform/invitations/{$inv['id']}/send", ['token' => $token]))['mail']);
+        $this->assertSame($before + 1, $count());
+        $this->assertSame(403, $this->loginAs('admin.t@example.test')->post("/api/platform/invitations/{$inv['id']}/send", ['token' => $token])->status);
+
+        // nuovo link: il vecchio non vale più, il nuovo sì
+        $renew = $this->ok($s->post("/api/platform/invitations/{$inv['id']}/renew"));
+        $this->assertNotSame($inv['inviteLink'], $renew['inviteLink']);
+        $this->assertSame(422, $s->post("/api/platform/invitations/{$inv['id']}/send", ['token' => $token])->status);
+        $list = collect($this->ok($s->get('/api/platform/companies'))['data'])->firstWhere('name', 'Bar Mario');
+        $this->assertSame($inv['id'], $list['pendingAdminInvitations'][0]['id']);
+
+        // con l'opzione attiva l'email parte subito
+        $r = $this->ok($s->post('/api/platform/companies', ['name' => 'Bar Due', 'adminName' => 'Luigi Due', 'adminEmail' => 'bar.mario@example.test', 'sendEmail' => true]));
+        $this->assertSame('outbox', $r['invitation']['mail']);
+        $this->assertArrayHasKey('inviteLink', $r['invitation']);
+    }
 }

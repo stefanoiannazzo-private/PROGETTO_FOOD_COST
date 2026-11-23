@@ -85,8 +85,17 @@ final class UserController extends Controller
         return self::createInvitation($cid, $ctx->company['name'], $ctx->userId(), $ctx->user['name'], $body['email'], $body['name'], $body['role'], $body['extraPermissions']);
     }
 
-    /** Crea un invito e prova a inviarlo; se l'email non parte, chi invita riceve il link da consegnare. */
-    public static function createInvitation(string $companyId, string $companyName, string $byId, string $byName, string $email, string $name, string $role, array $extra): array
+    /** Invia l'email di invito con il link. @return 'sent'|'outbox' */
+    public static function sendInviteMail(string $email, string $companyName, string $byName, string $role, string $link): string
+    {
+        return Mailer::send($email, "Invito a Food Cost — {$companyName}", "{$byName} ti ha invitato su Food Cost per {$companyName} come ".Permissions::ROLE_LABELS[$role].".\nAccetta l’invito entro 7 giorni:\n{$link}\n");
+    }
+
+    /**
+     * Crea un invito e prova a inviarlo; se l'email non parte, chi invita riceve il link da consegnare.
+     * NUOVO: $send = false crea solo il link (mail 'skipped'); $returnLink = true lo restituisce sempre (console superadmin).
+     */
+    public static function createInvitation(string $companyId, string $companyName, string $byId, string $byName, string $email, string $name, string $role, array $extra, bool $send = true, bool $returnLink = false): array
     {
         $token = Crypto::newToken();
         $id = (string) Str::uuid();
@@ -96,15 +105,18 @@ final class UserController extends Controller
             'invited_by' => $byId, 'expires_at' => Clock::plusSeconds(7 * 86400), 'created_at' => Clock::now(),
         ]);
         $link = config('foodcost.app_url')."/invito?token={$token}";
-        try {
-            $mail = Mailer::send($email, "Invito a Food Cost — {$companyName}", "{$byName} ti ha invitato su Food Cost per {$companyName} come ".Permissions::ROLE_LABELS[$role].".\nAccetta l’invito entro 7 giorni:\n{$link}\n");
-        } catch (\Throwable $e) {
-            Log::error('invio email di invito non riuscito', ['err' => $e->getMessage()]);
-            $mail = 'failed';
+        $mail = 'skipped';
+        if ($send) {
+            try {
+                $mail = self::sendInviteMail($email, $companyName, $byName, $role, $link);
+            } catch (\Throwable $e) {
+                Log::error('invio email di invito non riuscito', ['err' => $e->getMessage()]);
+                $mail = 'failed';
+            }
         }
         Audit::log($companyId, $byId, 'invitation', $id, 'created', ['email' => $email, 'role' => $role]);
         $out = ['id' => $id, 'mail' => $mail];
-        if ($mail !== 'sent' || config('foodcost.dev_expose_tokens')) {
+        if ($returnLink || $mail !== 'sent' || config('foodcost.dev_expose_tokens')) {
             $out['inviteLink'] = $link;
         }
 
