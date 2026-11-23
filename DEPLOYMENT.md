@@ -5,6 +5,31 @@ Finché i secrets FTP non sono impostati, il workflow esegue soltanto i test e n
 
 > Nulla di questa procedura è stato ancora eseguito su un server reale: richiede il repository GitHub e le credenziali, entrambi in attesa della tua autorizzazione. L'intera sequenza (Apache con `.htaccess`, migrazioni via `/api/system/deploy`, cron via URL, configurazione in cache) è stata provata in un contenitore Apache + PHP 8.3 + MySQL 8.0 con la stessa struttura di cartelle dell'hosting.
 
+## 0. Piano Aruba Hosting Easy Linux: note specifiche
+
+Il piano scelto ha tutto ciò che serve:
+- PHP 8.3, 8.4 o 8.5;
+- MySQL 8.0;
+- Apache con `.htaccess` e mod_rewrite;
+- cron;
+- SSL incluso;
+- `php.ini` modificabile;
+- backup giornalieri.
+
+Alcune cose da sapere:
+
+- **Niente SSH:** il primo superadmin si crea con il metodo "senza SSH" del §3, mentre le migrazioni partono da sole a ogni pubblicazione.
+- **Spazio database (1 GB in totale):** un ristorante grande (5.000 prodotti con prezzi, 300 ricette con 3 revisioni ciascuna) occupa circa 35 MB. Di questi, circa 5 MB sono dati temporanei delle importazioni, cancellati dopo 30 giorni. Un ristorante tipico (qualche centinaio di prodotti, 50–100 ricette) occupa pochi MB. 50 ristoratori stanno comodi, ma lo spazio va controllato in phpMyAdmin ogni tanto, perché cresce con lo storico dei prezzi.
+- **`php.ini`:** imposta `max_execution_time = 60`, `memory_limit = 256M`, `upload_max_filesize = 12M`, `post_max_size = 14M`.
+- **HiSpeed Cache:** si può lasciare attiva. Le risposte dell'API (`no-store, private`) e la pagina dell'app (`no-store`) non finiscono mai in cache, quindi non si vedono dati di altri utenti né versioni vecchie dopo un aggiornamento. Se compaiono comportamenti strani dopo una pubblicazione, svuota la cache dal pannello.
+- **"Limita accesso FTP":** deve restare **disattivato**, perché la pubblicazione arriva dai server di GitHub, che non hanno un indirizzo fisso.
+- **WAF e "Blocco Bot AI":** potrebbero bloccare la chiamata finale del workflow (`/api/system/deploy`, fatta con `curl`). Se il passo "Migrazioni" fallisce con 403, lancia la stessa richiesta dal tuo PC:
+  ```powershell
+  Invoke-RestMethod -Method Post -Uri "https://foodcost.tuodominio.it/api/system/deploy" `
+    -Headers @{ "X-Requested-With"="foodcost"; "X-Deploy-Key"="<DEPLOY_KEY>" }
+  ```
+  Se non basta, chiedi all'assistenza Aruba di consentire le richieste verso `/api/system/deploy`.
+
 ## 1. Sul pannello Aruba
 
 1. **PHP:** per il dominio scegli **PHP 8.3 o superiore**. Servono le estensioni `pdo_mysql`, `mbstring`, `zip`, `xmlreader` e, consigliata, `intl`.

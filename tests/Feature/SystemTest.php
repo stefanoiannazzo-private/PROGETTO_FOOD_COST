@@ -63,4 +63,22 @@ class SystemTest extends TestCase
         $this->assertSame(409, $again->getStatusCode());
         $this->assertSame('already_initialized', $again->json('error.code'));
     }
+
+    /** Hosting con cache lato server (es. Aruba HiSpeed Cache): niente in cache tra utenti, nessun CORS verso altri siti. */
+    public function test_intestazioni_per_hosting_con_cache(): void
+    {
+        $api = $this->call('GET', '/api/health', [], [], [], ['HTTP_ORIGIN' => 'https://altro-sito.example']);
+        $this->assertStringContainsString('no-store', (string) $api->headers->get('Cache-Control'));
+        $this->assertNull($api->headers->get('Access-Control-Allow-Origin'));
+        $this->createUser('cors@example.test', 'Cors');
+        $c = $this->loginAs('cors@example.test');
+        $me = $this->call('GET', '/api/auth/me', [], ['fc_session' => $c->cookie]);
+        $this->assertStringContainsString('no-store', (string) $me->headers->get('Cache-Control'));
+        $this->assertStringContainsString('private', (string) $me->headers->get('Cache-Control'));
+        if (is_file(public_path('app/index.html'))) {
+            $spa = $this->call('GET', '/ricette');
+            $this->assertSame(200, $spa->getStatusCode());
+            $this->assertStringContainsString('no-store', (string) $spa->headers->get('Cache-Control'));
+        }
+    }
 }

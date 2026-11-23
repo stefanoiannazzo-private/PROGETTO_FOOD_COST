@@ -27,6 +27,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // I valori arrivano al validatore così come li ha inviati il browser (come nell'originale).
         $middleware->remove([TrimStrings::class, ConvertEmptyStringsToNull::class]);
+        // Interfaccia e API stanno sullo stesso dominio, come nell'originale: nessuna intestazione CORS verso altri siti
+        $middleware->remove(\Illuminate\Http\Middleware\HandleCors::class);
         $middleware->append(SecurityHeaders::class);
         $middleware->encryptCookies(except: ['fc_session']);
         $middleware->group('api', [CsrfProtection::class, LoadSession::class]);

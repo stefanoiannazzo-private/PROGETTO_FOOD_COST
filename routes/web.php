@@ -12,5 +12,6 @@ Route::get('/{path?}', function () {
         return response('Interfaccia non ancora compilata: esegui "npm run build" nella cartella frontend.', 503);
     }
 
-    return response()->file($index, ['Content-Type' => 'text/html; charset=utf-8', 'Cache-Control' => 'no-cache']);
+    // mai in cache (nemmeno nelle cache dell'hosting): dopo un aggiornamento deve puntare subito ai nuovi file
+    return response((string) file_get_contents($index), 200, ['Content-Type' => 'text/html; charset=utf-8', 'Cache-Control' => 'no-store, private']);
 })->where('path', '^(?!api(/|$)).*');
