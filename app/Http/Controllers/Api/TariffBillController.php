@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Costing\Dec;
 use App\Http\Controllers\Controller;
 use App\Services\BillReader;
+use App\Services\LocalBillReader;
 use App\Support\AppError;
 use App\Services\Audit;
 use App\Support\Clock;
@@ -58,7 +59,7 @@ class TariffBillController extends Controller
                 'createdAt' => Clock::iso($r->created_at),
                 'createdBy' => $r->created_by,
             ])->all(),
-            'meta' => ['aiEnabled' => BillReader::configured()],
+            'meta' => ['aiEnabled' => BillReader::configured(), 'reader' => BillReader::configured() ? 'ai' : 'local'],
         ];
     }
 
@@ -98,14 +99,16 @@ class TariffBillController extends Controller
         file_put_contents($abs, $bytes);
         @chmod($abs, 0600);
 
-        // lettura automatica (sincrona: la risposta arriva in 10-40 secondi)
+        // lettura automatica: con la chiave Anthropic (PDF e foto), altrimenti lettura locale del testo dei PDF
         $status = 'off';
         $error = null;
         $result = null;
         $raw = null;
+        $method = null;
         if (BillReader::configured()) {
+            $method = 'ai';
             $used = DB::table('tariff_bills')->where('company_id', $cid)->whereIn('extraction_status', ['ok', 'failed'])
-                ->where('created_at', '>=', substr(Clock::now(), 0, 7).'-01 00:00:00.000')->count();
+                ->where('read_method', 'ai')->where('created_at', '>=', substr(Clock::now(), 0, 7).'-01 00:00:00.000')->count();
             if ($used >= (int) config('foodcost.bill_ai.monthly_limit')) {
                 $status = 'limit';
                 $error = 'Raggiunto il limite mensile di letture automatiche: compila i dati a mano.';
@@ -114,7 +117,6 @@ class TariffBillController extends Controller
                 try {
                     [$payload, $payloadMime] = self::forReading($bytes, $mime);
                     $raw = BillReader::read($payload, $payloadMime);
-                    $result = BillReader::normalize($raw, $t->kind, $t->unit);
                     $status = 'ok';
                 } catch (\Throwable $e) {
                     $status = 'failed';
@@ -122,6 +124,21 @@ class TariffBillController extends Controller
                     Log::warning('lettura bolletta non riuscita', ['err' => $e->getMessage()]);
                 }
             }
+        } elseif ($mime === 'application/pdf') {
+            $method = 'local';
+            @set_time_limit(60);
+            try {
+                $raw = LocalBillReader::read($bytes);
+                $status = 'ok';
+            } catch (\Throwable $e) {
+                $status = 'failed';
+                $error = $e instanceof \RuntimeException ? $e->getMessage() : 'Lettura non riuscita: compila i dati a mano.';
+            }
+        } else {
+            $error = 'Le foto non si leggono in automatico: compila i dati a mano (per la lettura automatica carica il PDF scaricato dall’area clienti del fornitore).';
+        }
+        if ($raw !== null) {
+            $result = BillReader::normalize($raw, $t->kind, $t->unit);
         }
 
         DB::table('tariff_bills')->insert([
@@ -138,6 +155,7 @@ class TariffBillController extends Controller
             'period_to' => $result['form']['periodTo'] ?? null,
             'total_amount' => isset($result['info']['totalAmount']) ? Dec::of($result['info']['totalAmount'])->toDecimalPlaces(2)->toFixed(2) : null,
             'extraction_status' => $status,
+            'read_method' => $status === 'ok' || $status === 'failed' ? $method : null,
             'extraction_error' => $error ? mb_substr($error, 0, 500) : null,
             'extracted' => $raw ? json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : null,
             'created_by' => $ctx->userId(),
@@ -153,11 +171,13 @@ class TariffBillController extends Controller
         return [
             'id' => $billId,
             'readStatus' => $status,
+            'method' => $method,
             'message' => match ($status) {
-                'ok' => 'Dati letti dalla bolletta: controllali e conferma.',
-                'off' => 'Bolletta archiviata. La lettura automatica non è attiva: compila i dati a mano.',
+                'ok' => $method === 'local' ? 'Dati letti dal testo del PDF: controllali uno per uno e conferma.' : 'Dati letti dalla bolletta: controllali e conferma.',
+                'off' => 'Bolletta archiviata. '.($error ?? 'La lettura automatica non è attiva: compila i dati a mano.'),
                 default => $error.' La bolletta è comunque archiviata.',
             },
+            'found' => $result ? self::found($result) : null,
             'form' => $result['form'] ?? null,
             'info' => $result['info'] ?? null,
             'warnings' => $warnings,
@@ -195,6 +215,28 @@ class TariffBillController extends Controller
         Audit::log($ctx->companyId(), $ctx->userId(), 'tariff_bill', $billId, 'deleted', ['file' => $b->original_name]);
 
         return ['ok' => true];
+    }
+
+    /**
+     * Riepilogo di cosa è stato trovato, per far vedere al ristoratore quali dati controllare o inserire.
+     *
+     * @return list<array{label:string, ok:bool, value:?string}>
+     */
+    private static function found(array $r): array
+    {
+        $f = $r['form'] ?? [];
+        $i = $r['info'];
+        $n = count($f['components'] ?? []);
+
+        return [
+            ['label' => 'Fornitore', 'ok' => $i['supplier'] !== null, 'value' => $i['supplier']],
+            ['label' => 'Numero fattura', 'ok' => $i['billNumber'] !== null, 'value' => $i['billNumber']],
+            ['label' => 'Periodo', 'ok' => ! empty($f['periodFrom']) && ! empty($f['periodTo']), 'value' => null],
+            ['label' => 'Consumo', 'ok' => ! empty($f['consumption']), 'value' => null],
+            ['label' => 'Voci di costo', 'ok' => $n > 0, 'value' => $n > 0 ? (string) $n : null],
+            ['label' => 'Imponibile', 'ok' => $i['taxableAmount'] !== null, 'value' => $i['taxableAmount']],
+            ['label' => 'Totale da pagare', 'ok' => $i['totalAmount'] !== null, 'value' => $i['totalAmount']],
+        ];
     }
 
     /** Collega la bolletta al valore della tariffa appena creato (chiamato da TariffController::addVersion). */

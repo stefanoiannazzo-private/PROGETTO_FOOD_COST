@@ -73,7 +73,10 @@ interface BillRead {
   } | null
   info: { supplier: string | null; billNumber: string | null; issueDate: string | null; totalAmount: string | null } | null
   warnings: string[]
+  method: 'ai' | 'local' | null
+  found: Array<{ label: string; ok: boolean; value: string | null }> | null
 }
+type BillsResponse = { data: BillRow[]; meta: { aiEnabled: boolean; reader: 'ai' | 'local' } }
 
 export default function TariffDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -218,6 +221,8 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
   const [busy, setBusy] = useState(false)
   // NUOVO: bolletta caricata e letta automaticamente
   const fileRef = useRef<HTMLInputElement>(null)
+  const bills = useQuery({ queryKey: ['tariffs', 'bills', t.id], queryFn: () => api.get<BillsResponse>(`/tariffs/${t.id}/bills`) })
+  const localReader = bills.data?.meta.reader === 'local'
   const [reading, setReading] = useState(false)
   const [read, setRead] = useState<BillRead | null>(null)
   const u = unitLabel(t.unit)
@@ -302,7 +307,11 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
         <div className="alert info" style={{ alignItems: 'center' }}>
           <Icon name="upload" />
           <div className="grow">
-            <strong>Hai la bolletta?</strong> Caricala in PDF o come foto: leggiamo noi periodo, consumi e voci di costo. Tu controlli e confermi; la bolletta resta nell’archivio.
+            <strong>Hai la bolletta?</strong>{' '}
+            {localReader
+              ? 'Carica il PDF scaricato dall’area clienti del fornitore: leggiamo periodo, consumi e voci di costo. Le foto vengono archiviate ma i dati vanno inseriti a mano.'
+              : 'Caricala in PDF o come foto: leggiamo noi periodo, consumi e voci di costo.'}{' '}
+            Tu controlli e confermi; la bolletta resta nell’archivio.
           </div>
           <input
             ref={fileRef}
@@ -319,7 +328,7 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
             {reading ? <span className="spinner" /> : <Icon name="upload" />} {reading ? 'Lettura in corso…' : 'Carica bolletta'}
           </button>
         </div>
-        {reading ? <div className="muted small">Sto leggendo la bolletta: può richiedere fino a 40 secondi.</div> : null}
+        {reading ? <div className="muted small">Sto leggendo la bolletta{localReader ? '…' : ': può richiedere fino a 40 secondi.'}</div> : null}
         {read ? (
           <div className={`alert ${read.readStatus === 'ok' ? 'ok' : 'warn'}`}>
             <Icon name={read.readStatus === 'ok' ? 'check' : 'alert'} />
@@ -332,6 +341,16 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
                   {[read.info.supplier, read.info.billNumber ? `fattura ${read.info.billNumber}` : null, read.info.issueDate ? `del ${date(read.info.issueDate)}` : null, read.info.totalAmount ? `totale ${euro(read.info.totalAmount)} IVA inclusa` : null]
                     .filter(Boolean)
                     .join(' · ')}
+                </div>
+              ) : null}
+              {read.found ? (
+                <div className="row wrap" style={{ gap: 6, marginTop: 6 }} aria-label="Dati trovati nella bolletta">
+                  {read.found.map((x) => (
+                    <span key={x.label} className={`badge ${x.ok ? 'ok' : 'warn'}`} title={x.ok ? 'Trovato: controlla che sia giusto' : 'Non trovato: inseriscilo a mano'}>
+                      {x.ok ? '✓' : '✗'} {x.label}
+                      {x.ok && x.value && x.label === 'Voci di costo' ? ` (${x.value})` : ''}
+                    </span>
+                  ))}
                 </div>
               ) : null}
               {read.warnings.length ? (
@@ -443,14 +462,14 @@ function Bills({ t }: { t: Detail }) {
   const can = useCan()
   const qc = useQueryClient()
   const toast = useToast()
-  const q = useQuery({ queryKey: ['tariffs', 'bills', t.id], queryFn: () => api.get<{ data: BillRow[]; meta: { aiEnabled: boolean } }>(`/tariffs/${t.id}/bills`) })
+  const q = useQuery({ queryKey: ['tariffs', 'bills', t.id], queryFn: () => api.get<BillsResponse>(`/tariffs/${t.id}/bills`) })
   const u = unitLabel(t.unit)
   const fileUrl = (b: BillRow, download = false) => `/api/tariffs/${t.id}/bills/${b.id}/file${download ? '?download=1' : ''}`
   return (
     <div className="card">
       <div className="card-head">
         <h2>Bollette caricate</h2>
-        {q.data && !q.data.meta.aiEnabled ? <span className="badge">lettura automatica non attiva</span> : null}
+        {q.data?.meta.reader === 'local' ? <span className="badge">lettura automatica: solo PDF digitali</span> : null}
       </div>
       {q.error ? (
         <div className="card-body">

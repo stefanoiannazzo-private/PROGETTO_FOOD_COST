@@ -37,7 +37,7 @@ Alcune cose da sapere:
 - **Primo caricamento:** circa 70 minuti per circa 6.800 file. L'FTP di Aruba è lento con molti file piccoli. Dalle pubblicazioni successive vengono caricati solo i file cambiati.
 - **HiSpeed Cache:** dopo la prima pubblicazione la home mostrava ancora la pagina d'attesa di Aruba, rimasta nella sua cache. Si risolve con *Velocità → Caching → Cancella cache*. Le pagine dell'app sono `no-store`, quindi non si ripete.
 - **Email:** casella `no-reply@ricettaquadra.it` (secrets `SMTP_USER` e `SMTP_PASS`, server `smtps.aruba.it:465`): inviti e recupero password partono in automatico.
-- **Bollette:** la lettura automatica usa il secret `ANTHROPIC_API_KEY` (chiave creata su console.anthropic.com, con credito prepagato). Senza la chiave le bollette si caricano e archiviano lo stesso, ma i dati si compilano a mano. I file stanno in `storage/app/bills/` sul server (fuori dalla cartella pubblica, esclusa dalla sincronizzazione FTP): includila nei backup.
+- **Bollette:** senza configurazione i PDF digitali vengono letti sul server (lettura locale, gratuita); foto e scansioni si archiviano e si compilano a mano. Con il secret facoltativo `ANTHROPIC_API_KEY` la lettura passa a Claude e funziona anche con le foto. I file stanno in `storage/app/bills/` sul server (fuori dalla cartella pubblica, esclusa dalla sincronizzazione FTP): includila nei backup.
 - **Database:** Aruba crea da sé i 5 database (`Sql…_1` … `Sql…_5`) con un solo utente. Usiamo il primo.
 
 ## 1. Sul pannello Aruba

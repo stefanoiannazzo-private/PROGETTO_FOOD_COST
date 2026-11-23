@@ -152,10 +152,11 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 | Funzionalità | Stato | Prove |
 |---|---|---|
 | Caricamento della bolletta in PDF o foto (JPG, PNG, WebP), tipo controllato dal contenuto; HEIC rifiutato con istruzioni | ➕ | `TariffBillsTest::test_tipi_di_file_controllati_dal_contenuto` |
-| Lettura automatica con Claude (Anthropic): periodo, consumo, voci nette IVA, quote fisse, coefficienti gas; il modulo «Calcola da una bolletta» arriva precompilato e si salva solo dopo la conferma | ➕ | `test_lettura_precompila_e_conferma_collega_la_bolletta`, `test_gas_in_metri_cubi_convertito_e_coefficienti`, E |
+| Lettura con Claude (Anthropic), facoltativa con `ANTHROPIC_API_KEY`: periodo, consumo, voci nette IVA, quote fisse, coefficienti gas; il modulo «Calcola da una bolletta» arriva precompilato e si salva solo dopo la conferma | ➕ | `test_lettura_precompila_e_conferma_collega_la_bolletta`, `test_gas_in_metri_cubi_convertito_e_coefficienti`, E |
 | Avvisi: utenza sbagliata, somma voci ≠ imponibile, consumi stimati, doppione, accrediti esclusi | ➕ | `test_avvisi_utenza_sbagliata_e_somma_diversa` |
 | Archivio delle bollette per utenza: apertura, download, eliminazione; il file resta anche se il valore generato viene eliminato | ➕ | `test_file_scaricabile_ed_eliminabile`, E |
-| Senza chiave o con servizio in errore la bolletta si archivia comunque e si compila a mano; limite mensile di letture per azienda (`BILL_AI_MONTHLY_LIMIT`, 40) | ➕ | `test_senza_chiave_archivia_senza_leggere`, `test_errore_del_servizio_non_perde_il_file`, `test_limite_mensile` |
+| **Lettura locale** (predefinita, senza servizi esterni): testo estratto dal PDF sul server (smalot/pdfparser) e diciture standard ARERA (Bolletta 2.0 e bolletta trasparente), luce, gas e acqua; riepilogo «trovato/non trovato» per ogni dato; foto e scansioni archiviate da compilare a mano | ➕ | `test_lettura_locale_luce`, `test_lettura_locale_gas_bolletta_trasparente`, `test_lettura_locale_acqua`, `test_senza_chiave_foto_archiviata_e_pdf_senza_testo`, E |
+| Con il servizio in errore la bolletta si archivia comunque e si compila a mano; limite mensile di letture per azienda (`BILL_AI_MONTHLY_LIMIT`, 40) | ➕ | `test_senza_chiave_archivia_senza_leggere`, `test_errore_del_servizio_non_perde_il_file`, `test_limite_mensile` |
 | Permessi (`tariffs.manage` per caricare/eliminare, `tariffs.read` per consultare) e isolamento tra aziende | ➕ | `test_permessi_e_isolamento` |
 | Eliminazione di un valore di tariffa o di una configurazione di costo del dipendente inserita per errore (API già presenti nell'originale, mancava il pulsante) | ✅ | E `tariffa.mjs` |
 

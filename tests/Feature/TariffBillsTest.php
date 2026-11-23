@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Tests\ApiClient;
 use Tests\ApiResponse;
+use Tests\Support\PdfFixture;
 use Tests\TestCase;
 
 /** NUOVO — Bollette delle utenze: caricamento, lettura automatica (servizio simulato), conferma, archivio. */
@@ -128,15 +129,64 @@ class TariffBillsTest extends TestCase
         $this->assertSame(404, $this->a->get("/api/tariffs/{$this->luce}/bills/{$id}/file")->status);
     }
 
-    public function test_senza_chiave_archivia_senza_leggere(): void
+    public function test_senza_chiave_foto_archiviata_e_pdf_senza_testo(): void
     {
         config(['foodcost.bill_ai.key' => '']);
         Http::fake();
-        $r = $this->ok($this->upload($this->luce));
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==');
+        $r = $this->ok($this->upload($this->luce, $png, 'foto.png'));
         $this->assertSame('off', $r['readStatus']);
         $this->assertNull($r['form']);
+        $this->assertStringContainsString('foto non si leggono', $r['message']);
+        // PDF senza testo (scansione) e PDF danneggiato
+        $r = $this->ok($this->upload($this->luce, PdfFixture::make([])));
+        $this->assertSame(['failed', 'local'], [$r['readStatus'], $r['method']]);
+        $this->assertStringContainsString('non contiene testo', $r['message']);
+        $this->assertStringContainsString('danneggiato', $this->ok($this->upload($this->luce))['message']);
         Http::assertNothingSent();
-        $this->assertFalse($this->ok($this->a->get("/api/tariffs/{$this->luce}/bills"))['meta']['aiEnabled']);
+        $meta = $this->ok($this->a->get("/api/tariffs/{$this->luce}/bills"))['meta'];
+        $this->assertSame([false, 'local'], [$meta['aiEnabled'], $meta['reader']]);
+    }
+
+    public function test_lettura_locale_luce(): void
+    {
+        config(['foodcost.bill_ai.key' => '']);
+        Http::fake();
+        $r = $this->ok($this->upload($this->luce, PdfFixture::make(PdfFixture::LUCE)));
+        $this->assertSame(['ok', 'local'], [$r['readStatus'], $r['method']]);
+        $f = $r['form'];
+        $this->assertSame(['2026-08-01', '2026-09-30', '2000'], [$f['periodFrom'], $f['periodTo'], $f['consumption']]);
+        $this->assertSame([['Spesa per la materia / vendita', '400', true], ['Trasporto e gestione del contatore', '90', true], ['Oneri di sistema', '70', true], ['Imposte (accise)', '45', true], ['Canone TV', '18', false]],
+            array_map(fn ($c) => [$c['label'], $c['amount'], $c['include']], $f['components']));
+        $this->assertSame(['Enel Energia', '004512345678', '2026-10-05', '703.3', '623'], [$r['info']['supplier'], $r['info']['billNumber'], $r['info']['issueDate'], $r['info']['totalAmount'], $r['info']['taxableAmount']]);
+        $this->assertSame([], $r['warnings']);
+        $this->assertTrue(collect($r['found'])->every(fn ($x) => $x['ok']));
+        Http::assertNothingSent();
+        // conferma: (400 + 90 + 70 + 45) / 2000 = 0,3025 €/kWh
+        $this->ok($this->a->post("/api/tariffs/{$this->luce}/versions", ['mode' => 'bill', 'vatBasis' => 'net', 'billFileId' => $r['id'], ...array_diff_key($f, ['m3ToSmc' => 1, 'smcToKwh' => 1])]));
+        $this->assertSame('0.30250000', $this->ok($this->a->get("/api/tariffs/{$this->luce}/bills"))['data'][0]['version']['pricePerUnit']);
+    }
+
+    public function test_lettura_locale_gas_bolletta_trasparente(): void
+    {
+        config(['foodcost.bill_ai.key' => '']);
+        $r = $this->ok($this->upload($this->gas, PdfFixture::make(PdfFixture::GAS)));
+        $f = $r['form'];
+        $this->assertSame(['2026-08-01', '2026-09-30', '500', 'smc', '1.02', '10.7'], [$f['periodFrom'], $f['periodTo'], $f['consumption'], $f['consumptionUnit'], $f['m3ToSmc'], $f['smcToKwh']]);
+        $this->assertSame(['300', '120', '60'], array_column($f['components'], 'amount'));
+        $this->assertSame(['A2A Energia', '528'], [$r['info']['supplier'], $r['info']['totalAmount']]);
+        $this->assertFalse(collect($r['found'])->firstWhere('label', 'Imponibile')['ok']);
+    }
+
+    public function test_lettura_locale_acqua(): void
+    {
+        config(['foodcost.bill_ai.key' => '']);
+        $acqua = $this->ok($this->a->post('/api/tariffs', ['name' => 'Acqua', 'kind' => 'water', 'unit' => 'm3']))['id'];
+        $r = $this->ok($this->upload($acqua, PdfFixture::make(PdfFixture::ACQUA)));
+        $f = $r['form'];
+        $this->assertSame(['2026-07-01', '2026-09-30', '85'], [$f['periodFrom'], $f['periodTo'], $f['consumption']]);
+        $this->assertSame([['Acquedotto', '95.2'], ['Fognatura', '30.1'], ['Depurazione', '60.4'], ['Quota fissa', '12.5']], array_map(fn ($c) => [$c['label'], $c['amount']], $f['components']));
+        $this->assertSame('Publiacqua', $r['info']['supplier']);
     }
 
     public function test_errore_del_servizio_non_perde_il_file(): void
