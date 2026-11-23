@@ -58,7 +58,7 @@ class TariffBillsTest extends TestCase
                 ['descrizione' => 'Quota fissa e potenza', 'importo_netto_iva' => '60.00', 'tipo' => 'fixed', 'includi' => true],
                 ['descrizione' => 'Canone RAI', 'importo_netto_iva' => '18.00', 'tipo' => 'fixed', 'includi' => false],
             ],
-            'imponibile_totale' => '638.00', 'aliquota_iva' => '10', 'totale_da_pagare' => '701.80', 'note' => null,
+            'imponibile_totale' => '638.00', 'aliquota_iva' => '10', 'totale_da_pagare' => '638.00', 'note' => null,
         ], $override);
     }
 
@@ -84,8 +84,8 @@ class TariffBillsTest extends TestCase
         $this->assertSame('ok', $r['readStatus']);
         $f = $r['form'];
         $this->assertSame(['2026-08-01', '2026-08-01', '2026-09-30', '2000', 'kwh'], [$f['validFrom'], $f['periodFrom'], $f['periodTo'], $f['consumption'], $f['consumptionUnit']]);
-        // quote fisse proposte escluse (vanno nella redditività), canone RAI escluso
-        $this->assertSame([true, true, true, false, false], array_column($f['components'], 'include'));
+        // si seguono le indicazioni della lettura (qui il canone è segnato da escludere)
+        $this->assertSame([true, true, true, true, false], array_column($f['components'], 'include'));
         $this->assertSame('Enel Energia', $r['info']['supplier']);
         $this->assertSame([], $r['warnings']);
 
@@ -102,8 +102,8 @@ class TariffBillsTest extends TestCase
         $this->assertCount(1, $list['data']);
         $b = $list['data'][0];
         $this->assertSame($v['id'], $b['version']['id']);
-        $this->assertSame('0.28000000', $b['version']['pricePerUnit']); // (400+90+70)/2000
-        $this->assertSame(['Enel Energia', '2026-08-01', '2026-09-30', '701.80'], [$b['supplier'], $b['periodFrom'], $b['periodTo'], $b['totalAmount']]);
+        $this->assertSame('0.31000000', $b['version']['pricePerUnit']); // (400+90+70+60)/2000
+        $this->assertSame(['Enel Energia', '2026-08-01', '2026-09-30', '638.00'], [$b['supplier'], $b['periodFrom'], $b['periodTo'], $b['totalAmount']]);
 
         // eliminando il valore la bolletta resta nell'archivio
         $this->ok($this->a->request('DELETE', "/api/tariffs/{$this->luce}/versions/{$v['id']}"));
@@ -156,15 +156,16 @@ class TariffBillsTest extends TestCase
         $this->assertSame(['ok', 'local'], [$r['readStatus'], $r['method']]);
         $f = $r['form'];
         $this->assertSame(['2026-08-01', '2026-09-30', '2000'], [$f['periodFrom'], $f['periodTo'], $f['consumption']]);
-        $this->assertSame([['Spesa per la materia / vendita', '400', true], ['Trasporto e gestione del contatore', '90', true], ['Oneri di sistema', '70', true], ['Imposte (accise)', '45', true], ['Canone TV', '18', false]],
+        // tutte le voci incluse, IVA e canone compresi: la somma è il totale da pagare
+        $this->assertSame([['Spesa per i consumi', '400', true], ['Trasporto e gestione del contatore', '90', true], ['Rete e oneri di sistema', '70', true], ['Imposte (accise)', '45', true], ['Canone TV', '18', true], ['IVA', '62.3', true]],
             array_map(fn ($c) => [$c['label'], $c['amount'], $c['include']], $f['components']));
-        $this->assertSame(['Enel Energia', '004512345678', '2026-10-05', '703.3', '623'], [$r['info']['supplier'], $r['info']['billNumber'], $r['info']['issueDate'], $r['info']['totalAmount'], $r['info']['taxableAmount']]);
+        $this->assertSame(['Enel Energia', '004512345678', '2026-10-05', '685.3', '623'], [$r['info']['supplier'], $r['info']['billNumber'], $r['info']['issueDate'], $r['info']['totalAmount'], $r['info']['taxableAmount']]);
         $this->assertSame([], $r['warnings']);
         $this->assertTrue(collect($r['found'])->every(fn ($x) => $x['ok']));
         Http::assertNothingSent();
-        // conferma: (400 + 90 + 70 + 45) / 2000 = 0,3025 €/kWh
+        // conferma: 685,30 € pagati / 2000 kWh = 0,34265 €/kWh
         $this->ok($this->a->post("/api/tariffs/{$this->luce}/versions", ['mode' => 'bill', 'vatBasis' => 'net', 'billFileId' => $r['id'], ...array_diff_key($f, ['m3ToSmc' => 1, 'smcToKwh' => 1])]));
-        $this->assertSame('0.30250000', $this->ok($this->a->get("/api/tariffs/{$this->luce}/bills"))['data'][0]['version']['pricePerUnit']);
+        $this->assertSame('0.34265000', $this->ok($this->a->get("/api/tariffs/{$this->luce}/bills"))['data'][0]['version']['pricePerUnit']);
     }
 
     public function test_lettura_locale_gas_bolletta_trasparente(): void
@@ -173,9 +174,42 @@ class TariffBillsTest extends TestCase
         $r = $this->ok($this->upload($this->gas, PdfFixture::make(PdfFixture::GAS)));
         $f = $r['form'];
         $this->assertSame(['2026-08-01', '2026-09-30', '500', 'smc', '1.02', '10.7'], [$f['periodFrom'], $f['periodTo'], $f['consumption'], $f['consumptionUnit'], $f['m3ToSmc'], $f['smcToKwh']]);
-        $this->assertSame(['300', '120', '60'], array_column($f['components'], 'amount'));
+        $this->assertSame(['300', '120', '60', '48'], array_column($f['components'], 'amount'));
         $this->assertSame(['A2A Energia', '528'], [$r['info']['supplier'], $r['info']['totalAmount']]);
+        $this->assertSame([], $r['warnings']);
         $this->assertFalse(collect($r['found'])->firstWhere('label', 'Imponibile')['ok']);
+    }
+
+    public function test_lettura_locale_iren_quote_e_sottovoci(): void
+    {
+        config(['foodcost.bill_ai.key' => '']);
+        $r = $this->ok($this->upload($this->luce, PdfFixture::make(PdfFixture::IREN)));
+        $f = $r['form'];
+        $this->assertSame(['2026-10-01', '2026-10-31', '63'], [$f['periodFrom'], $f['periodTo'], $f['consumption']]);
+        // le sottovoci "di cui" non si sommano; la quota potenza c'è; accise e IVA in una voce sola; canone incluso
+        $this->assertSame([['Spesa per i consumi', '14.65'], ['Quota fissa', '15.67'], ['Quota potenza', '5.93'], ['Accise e IVA', '3.63'], ['Canone TV', '9']], array_map(fn ($c) => [$c['label'], $c['amount']], $f['components']));
+        $this->assertSame(['Iren Luce Gas e Servizi', '38500000000001', '2026-11-05', '48.88'], [$r['info']['supplier'], $r['info']['billNumber'], $r['info']['issueDate'], $r['info']['totalAmount']]);
+        $this->assertSame([], $r['warnings']);
+        // 48,88 € pagati / 63 kWh = 0,775873 €/kWh
+        $p = $this->ok($this->a->post('/api/tariffs/bill-preview', ['mode' => 'bill', 'vatBasis' => 'net', ...array_diff_key($f, ['m3ToSmc' => 1, 'smcToKwh' => 1, 'validFrom' => 1]), 'validFrom' => $f['validFrom']]));
+        $this->assertStringStartsWith('0.7758730', $p['pricePerUnit']);
+    }
+
+    public function test_voci_mancanti_e_accrediti_riconciliati_col_totale(): void
+    {
+        $this->fakeAi($this->luceLetta(['voci' => [
+            ['descrizione' => 'Spesa per la materia energia', 'importo_netto_iva' => '400.00', 'tipo' => 'variable', 'includi' => true],
+            ['descrizione' => 'Bonus sociale', 'importo_netto_iva' => '-20.00', 'tipo' => 'variable', 'includi' => true],
+            ['descrizione' => 'IVA', 'importo_netto_iva' => '38.00', 'tipo' => 'variable', 'includi' => true],
+        ], 'totale_da_pagare' => '500.00']));
+        $r = $this->ok($this->upload($this->luce));
+        $c = $r['form']['components'];
+        $this->assertSame(['Spesa per la materia energia (al netto degli accrediti)', '380'], [$c[0]['label'], $c[0]['amount']]);
+        // 500 − (380 + 38) = 82 € non riconosciuti → «Altre voci», così il totale torna
+        $this->assertSame(['Altre voci (differenza dal totale da pagare)', '82', true], [$c[2]['label'], $c[2]['amount'], $c[2]['include']]);
+        $w = implode(' ', $r['warnings']);
+        $this->assertStringContainsString('accredito di 20.00', $w);
+        $this->assertStringContainsString('differenza di 82.00', $w);
     }
 
     public function test_lettura_locale_acqua(): void
@@ -185,7 +219,8 @@ class TariffBillsTest extends TestCase
         $r = $this->ok($this->upload($acqua, PdfFixture::make(PdfFixture::ACQUA)));
         $f = $r['form'];
         $this->assertSame(['2026-07-01', '2026-09-30', '85'], [$f['periodFrom'], $f['periodTo'], $f['consumption']]);
-        $this->assertSame([['Acquedotto', '95.2'], ['Fognatura', '30.1'], ['Depurazione', '60.4'], ['Quota fissa', '12.5']], array_map(fn ($c) => [$c['label'], $c['amount']], $f['components']));
+        $this->assertSame([['Quota fissa', '12.5'], ['Acquedotto', '95.2'], ['Fognatura', '30.1'], ['Depurazione', '60.4'], ['IVA', '19.82']], array_map(fn ($c) => [$c['label'], $c['amount']], $f['components']));
+        $this->assertSame([], $r['warnings']);
         $this->assertSame('Publiacqua', $r['info']['supplier']);
     }
 
@@ -235,11 +270,11 @@ class TariffBillsTest extends TestCase
 
     public function test_avvisi_utenza_sbagliata_e_somma_diversa(): void
     {
-        $this->fakeAi($this->luceLetta(['imponibile_totale' => '900.00']));
+        $this->fakeAi($this->luceLetta(['totale_da_pagare' => '500.00']));
         $r = $this->ok($this->upload($this->gas));
         $w = implode(' ', $r['warnings']);
         $this->assertStringContainsString('sembra di luce', $w);
-        $this->assertStringContainsString('non coincide con l’imponibile', $w);
+        $this->assertStringContainsString('supera di', $w);
         // kWh su utenza gas: consumo non riportato
         $this->assertNull($r['form']['consumption']);
     }

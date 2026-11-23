@@ -50,7 +50,7 @@ final class PdfFixture
         'Canone di abbonamento alla televisione € 18,00',
         'Totale imponibile € 623,00',
         'IVA 10% € 62,30',
-        'Totale da pagare € 703,30',
+        'Totale da pagare € 685,30',
     ];
 
     public const GAS = [
@@ -64,7 +64,46 @@ final class PdfFixture
         'Spesa per la vendita di gas naturale 300,00 €',
         'Spesa per la rete e gli oneri generali di sistema 120,00 €',
         'Imposte 60,00 €',
+        'IVA 10% 48,00 €',
         'Totale bolletta 528,00 €',
+    ];
+
+    /** Impaginazione Iren "scontrino dell'energia" (quote con sottovoci "di cui"), dati personali omessi. */
+    public const IREN = [
+        'Cliente Esempio',
+        'Fattura n. 38500000000001 *',
+        'Emessa in data: 05 novembre 2026',
+        '** Periodo di riferimento:',
+        '01 OTTOBRE 2026 - 31 OTTOBRE 2026',
+        'Consumo',
+        'Annuo (kWh)',
+        'TOTALE',
+        '1.053',
+        'kWh',
+        'ENERGIA ELETTRICA',
+        'Totale da pagare 48,88 €',
+        'Consumo totale fatturato nel periodo **',
+        '63 kWh',
+        'Scontrino dell\'energia',
+        'QUANTITA\' PREZZO MEDIO IMPORTO',
+        'Quota per consumi',
+        'ENERGIA ATTIVA 63 kWh x 0,232540 €/kWh 14,65 €',
+        'di cui spesa per la vendita di energia elettrica 0,184762 €/kWh 11,64 €',
+        'di cui spesa per la rete e gli oneri generali di sistema 0,047778 €/kWh 3,01 €',
+        'Quota fissa e Quota potenza',
+        'Quota fissa 1 mese x 15,670000 €/mese 15,67 €',
+        'di cui spesa per la vendita di energia elettrica 13,750000 €/mese 13,75 €',
+        'Quota potenza 3,0 kW per 1 mese x 1,976667 €/kW/mese 5,93 €',
+        'di cui spesa per la rete e gli oneri generali di sistema 1,976667 €/kW/mese 5,93 €',
+        'Accise e IVA 3,63 €',
+        'Totale bolletta',
+        '39,88 €',
+        'Canone di abbonamento alla televisione per uso privato di 10/26 9,00 €',
+        'Totale da pagare',
+        '48,88 €',
+        'Iren Luce Gas e Servizi S.p.A.',
+        'Totale consumi dal 01/10/2026 al 31/10/2026',
+        'Iva 10% 39,88 € 36,25 € 3,63 €',
     ];
 
     public const ACQUA = [
@@ -76,6 +115,7 @@ final class PdfFixture
         'Servizio acquedotto 95,20',
         'Servizio fognatura 30,10',
         'Servizio depurazione 60,40',
-        'Totale da pagare 218,00',
+        'IVA 10% 19,82',
+        'Totale da pagare 218,02',
     ];
 }

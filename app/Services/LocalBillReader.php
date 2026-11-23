@@ -56,7 +56,7 @@ final class LocalBillReader
             'tipo_utenza' => $kind,
             'fornitore' => self::supplier($low),
             'numero_fattura' => self::match($t, '/(?:fattura|bolletta|documento)\s*(?:n\.?|nr\.?|numero|num\.?)\s*[:°º]?\s*([A-Z0-9][A-Z0-9\/\-.]{3,30})/iu'),
-            'data_emissione' => self::date(self::match($t, '/(?:emess[ao]\s+il|data\s+(?:di\s+)?emissione|del)\s*[:]?\s*(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\d{1,2}\s+[a-zà]+\s+\d{4})/iu')),
+            'data_emissione' => self::date(self::match($t, '/(?:emess[ao]\s+(?:il|in\s+data)|data\s+(?:di\s+)?emissione|del)\s*[:]?\s*(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}|\d{1,2}\s+[a-zà]+\s+\d{4})/iu')),
             'periodo_dal' => $from,
             'periodo_al' => $to,
             'consumo' => $consumption,
@@ -79,7 +79,7 @@ final class LocalBillReader
 
     private const SUPPLIERS = [
         'enel energia' => 'Enel Energia', 'servizio elettrico nazionale' => 'Servizio Elettrico Nazionale', 'a2a energia' => 'A2A Energia', 'hera comm' => 'Hera Comm',
-        'edison energia' => 'Edison Energia', 'plenitude' => 'Plenitude (Eni)', 'eni gas e luce' => 'Eni gas e luce', 'iren mercato' => 'Iren', 'acea energia' => 'Acea Energia',
+        'edison energia' => 'Edison Energia', 'plenitude' => 'Plenitude (Eni)', 'eni gas e luce' => 'Eni gas e luce', 'iren mercato' => 'Iren', 'iren luce gas' => 'Iren Luce Gas e Servizi', 'acea energia' => 'Acea Energia',
         'sorgenia' => 'Sorgenia', 'engie' => 'Engie', 'e.on' => 'E.ON', 'illumia' => 'Illumia', 'axpo' => 'Axpo', 'duferco' => 'Duferco Energia', 'iberdrola' => 'Iberdrola',
         'estra' => 'Estra', 'agsm aim' => 'AGSM AIM', 'dolomiti energia' => 'Dolomiti Energia', 'alperia' => 'Alperia', 'optima italia' => 'Optima Italia', 'wekiwi' => 'Wekiwi',
         'enegan' => 'Enegan', 'nen ' => 'NeN', 'pulsee' => 'Pulsee', 'octopus energy' => 'Octopus Energy', 'green network' => 'Green Network', 'bluenergy' => 'Bluenergy',
@@ -88,25 +88,29 @@ final class LocalBillReader
         'a2a' => 'A2A', 'hera' => 'Hera', 'iren' => 'Iren', 'enel' => 'Enel', 'edison' => 'Edison', 'acea' => 'Acea', 'eni' => 'Eni',
     ];
 
-    /** Voci del riepilogo: [espressioni, descrizione, tipo, includi]. Le prime trovate vincono. */
-    private const COMPONENTS = [
-        [['spesa per la materia energia', 'spesa per la materia gas naturale', 'spesa per la materia gas', 'spesa per la vendita di energia elettrica', 'spesa per la vendita di gas naturale', 'spesa per la vendita'], 'Spesa per la materia / vendita', 'variable', true],
-        [['spesa per la rete e gli oneri generali di sistema', 'spesa per la rete e oneri generali di sistema', 'spesa per la rete'], 'Rete e oneri generali di sistema', 'variable', true],
-        [['spesa per il trasporto e la gestione del contatore', 'spesa per il trasporto e gestione del contatore', 'trasporto e gestione del contatore'], 'Trasporto e gestione del contatore', 'variable', true],
-        [['spesa per oneri di sistema', 'oneri di sistema'], 'Oneri di sistema', 'variable', true],
-        [['imposte', 'accise e addizionali', 'accisa', 'imposta erariale'], 'Imposte (accise)', 'variable', true],
-        // acqua
-        [['servizio acquedotto', 'quota acquedotto', 'acquedotto'], 'Acquedotto', 'variable', true],
-        [['servizio fognatura', 'quota fognatura', 'fognatura'], 'Fognatura', 'variable', true],
-        [['servizio depurazione', 'quota depurazione', 'depurazione'], 'Depurazione', 'variable', true],
-        [['quota fissa'], 'Quota fissa', 'fixed', false],
-        [['oneri di perequazione', 'componenti perequative', 'perequazione'], 'Oneri di perequazione', 'variable', true],
-        // voci estranee al costo del periodo
-        [['canone di abbonamento alla televisione', 'canone tv', 'canone rai'], 'Canone TV', 'fixed', false],
-        [['ricalcoli', 'ricalcolo'], 'Ricalcoli di periodi precedenti', 'variable', false],
-        [['altre partite'], 'Altre partite', 'variable', false],
-        [['bonus sociale'], 'Bonus sociale', 'variable', false],
+    /**
+     * Voci del riepilogo della bolletta: [gruppo, diciture a inizio riga, descrizione, tipo].
+     * Per ogni gruppo vale la prima riga trovata; le righe "di cui …" (sottovoci) sono ignorate.
+     * Per scelta del ristoratore tutte le voci sono incluse (IVA e canone compresi): si tolgono con la spunta.
+     */
+    private const GROUPS = [
+        ['consumi', ['quota per consumi', 'quota consumi', 'spesa per la materia energia', 'spesa per la materia gas naturale', 'spesa per la materia gas', 'spesa per la materia', 'spesa per la vendita di energia elettrica', 'spesa per la vendita di gas naturale', 'spesa per la vendita', 'spesa per l’energia', "spesa per l'energia"], 'Spesa per i consumi', 'variable'],
+        ['trasporto', ['spesa per il trasporto e la gestione del contatore', 'spesa per il trasporto e gestione del contatore', 'spesa per il trasporto', 'trasporto e gestione del contatore'], 'Trasporto e gestione del contatore', 'variable'],
+        ['oneri', ['spesa per oneri di sistema', 'spesa per la rete e gli oneri generali di sistema', 'spesa per la rete e oneri generali di sistema', 'spesa per la rete', 'oneri di sistema', 'oneri generali di sistema'], 'Rete e oneri di sistema', 'variable'],
+        ['fissa', ['quota fissa'], 'Quota fissa', 'fixed'],
+        ['potenza', ['quota potenza'], 'Quota potenza', 'fixed'],
+        ['acquedotto', ['servizio acquedotto', 'quota acquedotto', 'acquedotto'], 'Acquedotto', 'variable'],
+        ['fognatura', ['servizio fognatura', 'quota fognatura', 'fognatura'], 'Fognatura', 'variable'],
+        ['depurazione', ['servizio depurazione', 'quota depurazione', 'depurazione'], 'Depurazione', 'variable'],
+        ['perequazione', ['oneri di perequazione', 'componenti perequative', 'perequazione'], 'Oneri di perequazione', 'variable'],
+        ['imposte', ['totale accise e iva', 'accise e iva', 'imposte e iva', 'imposte', 'accise e addizionali', 'accise', 'imposta erariale'], 'Imposte (accise)', 'variable'],
+        ['iva', ['totale iva', 'iva'], 'IVA', 'variable'],
+        ['canone', ['canone di abbonamento alla televisione', 'canone di abbonamento della televisione', 'canone tv', 'canone rai'], 'Canone TV', 'fixed'],
+        ['altre', ['altre partite', 'ricalcoli', 'ricalcolo', 'interessi di mora', 'oneri diversi', 'corrispettivi diversi'], 'Altre partite', 'variable'],
+        ['bonus', ['bonus sociale', 'bonus', 'sconto', 'sconti'], 'Bonus e sconti', 'variable'],
     ];
+
+    private const MONEY = '/(?<![\d,.])(-?\s?\d{1,3}(?:\.\d{3})*,\d{2}|-?\s?\d+,\d{2})(?!\d)(?!\s*(?:€\s*)?\/)(?!\s*%)/u';
 
     private static function clean(string $t): string
     {
@@ -223,23 +227,90 @@ final class LocalBillReader
     /** @return list<array<string,mixed>> */
     private static function components(string $t, ?string $kind): array
     {
-        $out = [];
-        $taken = [];
-        foreach (self::COMPONENTS as [$needles, $label, $type, $include]) {
-            if ($kind !== 'water' && in_array($label, ['Acquedotto', 'Fognatura', 'Depurazione', 'Oneri di perequazione'], true)) {
-                continue;
+        $lines = array_values(array_filter(array_map('trim', explode("\n", $t)), fn ($l) => $l !== ''));
+        $lower = array_map(fn ($l) => mb_strtolower($l), $lines);
+        $groups = array_values(array_filter(self::GROUPS, function ($g) use ($kind) {
+            $water = in_array($g[0], ['acquedotto', 'fognatura', 'depurazione', 'perequazione'], true);
+            $energy = in_array($g[0], ['consumi', 'trasporto', 'oneri', 'potenza', 'imposte'], true);
+
+            return ! ($kind !== 'water' && $water) && ! ($kind === 'water' && $energy);
+        }));
+        $hit = function (int $i) use ($lower, $groups): ?array {
+            $l = ltrim($lower[$i], " \t-•*");
+            if (str_starts_with($lower[$i], 'di cui') || str_starts_with($lower[$i], '-')) {
+                return null;
             }
-            if ($kind === 'water' && in_array($label, ['Spesa per la materia / vendita', 'Trasporto e gestione del contatore', 'Oneri di sistema', 'Rete e oneri generali di sistema', 'Imposte (accise)'], true)) {
-                continue;
-            }
-            foreach ($needles as $n) {
-                $found = self::amountAfter($t, [$n], $taken);
-                if ($found !== null) {
-                    $out[] = ['descrizione' => $label, 'importo_netto_iva' => $found, 'tipo' => $type, 'includi' => $include];
-                    break;
+            foreach ($groups as $g) {
+                foreach ($g[1] as $needle) {
+                    if (str_starts_with($l, $needle)) {
+                        return $g;
+                    }
                 }
             }
+
+            return null;
+        };
+        $money = function (int $i) use ($lines): ?string {
+            if (! isset($lines[$i]) || ! preg_match_all(self::MONEY, $lines[$i], $m)) {
+                return null;
+            }
+
+            return self::number(str_replace(' ', '', end($m[1])));
+        };
+        // inizio del riepilogo: prima riga con una voce e un importo (sulla riga o su quella seguente)
+        $start = null;
+        for ($i = 0; $i < count($lines); $i++) {
+            if ($hit($i) && ($money($i) !== null || ($money($i + 1) !== null && ! $hit($i + 1)) || ($money($i + 1) !== null && $hit($i + 1) === $hit($i)))) {
+                $start = $i;
+                break;
+            }
         }
+        if ($start === null) {
+            return [];
+        }
+        $end = null;
+        foreach ([['totale da pagare', 'importo da pagare', 'totale dovuto', 'importo totale da pagare'], ['totale bolletta', 'totale fattura', 'totale documento']] as $stops) {
+            for ($i = $start + 1; $i < count($lines) && $end === null; $i++) {
+                foreach ($stops as $stop) {
+                    if (str_starts_with($lower[$i], $stop)) {
+                        $end = $i;
+                        break;
+                    }
+                }
+            }
+            if ($end !== null) {
+                break;
+            }
+        }
+        $end ??= min(count($lines), $start + 60);
+
+        $out = [];
+        $used = [];
+        $consumed = [];
+        for ($i = $start; $i < $end; $i++) {
+            if (isset($consumed[$i]) || ! ($g = $hit($i)) || isset($used[$g[0]])) {
+                continue;
+            }
+            $v = $money($i);
+            if ($v === null && $i + 1 < $end && ! $hit($i + 1)) {
+                $v = $money($i + 1);
+                $consumed[$i + 1] = true;
+            } elseif ($v === null && $i + 1 < $end && $hit($i + 1) === $g) {
+                // intestazione seguita dalla riga della stessa voce ("Quota fissa e quota potenza" → "Quota fissa …")
+                continue;
+            }
+            if ($v === null) {
+                continue;
+            }
+            $used[$g[0]] = true;
+            $label = $g[2];
+            if ($g[0] === 'imposte' && str_contains($lower[$i], 'iva')) {
+                $label = 'Accise e IVA';
+                $used['iva'] = true;
+            }
+            $out[] = ['descrizione' => $label, 'importo_netto_iva' => $v, 'tipo' => $g[3], 'includi' => true];
+        }
+
         return $out;
     }
 

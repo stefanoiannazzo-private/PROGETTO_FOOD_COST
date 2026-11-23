@@ -212,9 +212,10 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
   const [smcToKwh, setSmcToKwh] = useState<string | null>(t.current?.smc_to_kwh ?? null)
   const [bill, setBill] = useState({ periodFrom: '', periodTo: '', consumption: null as string | null })
   const [comps, setComps] = useState<BillComponent[]>([
-    { label: 'Spesa per la materia (energia)', amount: null, kind: 'variable', include: true },
-    { label: 'Trasporto e oneri variabili', amount: null, kind: 'variable', include: true },
-    { label: 'Quote fisse e potenza', amount: null, kind: 'fixed', include: false },
+    { label: 'Spesa per i consumi', amount: null, kind: 'variable', include: true },
+    { label: 'Quote fisse e potenza', amount: null, kind: 'fixed', include: true },
+    { label: 'Imposte e IVA', amount: null, kind: 'variable', include: true },
+    { label: 'Altre voci (canone, ecc.)', amount: null, kind: 'fixed', include: true },
   ])
   const [preview, setPreview] = useState<{ pricePerUnit: string; variableOnlyPricePerUnit: string; includesFixed: boolean } | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -360,7 +361,7 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
                   ))}
                 </ul>
               ) : null}
-              {read.form ? <div className="small faint" style={{ marginTop: 4 }}>Le quote fisse sono proposte escluse: le trovi già nei costi fissi della pagina Redditività. Spunta «Includi» se vuoi la tariffa “tutto compreso”.</div> : null}
+              {read.form ? <div className="small faint" style={{ marginTop: 4 }}>Tutte le voci sono incluse: il prezzo è quello che paghi davvero (totale della bolletta ÷ consumo). Togli «Includi» alle voci che non vuoi conteggiare, per esempio l’IVA se la recuperi.</div> : null}
             </div>
           </div>
         ) : null}
@@ -396,7 +397,7 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
               </Field>
             </div>
             <div className="stack tight">
-              <div className="label">Voci di costo (importi netti IVA)</div>
+              <div className="label">Voci della bolletta (IVA e canone compresi: togli «Includi» alle voci che non vuoi conteggiare)</div>
               {comps.map((c, i) => (
                 <div key={i} className="row wrap">
                   <input className="input grow" style={{ minWidth: 180 }} value={c.label} onChange={(e) => setComps(comps.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} aria-label="Descrizione voce" />
@@ -422,9 +423,9 @@ function NewVersion({ t, onDone }: { t: Detail; onDone: (r: AffectedRecipe[]) =>
               </div>
             </div>
             {comps.some((c) => c.kind === 'fixed' && c.include) ? (
-              <div className="alert warn">
+              <div className="alert info small">
                 <Icon name="alert" />
-                <div>Stai includendo quote fisse nella tariffa media: non imputarle di nuovo altrove (per esempio come costi generali), altrimenti verrebbero conteggiate due volte.</div>
+                <div>Le quote fisse incluse qui entrano nel prezzo per {u}: la pagina Redditività non le aggiunge di nuovo. Non inserirle anche a mano tra i costi fissi, altrimenti verrebbero contate due volte.</div>
               </div>
             ) : null}
             {preview ? (

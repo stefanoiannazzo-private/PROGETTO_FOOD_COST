@@ -126,33 +126,53 @@ final class BillReader
             $w[] = 'Il fornitore indica consumi stimati (non letture reali): il prezzo medio può cambiare con il conguaglio.';
         }
 
+        // Per scelta del ristoratore il prezzo è quello pagato davvero: tutte le voci (IVA e canone compresi)
+        // sono incluse e si tolgono con la spunta. Gli accrediti (importi negativi) riducono la prima voce variabile.
         $components = [];
+        $credits = Dec::zero();
         foreach ((array) ($raw['voci'] ?? []) as $c) {
-            $amount = self::dec($c['importo_netto_iva'] ?? null);
+            $amount = self::dec($c['importo_netto_iva'] ?? $c['importo'] ?? null);
             $label = self::text($c['descrizione'] ?? null, 120);
-            if ($amount === null || $label === null) {
+            if ($amount === null || $label === null || Dec::of($amount)->isZero()) {
                 continue;
             }
-            $negative = Dec::of($amount)->lt(0);
+            if (Dec::of($amount)->lt(0)) {
+                $credits = $credits->plus(Dec::of($amount)->abs());
+                $w[] = "«{$label}» è un accredito di ".Dec::of($amount)->abs()->toDecimalPlaces(2)->toFixed(2).' €: è stato tolto dalla spesa per i consumi.';
+
+                continue;
+            }
             $components[] = [
                 'label' => $label,
-                'amount' => $negative ? Dec::of($amount)->abs()->toFixed() : $amount,
+                'amount' => $amount,
                 'kind' => ($c['tipo'] ?? '') === 'fixed' ? 'fixed' : 'variable',
-                // voci negative (bonus, ricalcoli a credito) ed estranee al costo dell'energia restano escluse
-                'include' => ! $negative && ($c['includi'] ?? true) !== false && ($c['tipo'] ?? '') !== 'fixed',
+                'include' => ($c['includi'] ?? true) !== false,
             ];
-            if ($negative) {
-                $w[] = "La voce «{$label}» è un accredito: è stata esclusa dal calcolo.";
+        }
+        if ($credits->gt(0)) {
+            foreach ($components as $k => $c) {
+                if ($c['kind'] === 'variable' && Dec::of($c['amount'])->gte($credits)) {
+                    $components[$k]['amount'] = Dec::of($c['amount'])->minus($credits)->toFixed();
+                    $components[$k]['label'] = mb_substr($c['label'].' (al netto degli accrediti)', 0, 120);
+                    $credits = Dec::zero();
+                    break;
+                }
             }
         }
         if (! $components) {
             $w[] = 'Voci di costo non trovate: inseriscile a mano.';
-        } elseif ($info['taxableAmount']) {
-            $sum = Dec::sum(array_map(fn ($c) => Dec::of($c['amount']), $components));
-            $tax = Dec::of($info['taxableAmount']);
-            if ($tax->gt(0) && $sum->minus($tax)->abs()->div($tax)->gt('0.02')) {
-                $w[] = 'La somma delle voci lette ('.$sum->toDecimalPlaces(2)->toFixed().' €) non coincide con l’imponibile della bolletta ('.$tax->toDecimalPlaces(2)->toFixed().' €): controlla gli importi.';
+        } elseif ($info['totalAmount']) {
+            // controllo sul totale da pagare: le voci devono sommare esattamente quanto si paga
+            $sum = Dec::sum(array_map(fn ($c) => Dec::of($c['amount']), $components))->minus($credits);
+            $diff = Dec::of($info['totalAmount'])->minus($sum)->toDecimalPlaces(2);
+            if ($diff->gt('0.01')) {
+                $components[] = ['label' => 'Altre voci (differenza dal totale da pagare)', 'amount' => $diff->toFixed(), 'kind' => 'variable', 'include' => true];
+                $w[] = 'Alcune voci non sono state riconosciute: la differenza di '.$diff->toFixed(2).' € rispetto al totale da pagare è stata aggiunta come «Altre voci».';
+            } elseif ($diff->lt('-0.01')) {
+                $w[] = 'La somma delle voci lette supera di '.$diff->abs()->toFixed(2).' € il totale da pagare ('.Dec::of($info['totalAmount'])->toDecimalPlaces(2)->toFixed(2).' €): controlla gli importi, forse una voce è contata due volte.';
             }
+        } else {
+            $w[] = 'Totale da pagare non trovato: verifica che le voci corrispondano alla bolletta.';
         }
         if (! empty($raw['note'])) {
             $w[] = self::text($raw['note'], 300);
@@ -238,12 +258,12 @@ final class BillReader
                     'pcs_gj_smc' => $num + ['description' => 'Solo gas: potere calorifico superiore in GJ/Smc, se indicato.'],
                     'voci' => [
                         'type' => 'array',
-                        'description' => 'Voci di spesa del periodo, importi NETTI IVA.',
+                        'description' => 'Tutte le voci del riepilogo, compresi IVA e canone TV: la somma deve essere uguale al totale da pagare.',
                         'items' => [
                             'type' => 'object',
                             'properties' => [
                                 'descrizione' => ['type' => 'string'],
-                                'importo_netto_iva' => $num,
+                                'importo_netto_iva' => $num + ['description' => 'Importo della voce come nel riepilogo (per la voce IVA: l\'importo dell\'IVA).'],
                                 'tipo' => ['type' => 'string', 'enum' => ['variable', 'fixed']],
                                 'includi' => ['type' => 'boolean'],
                             ],
@@ -266,9 +286,9 @@ Leggi il documento e registra i dati con lo strumento registra_bolletta. Regole:
 - Numeri sempre con il punto decimale e senza separatore delle migliaia ("1234.56"). Date in formato AAAA-MM-GG.
 - Il periodo è quello dei consumi fatturati (non la data di scadenza). Il consumo è il totale fatturato nel periodo (kWh per la luce, Smc o m³ per il gas, m³ per l'acqua).
 - Voci: usa le voci del riepilogo ("Spesa per la materia energia/gas naturale", "Spesa per il trasporto e la gestione del contatore", "Spesa per oneri di sistema", "Imposte"/accise, per l'acqua "Acquedotto", "Fognatura", "Depurazione", "Quota fissa"). Se il riepilogo separa quota fissa, quota potenza e quota energia, registrale come voci separate.
-- Importi NETTI IVA (senza IVA). Non includere mai l'IVA come voce.
-- tipo "fixed" = quote fisse e quote potenza (non dipendono dal consumo); tipo "variable" = tutto ciò che dipende dai consumi, accise comprese.
-- includi=false per: canone TV/RAI, interessi di mora, solleciti, depositi cauzionali, bonus, sconti una tantum, ricalcoli o conguagli di periodi precedenti, altre partite non legate ai consumi del periodo. Gli accrediti hanno importo negativo.
+- Registra TUTTE le voci che compongono il totale da pagare, ciascuna con il suo importo come appare nel riepilogo: l'IVA come voce separata ("IVA"), il canone TV, le altre partite. Non registrare le sottovoci "di cui". La somma delle voci deve essere uguale al totale da pagare.
+- tipo "fixed" = quote fisse, quote potenza e canone (non dipendono dal consumo); tipo "variable" = tutto il resto.
+- includi=true per tutte le voci. Gli accrediti (bonus, sconti, ricalcoli a credito) hanno importo negativo.
 - Se un dato non è leggibile usa null: non inventare valori.
 TXT;
 }
