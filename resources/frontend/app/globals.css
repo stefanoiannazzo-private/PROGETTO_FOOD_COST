@@ -382,3 +382,17 @@ details.more[open] > summary { margin-bottom: 12px; }
 .phase-card.waiting { background: color-mix(in srgb, var(--info) 6%, var(--surface)); border-style: dashed; }
 .phase-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .table tr.phase-row > td { background: var(--surface-2); padding-top: 9px; padding-bottom: 9px; }
+
+/* NUOVO — guida del primo accesso */
+.tour-block { position: fixed; inset: 0; z-index: 1000; transition: background .2s; }
+.tour-spot { position: fixed; z-index: 1001; border-radius: 10px; pointer-events: none; box-shadow: 0 0 0 9999px rgba(15, 15, 20, .55), 0 0 0 3px var(--accent); transition: top .25s, left .25s, width .25s, height .25s; }
+.tour-pop { position: fixed; z-index: 1002; background: var(--surface); color: var(--text); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.28); padding: 16px 16px 12px; border: 1px solid var(--border); animation: tour-in .18s ease-out; }
+@keyframes tour-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.tour-count { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-3); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.tour-dots { display: flex; gap: 4px; }
+.tour-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); }
+.tour-dots span.done { background: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.tour-dots span.on { background: var(--accent); width: 16px; border-radius: 4px; }
+.tour-title { font-size: 17px; font-weight: 700; margin: 8px 0 6px; }
+.tour-body { margin: 0 0 14px; line-height: 1.5; color: var(--text-2); font-size: 14.5px; }
+.tour-actions { display: flex; align-items: center; gap: 8px; }

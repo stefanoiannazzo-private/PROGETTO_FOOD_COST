@@ -12,6 +12,8 @@ export interface Me {
   companies: Array<{ id: string; name: string; role: string; roleLabel: string }>
   /** NUOVO: il superadmin sta assistendo un'azienda di cui non è membro */
   assist?: boolean
+  /** NUOVO: la guida del primo accesso è già stata vista */
+  tourDone?: boolean
 }
 
 export function useMe() {

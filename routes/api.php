@@ -38,6 +38,7 @@ Route::post('/system/first-admin', [SystemController::class, 'firstAdmin']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/logout', [AuthController::class, 'logout']);
 Route::get('/auth/me', [AuthController::class, 'show']);
+Route::post('/auth/tour', [AuthController::class, 'tour']);
 Route::post('/auth/company', [AuthController::class, 'company']);
 Route::post('/auth/password/change', [AuthController::class, 'changePassword']);
 Route::post('/auth/password/forgot', [AuthController::class, 'forgot']);

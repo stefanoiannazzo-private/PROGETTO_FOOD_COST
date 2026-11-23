@@ -56,7 +56,19 @@ final class AuthController extends Controller
             'companies' => $companies->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'role' => $c->role, 'roleLabel' => Permissions::ROLE_LABELS[$c->role]])->all(),
             // NUOVO: il superadmin che assiste un'azienda di cui non è membro
             'assist' => $auth?->assist ?? false,
+            // NUOVO: guida del primo accesso già vista (completata o chiusa)
+            'tourDone' => DB::table('users')->where('id', $userId)->value('tour_completed_at') !== null,
         ];
+    }
+
+    /** NUOVO — registra che la guida è stata completata o chiusa (done=false la ripropone al prossimo accesso). */
+    public function tour(Request $req): array
+    {
+        $auth = $this->requireAuth($req);
+        $body = $this->parseBody($req, S::object(['done' => S::bool()]));
+        DB::table('users')->where('id', $auth->userId())->update(['tour_completed_at' => $body['done'] ? Clock::now() : null]);
+
+        return ['ok' => true, 'tourDone' => $body['done']];
     }
 
     public function login(Request $req): JsonResponse

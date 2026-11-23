@@ -8,6 +8,7 @@ import { api, ApiError } from '@/lib/api'
 import { useMe, useSwitchCompany } from '@/lib/session'
 import { Icon, Skeleton } from './ui'
 import { MobileTables } from './MobileTables'
+import { Tour } from './Tour'
 
 const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adminOnly?: boolean }> = [
   { href: '/', label: 'Dashboard', icon: 'home' },
@@ -40,6 +41,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const switchCompany = useSwitchCompany()
   const [menuOpen, setMenuOpen] = useState(false)
   const fetching = useIsFetching()
+  // NUOVO: guida del primo accesso (automatica per l'amministratore che non l'ha ancora vista)
+  const [tourOpen, setTourOpen] = useState(false)
+  useEffect(() => {
+    if (me?.company && me.role === 'admin' && !me.assist && me.tourDone === false && !pathname.startsWith('/piattaforma')) {
+      const t = setTimeout(() => setTourOpen(true), 700)
+      return () => clearTimeout(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.company?.id, me?.tourDone])
 
   useEffect(() => {
     const onUnauth = () => {
@@ -162,6 +172,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Icon name="menu" />
           </button>
           <div className="grow" />
+          {me.company ? (
+            <button
+              className="btn ghost sm"
+              data-tour="help"
+              onClick={() => {
+                setMenuOpen(false)
+                setTourOpen(true)
+              }}
+              title="Riapri la guida"
+            >
+              <Icon name="help" /> Guida
+            </button>
+          ) : null}
           {me.assist ? (
             <span className="badge warn" title="Stai operando come amministratore di un'azienda cliente: ogni accesso è registrato">
               Assistenza
@@ -196,6 +219,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="content">{children}</main>
         <MobileTables />
+        {tourOpen && me.company ? <Tour me={me} onClose={() => setTourOpen(false)} /> : null}
       </div>
     </div>
   )

@@ -255,3 +255,13 @@ Erano tutti nel clone, non nell'originale:
 - Pubblicazione reale su Aruba e limiti effettivi del piano (tempo massimo di esecuzione, versione di MySQL). Richiede la tua autorizzazione e le credenziali.
 - Invio reale delle email SMTP.
 - Docker Desktop su Windows: l'ambiente è stato provato con Docker su Linux, con gli stessi file.
+
+## 20. Guida del primo accesso (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Guida a passi che si apre da sola al primo accesso dell'amministratore (non in modalità assistenza, non nella console piattaforma) | ✅ |
+| Riquadro evidenziato sul pulsante, vignetta con descrizione, "N di M", pallini di avanzamento, CHIUDI / INDIETRO / SEGUI → / HO CAPITO | ✅ |
+| Percorso: benvenuto → Utenze → Strumenti → Dipendenti → Prodotti → Importazioni → Ricette → Redditività → pulsante Guida; passi filtrati per permessi | ✅ |
+| Chiusura o completamento registrati sull'utente (`users.tour_completed_at`, `POST /api/auth/tour`, `tourDone` in `/auth/me`) | ✅ |
+| Pulsante "Guida" nella barra in alto per riaprirla; Esc chiude, frecce per navigare; su mobile la vignetta sta in basso o in alto | ✅ |
