@@ -1,4 +1,4 @@
-# Verifica il codice a ogni push su main e su laravel; pubblica sull'hosting (Aruba Linux) via FTPS solo dai push su main,
+# Verifica il codice a ogni push su main e su laravel; pubblica sull'hosting (Aruba Linux) via FTPS dai push su laravel,
 # come per ACAT (acat-sito/.github/workflows/deploy.yml).
 #
 # Secrets (GitHub > Settings > Secrets and variables > Actions):
@@ -72,7 +72,8 @@ jobs:
 
   deploy:
     needs: test
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # si pubblica dal ramo laravel (main resta il progetto TypeScript originale)
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/laravel'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,6 +1,6 @@
 # Pubblicazione su Aruba (hosting Linux condiviso)
 
-Stesso schema di ACAT: **push su `main` → GitHub Actions → test → FTPS verso Aruba**. In più, un passo finale esegue le migrazioni del database.
+Stesso schema di ACAT: **push sul ramo `laravel` → GitHub Actions → test → FTPS verso Aruba** (il ramo `main` del repository resta il progetto TypeScript originale). In più, un passo finale esegue le migrazioni del database.
 Finché i secrets FTP non sono impostati, il workflow esegue soltanto i test e non pubblica nulla.
 
 > Nulla di questa procedura è stato ancora eseguito su un server reale: richiede il repository GitHub e le credenziali, entrambi in attesa della tua autorizzazione. L'intera sequenza (Apache con `.htaccess`, migrazioni via `/api/system/deploy`, cron via URL, configurazione in cache) è stata provata in un contenitore Apache + PHP 8.3 + MySQL 8.0 con la stessa struttura di cartelle dell'hosting.
@@ -79,7 +79,7 @@ Non va caricato né modificato a mano.
 
 ## 3. Prima pubblicazione
 
-1. Esegui un push su `main`, oppure *Actions → Verifica e pubblica → Run workflow*.
+1. Esegui un push sul ramo `laravel`, oppure *Actions → Verifica e pubblica → Run workflow*.
 2. Il workflow esegue, nell'ordine:
    - test PHP (MySQL di prova) e controllo dei tipi dell'interfaccia;
    - `composer install --no-dev`;
@@ -125,7 +125,7 @@ Il cron completa le importazioni rimaste a metà e pulisce sessioni scadute e fi
 
 ## 6. Aggiornamenti, ritorno indietro, backup
 
-- **Aggiornare:** basta un push su `main`. Vengono caricati solo i file cambiati; le migrazioni nuove partono da sole.
+- **Aggiornare:** basta un push sul ramo `laravel`. Vengono caricati solo i file cambiati; le migrazioni nuove partono da sole.
 - **Tornare indietro:** `git revert` del commit e push. Le migrazioni vanno solo in avanti: prima di pubblicare una modifica allo schema fai un backup del database.
 - **Backup:** usa i backup del database dal pannello Aruba, oppure un'esportazione con phpMyAdmin. I file caricati per le importazioni sono temporanei (30 giorni) e non serve salvarli.
 
