@@ -172,6 +172,13 @@ Legenda: ✅ equivalente e provato · 🟡 equivalente con differenze dichiarate
 | Agente da tendina, prima quelli del fornitore (`GET /ingredients/agents`), con «nuovo agente» | ➕ | `IngredientSuggestionsTest`, E |
 | Nuovo prezzo con lo stesso blocco; le modalità incompatibili con i prezzi registrati (peso/volume/pezzi) sono disattivate | ➕ | E |
 
+## 14. Novità: coefficienti degli strumenti con esempi e valori automatici
+
+| Funzionalità | Stato | Prove |
+|---|---|---|
+| Esempi sotto i coefficienti elettrici (forno/combi 0,5·1·0,05; fry top 0,6·1·0,25; friggitrice 0,5·1·0,1; induzione 0,6·1·0,2; motori 0,8) con pulsante «Usa»; esempi del fattore di carico gas (fuochi 0,5; fry top 0,6; forno 0,5; friggitrice 0,5) | ➕ | E `strumenti.mjs` |
+| Coefficienti facoltativi: se vuoti, al salvataggio vengono compilati con i valori tipici del macchinario riconosciuto da nome/categoria (altrimenti valori medi 0,5·1·0,1 e gas 0,5), con avviso; le API restano invariate | ➕ | E (forno 18,9 kW → 0,5/1/0,05; fuochi a gas → 0,5) |
+
 ## Differenze rimaste rispetto all'originale
 
 1. **Ordinamento con valori uguali** (`/ingredients?sort=category`). A parità di categoria entrambe le API ordinano per ID interno, cioè per UUID casuali diversi nei due database. Non è una differenza di logica.

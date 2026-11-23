@@ -47,6 +47,51 @@ export const emptyEquipment = (): EquipmentValue => ({
   gasTariffId: null,
 })
 
+/**
+ * NUOVO — valori tipici dei coefficienti, mostrati come esempi e usati quando il ristoratore lascia i campi vuoti.
+ * Forno: consumo a vuoto misurato nelle prove ufficiali (DIN 18873 / ENERGY STAR) ≈ 5% della potenza; gli altri sono stime prudenti.
+ */
+type ElectricPreset = { key: string; label: string; usage: string; preheat: string; hold: string; match: RegExp }
+export const ELECTRIC_PRESETS: ElectricPreset[] = [
+  { key: 'forno', label: 'Forno elettrico / combi (es. 6 o 10 teglie)', usage: '0.5', preheat: '1', hold: '0.05', match: /forn|combi|convez|vapore/i },
+  { key: 'frytop', label: 'Fry top / piastra elettrica', usage: '0.6', preheat: '1', hold: '0.25', match: /fry|piastr|grigli|grill|bistecch/i },
+  { key: 'friggitrice', label: 'Friggitrice elettrica', usage: '0.5', preheat: '1', hold: '0.1', match: /friggi/i },
+  { key: 'induzione', label: 'Piano a induzione / piastre elettriche', usage: '0.6', preheat: '1', hold: '0.2', match: /induz|fornell|piano cottura|cucina elettr/i },
+  { key: 'motore', label: 'Impastatrice, planetaria, affettatrice', usage: '0.8', preheat: '0.8', hold: '0.8', match: /impast|planetar|affett|cutter|frull|tritacarne|sottovuoto/i },
+]
+const ELECTRIC_GENERIC = { label: 'valori medi', usage: '0.5', preheat: '1', hold: '0.1' }
+type GasPreset = { key: string; label: string; load: string; match: RegExp }
+export const GAS_PRESETS: GasPreset[] = [
+  { key: 'fuochi', label: 'Fuochi a gas (fornelli)', load: '0.5', match: /fuoch|fornell|bruciat|piano cottura|cucina/i },
+  { key: 'frytop', label: 'Fry top / piastra a gas', load: '0.6', match: /fry|piastr|grigli/i },
+  { key: 'forno', label: 'Forno a gas / combi a gas', load: '0.5', match: /forn|combi/i },
+  { key: 'friggitrice', label: 'Friggitrice a gas', load: '0.5', match: /friggi/i },
+]
+const GAS_GENERIC = { label: 'valore medio', load: '0.5' }
+const num = (x: string) => x.replace('.', ',')
+
+/** Compila i coefficienti lasciati vuoti con i valori tipici del macchinario (riconosciuto da nome e categoria). */
+export function applyDefaultCoefficients(v: EquipmentValue): { v: EquipmentValue; note: string | null } {
+  const text = `${v.name} ${v.category}`
+  const electric = v.powerType === 'electric' || v.powerType === 'mixed'
+  const gas = v.powerType === 'gas' || v.powerType === 'mixed'
+  const out = { ...v }
+  const notes: string[] = []
+  if (electric && (!v.usageCoefficient || !v.preheatCoefficient || !v.holdCoefficient)) {
+    const p = ELECTRIC_PRESETS.find((x) => x.match.test(text)) ?? ELECTRIC_GENERIC
+    if (!out.usageCoefficient) out.usageCoefficient = p.usage
+    if (!out.preheatCoefficient) out.preheatCoefficient = p.preheat
+    if (!out.holdCoefficient) out.holdCoefficient = p.hold
+    notes.push(`coefficienti elettrici con i ${'key' in p ? `valori tipici di «${p.label}»` : 'valori medi'}`)
+  }
+  if (gas && !v.gasLoadFactor) {
+    const p = GAS_PRESETS.find((x) => x.match.test(text)) ?? GAS_GENERIC
+    out.gasLoadFactor = p.load
+    notes.push(`fattore di carico ${num(p.load)} (${'key' in p ? p.label : 'valore medio'})`)
+  }
+  return { v: out, note: notes.length ? `Compilati in automatico: ${notes.join('; ')}. Puoi modificarli quando vuoi.` : null }
+}
+
 interface TariffOpt {
   id: string
   name: string
@@ -108,13 +153,13 @@ export function EquipmentFields({ v, set, errors }: { v: EquipmentValue; set: (p
             <Field label="Potenza nominale" htmlFor="eq-kw" error={errors.electricPowerKw} hint="Dalla targhetta del macchinario">
               <NumberInput id="eq-kw" value={v.electricPowerKw} onChange={(x) => set({ electricPowerKw: x })} suffix="kW" />
             </Field>
-            <Field label="Coefficiente medio di utilizzo" htmlFor="eq-cu" error={errors.usageCoefficient} hint="Tra 0 e 1 (es. 0,6)">
+            <Field label="Coefficiente medio di utilizzo" htmlFor="eq-cu" error={errors.usageCoefficient} hint="Mentre cuoce: per quanta parte del tempo scalda davvero. Facoltativo">
               <NumberInput id="eq-cu" value={v.usageCoefficient} onChange={(x) => set({ usageCoefficient: x })} />
             </Field>
-            <Field label="Coefficiente in preriscaldamento" htmlFor="eq-cp" error={errors.preheatCoefficient} hint="Facoltativo; altrimenti si usa quello medio">
+            <Field label="Coefficiente in preriscaldamento" htmlFor="eq-cp" error={errors.preheatCoefficient} hint="Mentre sale in temperatura (di solito 1). Facoltativo">
               <NumberInput id="eq-cp" value={v.preheatCoefficient} onChange={(x) => set({ preheatCoefficient: x })} />
             </Field>
-            <Field label="Coefficiente in mantenimento" htmlFor="eq-ch" error={errors.holdCoefficient} hint="Facoltativo">
+            <Field label="Coefficiente in mantenimento" htmlFor="eq-ch" error={errors.holdCoefficient} hint="Caldo, vuoto, in attesa. Facoltativo">
               <NumberInput id="eq-ch" value={v.holdCoefficient} onChange={(x) => set({ holdCoefficient: x })} />
             </Field>
             <Field label="Tariffa elettrica" htmlFor="eq-et" error={errors.electricTariffId}>
@@ -123,6 +168,42 @@ export function EquipmentFields({ v, set, errors }: { v: EquipmentValue; set: (p
                 {opt('electricity')}
               </select>
             </Field>
+          </div>
+          <div className="card" style={{ background: 'var(--surface-2)' }}>
+            <div className="card-pad small stack tight">
+              <div>
+                <strong>Non sai cosa mettere?</strong> Lascia vuoti i coefficienti: al salvataggio li compiliamo con i valori tipici del macchinario, riconosciuto dal nome o dalla categoria. Oppure scegli qui sotto.
+              </div>
+              <table className="table compact" style={{ background: 'transparent' }}>
+                <thead>
+                  <tr>
+                    <th>Esempio</th>
+                    <th className="num">Medio</th>
+                    <th className="num">Preriscaldamento</th>
+                    <th className="num">Mantenimento</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {ELECTRIC_PRESETS.map((p) => (
+                    <tr key={p.key}>
+                      <td>{p.label}</td>
+                      <td className="num">{num(p.usage)}</td>
+                      <td className="num">{num(p.preheat)}</td>
+                      <td className="num">{num(p.hold)}</td>
+                      <td className="num">
+                        <button type="button" className="btn sm" onClick={() => set({ usageCoefficient: p.usage, preheatCoefficient: p.preheat, holdCoefficient: p.hold })}>
+                          Usa
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div className="faint">
+                Esempio: forno da 10 kW, 30 minuti di cottura con coefficiente 0,5 → 10 × 0,5 h × 0,5 = 2,5 kWh. Per i forni il consumo a vuoto (mantenimento) è misurato nelle prove ufficiali intorno al 5% della potenza; gli altri valori sono stime: se misuri i consumi reali puoi correggerli.
+              </div>
+            </div>
           </div>
         </>
       ) : null}
@@ -155,7 +236,7 @@ export function EquipmentFields({ v, set, errors }: { v: EquipmentValue; set: (p
                 <NumberInput id="eq-gk" value={v.gasPowerKw} onChange={(x) => set({ gasPowerKw: x })} suffix="kW" />
               </Field>
             )}
-            <Field label="Fattore di carico" htmlFor="eq-gl" error={errors.gasLoadFactor} hint="Facoltativo, tra 0 e 1; applicato una sola volta">
+            <Field label="Fattore di carico" htmlFor="eq-gl" error={errors.gasLoadFactor} hint="A che percentuale della fiamma massima lavora in media (0,5 = metà). Facoltativo">
               <NumberInput id="eq-gl" value={v.gasLoadFactor} onChange={(x) => set({ gasLoadFactor: x })} />
             </Field>
             <Field label="Tariffa gas" htmlFor="eq-gt" error={errors.gasTariffId}>
@@ -164,6 +245,21 @@ export function EquipmentFields({ v, set, errors }: { v: EquipmentValue; set: (p
                 {opt('gas')}
               </select>
             </Field>
+          </div>
+          <div className="card" style={{ background: 'var(--surface-2)' }}>
+            <div className="card-pad small stack tight">
+              <div>
+                <strong>Non sai cosa mettere?</strong> Lascia vuoto il fattore di carico: al salvataggio usiamo il valore tipico del macchinario. Esempi:
+              </div>
+              <div className="row wrap" style={{ gap: 6 }}>
+                {GAS_PRESETS.map((p) => (
+                  <button key={p.key} type="button" className="btn sm" onClick={() => set({ gasLoadFactor: p.load })} title="Usa questo valore">
+                    {p.label}: {num(p.load)}
+                  </button>
+                ))}
+              </div>
+              <div className="faint">I fuochi raramente restano al massimo: in media lavorano a circa metà fiamma. Sono stime, modificabili.</div>
+            </div>
           </div>
         </>
       ) : null}

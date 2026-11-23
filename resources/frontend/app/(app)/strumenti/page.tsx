@@ -9,7 +9,7 @@ import { POWER_LABEL } from '@/lib/labels'
 import { useCan } from '@/lib/session'
 import { PageHead } from '@/components/AppShell'
 import { DataTable, useList, useListState, type Column } from '@/components/DataTable'
-import { EquipmentFields, emptyEquipment, equipmentPayload, type EquipmentValue } from '@/components/EquipmentForm'
+import { applyDefaultCoefficients, EquipmentFields, emptyEquipment, equipmentPayload, type EquipmentValue } from '@/components/EquipmentForm'
 import { Drawer, Empty, errorMessage, fieldErrors, Icon, StatusBadge, useToast } from '@/components/ui'
 
 interface Row {
@@ -110,10 +110,11 @@ function CreateEquipment({ onClose }: { onClose: () => void }) {
               setErrors({})
               setError('')
               try {
-                const r = await api.post<{ id: string; warnings: string[] }>('/equipment', equipmentPayload(v))
+                const filled = applyDefaultCoefficients(v)
+                setV(filled.v)
+                const r = await api.post<{ id: string; warnings: string[] }>('/equipment', equipmentPayload(filled.v))
                 qc.invalidateQueries({ queryKey: ['equipment'] })
-                if (r.warnings.length) toast(`Salvato con avvisi: ${r.warnings[0]}`)
-                else toast('Strumento creato.')
+                toast([r.warnings.length ? `Salvato con avvisi: ${r.warnings[0]}` : 'Strumento creato.', filled.note].filter(Boolean).join(' '))
                 router.push(`/strumenti/${r.id}`)
               } catch (e) {
                 setErrors(fieldErrors(e))

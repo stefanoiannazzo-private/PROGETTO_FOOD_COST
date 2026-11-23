@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type AffectedRecipe } from '@/lib/api'
 import { useCan } from '@/lib/session'
 import { PageHead } from '@/components/AppShell'
-import { EquipmentFields, equipmentPayload, type EquipmentValue } from '@/components/EquipmentForm'
+import { applyDefaultCoefficients, EquipmentFields, equipmentPayload, type EquipmentValue } from '@/components/EquipmentForm'
 import { AffectedNotice, ErrorBox, errorMessage, fieldErrors, Icon, Skeleton, StatusBadge, useToast } from '@/components/ui'
 
 type Detail = EquipmentValue & { id: string; archived: boolean; lockVersion: number; usedIn: Array<{ id: string; code: string; title: string; status: string }> }
@@ -79,10 +79,12 @@ export default function EquipmentDetailPage() {
             setBusy(true)
             setErrors({})
             try {
-              const r = await api.patch<{ warnings: string[]; affectedRecipes: AffectedRecipe[] }>(`/equipment/${id}`, { ...equipmentPayload(v), code: v.code, lockVersion: d.lockVersion })
+              const filled = applyDefaultCoefficients(v)
+              setV(filled.v)
+              const r = await api.patch<{ warnings: string[]; affectedRecipes: AffectedRecipe[] }>(`/equipment/${id}`, { ...equipmentPayload(filled.v), code: v.code, lockVersion: d.lockVersion })
               setWarnings(r.warnings)
               setAffected(r.affectedRecipes)
-              toast('Strumento salvato.')
+              toast(filled.note ? `Strumento salvato. ${filled.note}` : 'Strumento salvato.')
               await q.refetch()
               qc.invalidateQueries({ queryKey: ['recipes'] })
             } catch (err) {
