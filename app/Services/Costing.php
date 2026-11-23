@@ -368,6 +368,8 @@ final class Costing
                 'configId' => $c->id,
                 'grossMonthly' => Dec::of($c->gross_monthly),
                 'extraMonthly' => self::dn($c->extra_monthly),
+                'monthsPaid' => $c->months_paid !== null ? (int) $c->months_paid : null,
+                'extraMonths' => $c->extra_months !== null ? (int) $c->extra_months : null,
                 'contributionsMode' => $c->contributions_mode,
                 'contributionsValue' => self::dn($c->contributions_value),
                 'otherMonthlyCosts' => self::dn($c->other_monthly_costs),

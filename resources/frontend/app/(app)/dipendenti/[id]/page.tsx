@@ -15,6 +15,9 @@ interface Cost {
   validFrom: string
   grossMonthly: string
   extraMonthly: string | null
+  monthsPaid: number | null
+  extraMonths: number | null
+  annualCost: string
   contributionsMode: 'none' | 'amount' | 'percent'
   contributionsValue: string | null
   otherMonthlyCosts: string
@@ -57,7 +60,7 @@ export default function EmployeeDetailPage() {
   if (!q.data || !v) return <Skeleton rows={8} />
   const d = q.data
   const editable = can('employees.manage')
-  const mode = (c: Cost) => (c.contributionsMode === 'none' ? 'non inseriti' : c.contributionsMode === 'amount' ? euro(c.contributionsValue) : `${num(c.contributionsValue, 2)}% del lordo`)
+  const mode = (c: Cost) => (c.contributionsMode === 'none' ? (c.monthsPaid !== null ? 'compresi' : 'non inseriti') : c.contributionsMode === 'amount' ? euro(c.contributionsValue) : `${num(c.contributionsValue, 2)}% del lordo`)
   return (
     <>
       <PageHead title={`${d.firstName} ${d.lastName}`} sub={<span className="mono">{d.code}</span>} />
@@ -152,9 +155,10 @@ export default function EmployeeDetailPage() {
                     <thead>
                       <tr>
                         <th>Decorrenza</th>
-                        <th className="num">Lordo mensile</th>
+                        <th className="num">Costo mensile</th>
+                        <th className="num">Mensilità</th>
                         <th className="num">Voce extra</th>
-                        <th>Oneri</th>
+                        <th>Oneri a parte</th>
                         <th className="num">Altri costi</th>
                         <th className="num">Ore produttive</th>
                         <th className="num">Costo orario</th>
@@ -169,7 +173,8 @@ export default function EmployeeDetailPage() {
                             {date(c.validFrom)} {c.current ? <span className="badge ok">corrente</span> : c.future ? <span className="badge info">futura</span> : null}
                           </td>
                           <td className="num">{euro(c.grossMonthly)}</td>
-                          <td className="num">{c.extraMonthly ? euro(c.extraMonthly) : '—'}</td>
+                          <td className="num" title={`Costo annuo ${euro(c.annualCost)}`}>{c.monthsPaid ?? 12}</td>
+                          <td className="num">{c.extraMonthly ? `${euro(c.extraMonthly)} × ${c.extraMonths ?? c.monthsPaid ?? 12}` : '—'}</td>
                           <td>{mode(c)}</td>
                           <td className="num">{euro(c.otherMonthlyCosts)}</td>
                           <td className="num">{num(c.productiveHours, 2)}</td>

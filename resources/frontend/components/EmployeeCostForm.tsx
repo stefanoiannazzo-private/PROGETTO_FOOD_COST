@@ -7,24 +7,30 @@ import { Field, NumberInput } from './ui'
 
 export interface CostValue {
   validFrom: string
+  /** costo mensile del dipendente, tutto compreso (lordo, contributi, TFR: la cifra del consulente) */
   grossMonthly: string | null
-  /** NUOVO: voce extra mensile che si somma al lordo (facoltativa) */
+  /** NUOVO: voce extra mensile (facoltativa) e su quante mensilità si paga */
   extraMonthly: string | null
-  contributionsMode: 'none' | 'amount' | 'percent'
-  contributionsValue: string | null
+  extraMonths: number
+  /** NUOVO: mensilità pagate nell'anno (12 = tredicesima spalmata o assente) */
+  monthsPaid: number
   otherMonthlyCosts: string | null
   productiveHours: string | null
   notes: string
 }
-export const emptyCost = (): CostValue => ({ validFrom: todayIso(), grossMonthly: null, extraMonthly: null, contributionsMode: 'none', contributionsValue: null, otherMonthlyCosts: null, productiveHours: null, notes: '' })
+export const emptyCost = (): CostValue => ({ validFrom: todayIso(), grossMonthly: null, extraMonthly: null, extraMonths: 12, monthsPaid: 12, otherMonthlyCosts: null, productiveHours: null, notes: '' })
 
 export function costPayload(c: CostValue) {
+  const hasExtra = !!c.extraMonthly && Number(c.extraMonthly) > 0
   return {
     validFrom: c.validFrom,
     grossMonthly: c.grossMonthly ?? '',
-    extraMonthly: c.extraMonthly,
-    contributionsMode: c.contributionsMode,
-    contributionsValue: c.contributionsMode === 'none' ? null : c.contributionsValue,
+    extraMonthly: hasExtra ? c.extraMonthly : null,
+    monthsPaid: c.monthsPaid,
+    extraMonths: hasExtra ? Math.min(c.extraMonths, c.monthsPaid) : null,
+    // un solo importo tutto compreso: contributi e TFR non si inseriscono a parte
+    contributionsMode: 'none' as const,
+    contributionsValue: null,
     otherMonthlyCosts: c.otherMonthlyCosts,
     productiveHours: c.productiveHours ?? '',
     notes: c.notes || null,
@@ -32,14 +38,18 @@ export function costPayload(c: CostValue) {
 }
 
 interface Rates {
-  grossHourly: string
   companyMonthly: string
+  annualCost: string
   companyHourly: string
   costPerMinute: string
-  basis: 'company_cost' | 'gross_only'
 }
 
-/** Configurazione del costo del lavoro con anteprima dei costi orari calcolata dal backend. */
+const MONTHS = [12, 13, 14, 15, 16]
+
+/**
+ * Costo del lavoro (NUOVO, semplificato): un solo importo mensile tutto compreso, le mensilità pagate,
+ * l'eventuale voce extra con le sue mensilità e gli altri costi. Costo orario = costo annuo ÷ 12 ÷ ore produttive.
+ */
 export function EmployeeCostFields({ v, set, errors }: { v: CostValue; set: (p: Partial<CostValue>) => void; errors: Record<string, string> }) {
   const [rates, setRates] = useState<Rates | null>(null)
   useEffect(() => {
@@ -52,51 +62,70 @@ export function EmployeeCostFields({ v, set, errors }: { v: CostValue; set: (p: 
     }, 250)
     return () => clearTimeout(t)
   }, [v])
+  const hasExtra = !!v.extraMonthly && Number(v.extraMonthly) > 0
   return (
     <div className="stack">
+      <div className="alert info small">
+        <div>
+          Inserisci <strong>quanto ti costa il dipendente ogni mese, tutto compreso</strong>: lordo, contributi e TFR (è la cifra del prospetto del consulente). Indica poi quante mensilità paghi in un anno: il costo orario
+          lo calcoliamo sull’anno diviso 12 mesi.
+        </div>
+      </div>
       <div className="grid-3">
         <Field label="Decorrenza" htmlFor="c-vf" required error={errors.validFrom}>
           <input id="c-vf" type="date" className="input" value={v.validFrom} onChange={(e) => set({ validFrom: e.target.value })} />
         </Field>
-        <Field label="Lordo mensile" htmlFor="c-gross" required error={errors.grossMonthly}>
+        <Field label="Costo mensile del dipendente" htmlFor="c-gross" required error={errors.grossMonthly} hint="Tutto compreso: lordo + contributi + TFR">
           <NumberInput id="c-gross" value={v.grossMonthly} onChange={(x) => set({ grossMonthly: x })} suffix="€" />
         </Field>
-        <Field label="Ore mensili produttive" htmlFor="c-hours" required error={errors.productiveHours} hint="Divisore: ore effettivamente lavorate in produzione">
-          <NumberInput id="c-hours" value={v.productiveHours} onChange={(x) => set({ productiveHours: x })} suffix="h" />
-        </Field>
-      </div>
-      <div className="grid-3">
-        <Field label="Voce extra mensile" htmlFor="c-extra" error={errors.extraMonthly} hint="Si somma al lordo (es. superminimo, indennità)">
-          <NumberInput id="c-extra" value={v.extraMonthly} onChange={(x) => set({ extraMonthly: x })} suffix="€" />
-        </Field>
-        <div />
-        <div />
-      </div>
-      <div className="grid-3">
-        <Field label="Oneri aziendali" htmlFor="c-mode" hint="Una sola modalità, per evitare doppie imputazioni">
-          <select id="c-mode" className="input" value={v.contributionsMode} onChange={(e) => set({ contributionsMode: e.target.value as CostValue['contributionsMode'], contributionsValue: null })}>
-            <option value="none">Non inseriti</option>
-            <option value="amount">Importo mensile</option>
-            <option value="percent">Percentuale su lordo + extra</option>
+        <Field label="Mensilità pagate in un anno" htmlFor="c-months" error={errors.monthsPaid} hint="12 se la tredicesima è già spalmata nei 12 mesi">
+          <select
+            id="c-months"
+            className="input"
+            value={v.monthsPaid}
+            onChange={(e) => {
+              const m = Number(e.target.value)
+              // la voce extra segue le mensilità, salvo scelta diversa già fatta
+              set({ monthsPaid: m, extraMonths: v.extraMonths === v.monthsPaid || v.extraMonths > m ? m : v.extraMonths })
+            }}
+          >
+            {MONTHS.map((m) => (
+              <option key={m} value={m}>
+                {m}{m === 12 ? ' mensilità' : m === 13 ? ' (con 13ª)' : m === 14 ? ' (con 13ª e 14ª)' : ' mensilità'}
+              </option>
+            ))}
           </select>
         </Field>
-        {v.contributionsMode !== 'none' ? (
-          <Field label={v.contributionsMode === 'amount' ? 'Importo oneri mensili' : 'Percentuale oneri'} htmlFor="c-cv" required error={errors.contributionsValue}>
-            <NumberInput id="c-cv" value={v.contributionsValue} onChange={(x) => set({ contributionsValue: x })} suffix={v.contributionsMode === 'amount' ? '€' : '% di lordo + extra'} />
-          </Field>
-        ) : (
-          <div />
-        )}
-        <Field label="Altri costi mensili imputabili" htmlFor="c-other" error={errors.otherMonthlyCosts} hint="es. buoni pasto, divise">
+      </div>
+      <div className="grid-3">
+        <Field label="Voce extra mensile" htmlFor="c-extra" error={errors.extraMonthly} hint="Facoltativa: superminimo, indennità, premio…">
+          <NumberInput id="c-extra" value={v.extraMonthly} onChange={(x) => set({ extraMonthly: x })} suffix="€" />
+        </Field>
+        <Field label="Per quante mensilità?" htmlFor="c-extra-months" error={errors.extraMonths} hint={hasExtra ? 'Su quante mensilità paghi la voce extra' : 'Prima indica la voce extra'}>
+          <select id="c-extra-months" className="input" value={Math.min(v.extraMonths, v.monthsPaid)} disabled={!hasExtra} onChange={(e) => set({ extraMonths: Number(e.target.value) })}>
+            {Array.from({ length: v.monthsPaid }, (_, i) => i + 1)
+              .reverse()
+              .map((m) => (
+                <option key={m} value={m}>
+                  {m === v.monthsPaid ? `Tutte (${m})` : `${m} mensilità`}
+                </option>
+              ))}
+          </select>
+        </Field>
+        <Field label="Altri costi mensili" htmlFor="c-other" error={errors.otherMonthlyCosts} hint="Facoltativi: quota del commercialista per il cedolino, buoni pasto, divise">
           <NumberInput id="c-other" value={v.otherMonthlyCosts} onChange={(x) => set({ otherMonthlyCosts: x })} suffix="€" />
         </Field>
       </div>
+      <div className="grid-3">
+        <Field label="Ore mensili produttive" htmlFor="c-hours" required error={errors.productiveHours} hint="Ore effettivamente lavorate in produzione in un mese">
+          <NumberInput id="c-hours" value={v.productiveHours} onChange={(x) => set({ productiveHours: x })} suffix="h" />
+        </Field>
+      </div>
       {rates ? (
-        <div className={`alert ${rates.basis === 'gross_only' ? 'warn' : 'info'}`}>
+        <div className="alert info">
           <div>
-            Costo orario sul solo lordo <strong>{euro(rates.grossHourly, 4)}</strong> · costo aziendale mensile <strong>{euro(rates.companyMonthly)}</strong> · costo orario aziendale <strong>{euro(rates.companyHourly, 4)}</strong> · al minuto{' '}
+            Costo annuo <strong>{euro(rates.annualCost)}</strong> · al mese (media su 12) <strong>{euro(rates.companyMonthly)}</strong> · all’ora <strong>{euro(rates.companyHourly, 4)}</strong> · al minuto{' '}
             <strong>{euro(rates.costPerMinute, 4)}</strong>
-            {rates.basis === 'gross_only' ? <div className="small">Stima sul solo lordo: non comprende oneri e altri costi non inseriti.</div> : null}
           </div>
         </div>
       ) : null}

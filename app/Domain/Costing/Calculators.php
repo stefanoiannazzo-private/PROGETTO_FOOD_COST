@@ -69,9 +69,19 @@ final class Calculators
         if ($e['grossMonthly']->lt(0)) {
             throw new DomainError('invalid_gross', 'Il lordo mensile non può essere negativo.');
         }
-        $gross = $e['grossMonthly'];
-        if (($e['extraMonthly'] ?? null) !== null) {
-            $gross = $gross->plus($e['extraMonthly']);
+        // NUOVO: mensilità pagate nell'anno e mensilità della voce extra; il costo mensile è la media su 12 mesi.
+        // Senza indicazioni valgono 12 su 12 (identico all'originale).
+        $months = (int) ($e['monthsPaid'] ?? 12);
+        $extraMonths = (int) ($e['extraMonths'] ?? $months);
+        $extra = $e['extraMonthly'] ?? null;
+        if ($months === 12 && ($extra === null || $extraMonths === 12)) {
+            $gross = $extra !== null ? $e['grossMonthly']->plus($extra) : $e['grossMonthly'];
+        } else {
+            $annual = $e['grossMonthly']->times($months);
+            if ($extra !== null) {
+                $annual = $annual->plus($extra->times($extraMonths));
+            }
+            $gross = $annual->div(12);
         }
         $contributions = Dec::zero();
         if ($e['contributionsMode'] === 'amount') {
@@ -82,7 +92,8 @@ final class Calculators
         $other = $e['otherMonthlyCosts'] ?? Dec::zero();
         $companyMonthly = $gross->plus($contributions)->plus($other);
         $companyHourly = $companyMonthly->div($e['productiveHours']);
-        $onlyGross = $e['contributionsMode'] === 'none' && $other->isZero();
+        // con le mensilità indicate (modulo NUOVO) l'importo è il costo mensile tutto compreso: non è "solo lordo"
+        $onlyGross = ($e['monthsPaid'] ?? null) === null && $e['contributionsMode'] === 'none' && $other->isZero();
 
         return [
             'grossHourly' => $gross->div($e['productiveHours']),
@@ -90,6 +101,7 @@ final class Calculators
             'companyHourly' => $companyHourly,
             'costPerMinute' => $companyHourly->div(Dec::sixty()),
             'contributions' => $contributions,
+            'annualCost' => $companyMonthly->times(12),
             'basis' => $onlyGross ? 'gross_only' : 'company_cost',
         ];
     }

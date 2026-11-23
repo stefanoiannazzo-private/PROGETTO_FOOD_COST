@@ -47,6 +47,9 @@ final class EmployeeController extends Controller
             'validFrom' => S::isoDate(),
             'grossMonthly' => S::dec(['min' => 0, 'label' => 'Il lordo mensile']),
             'extraMonthly' => S::decOpt(['min' => 0, 'label' => 'La voce extra']),
+            // NUOVO: mensilità pagate (12–16) e mensilità della voce extra (0..mensilità)
+            'monthsPaid' => S::int(12, 16)->nullable()->optional(),
+            'extraMonths' => S::int(0, 16)->nullable()->optional(),
             'contributionsMode' => S::enum(['none', 'amount', 'percent']),
             'contributionsValue' => S::decOpt(['min' => 0, 'label' => 'Gli oneri']),
             'otherMonthlyCosts' => S::decOpt(['min' => 0, 'label' => 'Gli altri costi']),
@@ -61,6 +64,9 @@ final class EmployeeController extends Controller
             if ($mode !== null && $mode !== 'none' && ! $t($value)) {
                 $add('Indica l’importo o la percentuale degli oneri.', ['contributionsValue']);
             }
+            if (isset($b['extraMonths']) && $b['extraMonths'] > ($b['monthsPaid'] ?? 12)) {
+                $add('La voce extra non può essere pagata su più mensilità di quelle del dipendente.', ['extraMonths']);
+            }
             if ($mode === 'percent' && $t($value) && Dec::of($value)->gt(200)) {
                 $add('Percentuale oneri non plausibile (oltre 200%).', ['contributionsValue']);
             }
@@ -72,6 +78,8 @@ final class EmployeeController extends Controller
         $r = Calculators::employeeRates([
             'grossMonthly' => Dec::of($c['gross_monthly']),
             'extraMonthly' => Recipes::t($c['extra_monthly'] ?? null) ? Dec::of($c['extra_monthly']) : null,
+            'monthsPaid' => isset($c['months_paid']) ? (int) $c['months_paid'] : null,
+            'extraMonths' => isset($c['extra_months']) ? (int) $c['extra_months'] : null,
             'contributionsMode' => $c['contributions_mode'],
             'contributionsValue' => Recipes::t($c['contributions_value']) ? Dec::of($c['contributions_value']) : null,
             'otherMonthlyCosts' => Dec::of($c['other_monthly_costs']),
@@ -82,6 +90,7 @@ final class EmployeeController extends Controller
             'grossHourly' => $r['grossHourly']->toFixed(),
             'contributionsMonthly' => $r['contributions']->toFixed(),
             'companyMonthly' => $r['companyMonthly']->toFixed(),
+            'annualCost' => $r['annualCost']->toFixed(),
             'companyHourly' => $r['companyHourly']->toFixed(),
             'costPerMinute' => $r['costPerMinute']->toFixed(),
             'basis' => $r['basis'],
@@ -183,6 +192,8 @@ final class EmployeeController extends Controller
                 'validFrom' => $c->valid_from,
                 'grossMonthly' => $c->gross_monthly,
                 'extraMonthly' => $c->extra_monthly,
+                'monthsPaid' => $c->months_paid !== null ? (int) $c->months_paid : null,
+                'extraMonths' => $c->extra_months !== null ? (int) $c->extra_months : null,
                 'contributionsMode' => $c->contributions_mode,
                 'contributionsValue' => $c->contributions_value,
                 'otherMonthlyCosts' => $c->other_monthly_costs,
@@ -292,6 +303,8 @@ final class EmployeeController extends Controller
         return self::ratesFor([
             'gross_monthly' => $b['grossMonthly'],
             'extra_monthly' => $b['extraMonthly'] ?? null,
+            'months_paid' => $b['monthsPaid'] ?? null,
+            'extra_months' => $b['extraMonths'] ?? null,
             'contributions_mode' => $b['contributionsMode'],
             'contributions_value' => $b['contributionsValue'] ?? null,
             'other_monthly_costs' => $b['otherMonthlyCosts'] ?? '0',
@@ -342,6 +355,8 @@ final class EmployeeController extends Controller
             'valid_from' => $b['validFrom'],
             'gross_monthly' => $b['grossMonthly'],
             'extra_monthly' => $b['extraMonthly'] ?? null,
+            'months_paid' => $b['monthsPaid'] ?? null,
+            'extra_months' => isset($b['extraMonthly']) && Recipes::t($b['extraMonthly']) ? ($b['extraMonths'] ?? null) : null,
             'contributions_mode' => $b['contributionsMode'],
             'contributions_value' => $b['contributionsMode'] === 'none' ? null : $b['contributionsValue'],
             'other_monthly_costs' => $b['otherMonthlyCosts'] ?? '0',

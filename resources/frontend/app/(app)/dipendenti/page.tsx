@@ -44,7 +44,7 @@ export default function EmployeesPage() {
     { key: 'status', label: 'Stato', render: (r) => (r.status === 'active' ? <span className="badge ok">Attivo</span> : <span className="badge">Non attivo</span>) },
     ...(salaries
       ? ([
-          { key: 'gross', label: 'Lordo mensile', num: true, render: (r) => (r.cost ? euro(r.cost.grossMonthly) : '—') },
+          { key: 'gross', label: 'Costo mensile', num: true, render: (r) => (r.cost ? euro(r.cost.grossMonthly) : '—') },
           {
             key: 'hourly',
             label: 'Costo orario',
