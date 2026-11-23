@@ -188,14 +188,15 @@ final class RecipeController extends Controller
             'comparison' => $ctx->can('costs.read') ? $comparison : null,
             'snapshots' => $snapshots,
             'usedBy' => Row::all($usedBy),
-            // NUOVO: prezzo in menu (IVA inclusa), solo per l'amministratore come la pagina Redditività
-            'menuPrice' => $ctx->role === 'admin' ? (function () use ($r) {
+            // NUOVO: prezzo in menu (IVA inclusa) solo per l'amministratore, come la pagina Redditività;
+            // per gli altri ruoli i campi non esistono proprio nella risposta
+            ...($ctx->role === 'admin' ? ['menuPrice' => (function () use ($r) {
                 $p = DB::table('recipe_prices')->where('recipe_id', $r->id)->first(['menu_price', 'vat_percent']);
 
                 return $p ? ['menuPrice' => $p->menu_price, 'vatPercent' => $p->vat_percent] : null;
-            })() : null,
+            })()] : []),
             'permissions' => [
-                'canSetMenuPrice' => $ctx->role === 'admin',
+                ...($ctx->role === 'admin' ? ['canSetMenuPrice' => true] : []),
                 'canEdit' => $ctx->can('recipes.manage'),
                 'costsVisible' => $ctx->can('costs.read'),
                 'salariesVisible' => $ctx->can('salaries.read'),
