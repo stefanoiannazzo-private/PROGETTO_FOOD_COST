@@ -11,7 +11,7 @@ import { SEGMENT_LABEL } from '@/lib/labels'
 import { date, dateTime, euro, euroPer, minutes, num, percent, todayIso, unitLabel } from '@/lib/num'
 import { PageHead } from '@/components/AppShell'
 import { CostSummary } from '@/components/CostSummary'
-import { Confirm, ErrorBox, errorMessage, Icon, Skeleton, StatusBadge, useToast } from '@/components/ui'
+import { Confirm, ErrorBox, errorMessage, Icon, NumberInput, Skeleton, StatusBadge, useToast } from '@/components/ui'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface Detail {
@@ -41,7 +41,8 @@ interface Detail {
   } | null
   snapshots: Array<{ id: string; created_at: string; valuation_date: string; label: string | null; total: string; cost_per_kg: string | null; cost_per_portion: string | null; complete: boolean; created_by: string | null; revision_number: number }>
   usedBy: Array<{ id: string; code: string; title: string; status: string }>
-  permissions: { canEdit: boolean; costsVisible: boolean; salariesVisible: boolean; canSnapshot: boolean }
+  permissions: { canEdit: boolean; costsVisible: boolean; salariesVisible: boolean; canSnapshot: boolean; canSetMenuPrice?: boolean }
+  menuPrice?: { menuPrice: string; vatPercent: string } | null
 }
 
 export default function RecipeDetailPage() {
@@ -456,6 +457,7 @@ export default function RecipeDetailPage() {
             </div>
             <div className="card-body">
               <CostSummary cost={v} stale={q.isFetching} />
+              {r.permissions.canSetMenuPrice ? <MenuPriceBox recipeId={id} price={r.menuPrice ?? null} costPerPortion={v.costPerPortion} onSaved={() => q.refetch()} /> : null}
             </div>
           </aside>
         ) : null}
@@ -560,6 +562,103 @@ function SubTree({ sub, fraction }: { sub: RecipeCost; fraction: string | null }
         <span>Manodopera</span>
         <span>{part(sub.labor)}</span>
       </div>
+    </div>
+  )
+}
+
+/**
+ * NUOVO — prezzo di vendita (in menu, IVA inclusa) nella scheda ricetta, con food cost % e margine a porzione.
+ * Stesso dato della pagina Redditività; visibile solo all'amministratore.
+ */
+function MenuPriceBox({ recipeId, price, costPerPortion, onSaved }: { recipeId: string; price: { menuPrice: string; vatPercent: string } | null; costPerPortion: string | null; onSaved: () => void }) {
+  const toast = useToast()
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [p, setP] = useState<string | null>(price?.menuPrice ?? null)
+  const [vat, setVat] = useState(price ? String(Number(price.vatPercent)) : '10')
+  const [busy, setBusy] = useState(false)
+  const net = price ? Number(price.menuPrice) / (1 + Number(price.vatPercent) / 100) : null
+  const cpp = costPerPortion !== null ? Number(costPerPortion) : null
+  const fc = net && cpp !== null && net > 0 ? (cpp / net) * 100 : null
+  const save = async () => {
+    setBusy(true)
+    try {
+      await api.put(`/profitability/prices/${recipeId}`, { menuPrice: p, vatPercent: vat })
+      toast(p ? 'Prezzo in menu salvato.' : 'Prezzo in menu rimosso.')
+      setEditing(false)
+      qc.invalidateQueries({ queryKey: ['profitability'] })
+      onSaved()
+    } catch (e) {
+      toast(errorMessage(e), 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="stack tight" style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 14 }}>
+      <div className="row between">
+        <strong>Prezzo in menu</strong>
+        {!editing ? (
+          <button className="btn ghost sm" onClick={() => setEditing(true)}>
+            <Icon name="edit" /> {price ? 'Modifica' : 'Inserisci'}
+          </button>
+        ) : null}
+      </div>
+      {editing ? (
+        <div className="stack tight">
+          <div className="row" style={{ gap: 8 }}>
+            <div className="grow">
+              <NumberInput id="mp-price" value={p} onChange={setP} suffix="€" ariaLabel="Prezzo in menu IVA inclusa" />
+            </div>
+            <select className="input" style={{ width: 84 }} value={vat} onChange={(e) => setVat(e.target.value)} aria-label="IVA">
+              {['10', '22', '4', '5', '0'].map((x) => (
+                <option key={x} value={x}>
+                  IVA {x}%
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="faint small">Il prezzo che il cliente paga, IVA inclusa. Lascia vuoto per toglierlo.</div>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn primary sm" disabled={busy} onClick={() => void save()}>
+              {busy ? <span className="spinner" /> : null} Salva
+            </button>
+            <button className="btn sm" onClick={() => setEditing(false)} disabled={busy}>
+              Annulla
+            </button>
+          </div>
+        </div>
+      ) : price ? (
+        <div className="stack tight">
+          <div className="sumline">
+            <span>Prezzo al cliente (IVA {num(price.vatPercent)}% inclusa)</span>
+            <strong>{euro(price.menuPrice)}</strong>
+          </div>
+          <div className="sumline">
+            <span>Senza IVA</span>
+            <span>{euro(String(net))}</span>
+          </div>
+          {fc !== null && net !== null && cpp !== null ? (
+            <>
+              <div className="sumline">
+                <span>Food cost</span>
+                <strong style={{ color: fc > 35 ? 'var(--err)' : fc > 30 ? 'var(--warn)' : 'var(--ok)' }}>{num(fc, 1)}%</strong>
+              </div>
+              <div className="sumline">
+                <span>Margine a porzione</span>
+                <strong>{euro(String(net - cpp))}</strong>
+              </div>
+            </>
+          ) : (
+            <div className="faint small">Per il food cost % servono le porzioni nella ricetta.</div>
+          )}
+          <Link className="link small" href="/redditivita">
+            Quanti piatti devo vendere? → Redditività
+          </Link>
+        </div>
+      ) : (
+        <div className="faint small">Non ancora inserito: aggiungilo per vedere food cost % e margine a porzione.</div>
+      )}
     </div>
   )
 }
