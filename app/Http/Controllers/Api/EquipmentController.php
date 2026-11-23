@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Schemas;
 use App\Services\Audit;
 use App\Services\Codes;
+use App\Services\ChangeAlerts;
 use App\Services\Costing;
 use App\Support\AppError;
 use App\Support\Clock;
@@ -237,6 +238,7 @@ final class EquipmentController extends Controller
         $body = $this->parseBody($req, self::equipmentBody()->extend(['code' => S::reqText('Il codice', 40), 'lockVersion' => S::int()]));
         $cid = $ctx->companyId();
         [$row, $warnings] = $this->prepare($cid, $body);
+        $watch = ChangeAlerts::watch($cid, 'equipment', [$id]);
         DB::transaction(function () use ($ctx, $body, $cid, $id, $row) {
             $cur = DB::table('equipment')->where('id', $id)->where('company_id', $cid)->lockForUpdate()->first();
             if (! $cur) {
@@ -253,6 +255,7 @@ final class EquipmentController extends Controller
             Audit::log($cid, $ctx->userId(), 'equipment', $id, 'updated', Audit::diff((array) $cur, $next));
         });
         $affected = Costing::invalidate($cid, 'equipment', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Strumento «'.$body['name'].'» modificato']);
 
         return ['ok' => true, 'warnings' => $warnings, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }

@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Schemas;
 use App\Services\Audit;
 use App\Services\Codes;
+use App\Services\ChangeAlerts;
 use App\Services\Costing;
 use App\Services\Recipes;
 use App\Support\AppError;
@@ -274,8 +275,10 @@ final class EmployeeController extends Controller
         if (! DB::table('employees')->where('id', $id)->where('company_id', $cid)->exists()) {
             throw AppError::notFound('Dipendente');
         }
+        $watch = ChangeAlerts::watch($cid, 'employees', [$id]);
         $cfgId = DB::transaction(fn () => self::insertConfig($cid, $ctx->userId(), $id, $body));
         $affected = Costing::invalidate($cid, 'employees', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Costo del personale aggiornato: '.self::nameOf($id)]);
 
         return ['id' => $cfgId, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }
@@ -285,14 +288,23 @@ final class EmployeeController extends Controller
         $ctx = $this->requireCompany($req, 'employees.manage', 'salaries.read');
         [$id, $configId] = $this->uuids(['id' => $id, 'configId' => $configId]);
         $cid = $ctx->companyId();
+        $watch = ChangeAlerts::watch($cid, 'employees', [$id]);
         $n = DB::table('employee_cost_configs')->where('id', $configId)->where('employee_id', $id)->where('company_id', $cid)->delete();
         if (! $n) {
             throw AppError::notFound('Configurazione');
         }
         Audit::log($cid, $ctx->userId(), 'employee_cost', $configId, 'deleted');
         $affected = Costing::invalidate($cid, 'employees', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Costo del personale aggiornato: '.self::nameOf($id)]);
 
         return ['ok' => true, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
+    }
+
+    private static function nameOf(string $id): string
+    {
+        $e = DB::table('employees')->where('id', $id)->first(['first_name', 'last_name', 'code']);
+
+        return $e ? trim(($e->first_name ?? '').' '.($e->last_name ?? '')) ?: (string) $e->code : 'dipendente';
     }
 
     public function costPreview(Request $req): array

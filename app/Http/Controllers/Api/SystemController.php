@@ -35,6 +35,8 @@ final class SystemController extends Controller
         $done = Jobs::runPending(null, 50);
         // sessioni e token scaduti
         DB::table('sessions')->where('expires_at', '<', now('UTC')->format('Y-m-d H:i:s.v'))->delete();
+        // NUOVO: avvisi di variazione più vecchi di 90 giorni
+        \App\Services\ChangeAlerts::prune();
 
         return ['ok' => true, 'jobs' => $done];
     }

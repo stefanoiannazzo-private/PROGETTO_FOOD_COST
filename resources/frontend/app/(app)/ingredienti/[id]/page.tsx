@@ -8,6 +8,8 @@ import { api, type AffectedRecipe } from '@/lib/api'
 import { date, dateTime, euro, euroPer, num, todayIso } from '@/lib/num'
 import { useCan } from '@/lib/session'
 import { PageHead } from '@/components/AppShell'
+import { ChangesNotice, type Change } from '@/components/ChangeAlerts'
+import { PriceHistory } from '@/components/PriceHistory'
 import { AgentSelect, BuyBlock, inferMode, IngredientFields, ingredientPayload, packageOf, validateIngredient, type BuyMode, type IngredientFormValue } from '@/components/IngredientForm'
 import { AffectedNotice, Confirm, ErrorBox, errorMessage, Field, fieldErrors, Icon, NumberInput, Skeleton, StatusBadge, useToast } from '@/components/ui'
 
@@ -23,6 +25,8 @@ interface Price {
   created_at: string
   created_by: string | null
   import_id: string | null
+  supplier: string | null
+  supplier_invoice_id?: string | null
   unitPrice: string
   baseUnit: string
   future: boolean
@@ -39,6 +43,7 @@ interface Detail extends Omit<IngredientFormValue, 'code' | 'mode'> {
   prices: Price[]
   usedIn: Array<{ id: string; code: string; title: string; status: string }>
   updatedAt: string
+  changes?: Change[]
 }
 
 export default function IngredientDetailPage() {
@@ -134,6 +139,7 @@ export default function IngredientDetailPage() {
         }
       />
       <div className="stack loose">
+        <ChangesNotice key={id} type="ingredient" id={id} changes={d.changes} />
         <AffectedNotice recipes={affected} />
         {d.priceVisible ? <PricesCard d={d} editable={editable} onAffected={setAffected} /> : null}
 
@@ -251,7 +257,7 @@ function PricesCard({ d, editable, onAffected }: { d: Detail; editable: boolean;
   return (
     <div className="card">
       <div className="card-head">
-        <h2>Prezzo e storico</h2>
+        <h2>Prezzo e storico prezzi</h2>
         {editable && !open ? (
           <button className="btn sm primary" onClick={() => setOpen(true)}>
             <Icon name="plus" /> Nuovo prezzo
@@ -344,62 +350,21 @@ function PricesCard({ d, editable, onAffected }: { d: Detail; editable: boolean;
             </div>
           </form>
         ) : null}
-        {d.prices.length ? (
-          <div className="table-wrap">
-            <table className="table compact">
-              <thead>
-                <tr>
-                  <th>Valido dal</th>
-                  <th className="num">Prezzo confezione</th>
-                  <th>Confezione</th>
-                  <th className="num">Normalizzato</th>
-                  <th>Fonte</th>
-                  <th>Inserito</th>
-                  {editable ? <th /> : null}
-                </tr>
-              </thead>
-              <tbody>
-                {d.prices.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      {date(p.valid_from)} {p.future ? <span className="badge info">futuro</span> : d.currentPrice?.id === p.id ? <span className="badge ok">corrente</span> : null}
-                    </td>
-                    <td className="num">{euro(p.package_price)}</td>
-                    <td>
-                      {num(p.package_content)} {p.package_unit}
-                    </td>
-                    <td className="num">{euroPer(p.unitPrice, p.baseUnit, 4)}</td>
-                    <td>
-                      {p.source ?? (p.import_id ? 'Importazione' : '—')}
-                      {/* NUOVO: agente del fornitore, se indicato */}
-                      {p.agent_name ? <div className="faint small">agente: {p.agent_name}</div> : null}
-                    </td>
-                    <td className="faint small">
-                      {dateTime(p.created_at)} {p.created_by ? `· ${p.created_by}` : ''}
-                    </td>
-                    {editable ? (
-                      <td className="num">
-                        <button
-                          className="btn ghost icon sm"
-                          aria-label="Elimina prezzo"
-                          onClick={async () => {
-                            if (!window.confirm('Eliminare questa voce di storico? Gli snapshot già salvati non cambiano.')) return
-                            const r = await api.del<{ affectedRecipes: AffectedRecipe[] }>(`/ingredients/${d.id}/prices/${p.id}`)
-                            onAffected(r.affectedRecipes)
-                            await qc.invalidateQueries({ queryKey: ['ingredients'] })
-                            qc.invalidateQueries({ queryKey: ['recipes'] })
-                          }}
-                        >
-                          <Icon name="trash" />
-                        </button>
-                      </td>
-                    ) : null}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
+        <PriceHistory
+          prices={d.prices}
+          currentId={d.currentPrice?.id ?? null}
+          onDelete={
+            editable
+              ? async (p) => {
+                  if (!window.confirm('Eliminare questa voce di storico? Gli snapshot già salvati non cambiano.')) return
+                  const r = await api.del<{ affectedRecipes: AffectedRecipe[] }>(`/ingredients/${d.id}/prices/${p.id}`)
+                  onAffected(r.affectedRecipes)
+                  await qc.invalidateQueries({ queryKey: ['ingredients'] })
+                  qc.invalidateQueries({ queryKey: ['recipes'] })
+                }
+              : undefined
+          }
+        />
       </div>
     </div>
   )

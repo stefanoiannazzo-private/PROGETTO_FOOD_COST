@@ -10,6 +10,7 @@ import { PageHead } from '@/components/AppShell'
 import { DataTable, useList, useListState, type Column } from '@/components/DataTable'
 import { CreateIngredientDrawer } from '@/components/IngredientForm'
 import { Empty, Icon } from '@/components/ui'
+import { ChangedBadge, ChangedListBanner, useChangedSet } from '@/components/ChangeAlerts'
 
 interface Row {
   id: string
@@ -32,6 +33,7 @@ export default function IngredientsPage() {
   const [creating, setCreating] = useState(false)
   const cats = useQuery({ queryKey: ['ingredients', 'categories'], queryFn: () => api.get<{ data: string[] }>('/ingredients/categories'), staleTime: 60_000 })
   const showCosts = can('costs.read')
+  const changed = useChangedSet('ingredient')
 
   const columns: Column<Row>[] = [
     { key: 'code', label: 'Codice', sortable: true, render: (r) => <span className="mono">{r.code}</span> },
@@ -40,9 +42,12 @@ export default function IngredientsPage() {
       label: 'Nome',
       sortable: true,
       render: (r) => (
-        <Link href={`/ingredienti/${r.id}`} className="link">
-          {r.name}
-        </Link>
+        <>
+          <Link href={`/ingredienti/${r.id}`} className="link">
+            {r.name}
+          </Link>{' '}
+          <ChangedBadge changed={changed.has(r.id)} type="ingredient" />
+        </>
       ),
     },
     { key: 'category', label: 'Categoria', sortable: true, render: (r) => r.category ?? <span className="faint">—</span> },
@@ -84,6 +89,7 @@ export default function IngredientsPage() {
         }
       />
       <datalist id="ingredient-categories">{cats.data?.data.map((c) => <option key={c} value={c} />)}</datalist>
+      <ChangedListBanner type="ingredient" />
       <DataTable
         columns={columns}
         query={query}

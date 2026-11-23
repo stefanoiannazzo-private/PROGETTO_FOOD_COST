@@ -156,6 +156,11 @@ class SupplierInvoicesTest extends TestCase
         $pas = DB::table('ingredients')->where('company_id', $this->company)->where('name', 'Passata di pomodoro')->first();
         $this->assertSame(['bottiglia', '700', 'g'], [$pas->purchase_unit, rtrim(rtrim((string) $pas->package_content, '0'), '.'), $pas->package_unit]);
         $this->assertSame(1, DB::table('ingredient_prices')->where('ingredient_id', $esistente)->count());
+        // avviso sul prodotto già esistente, con la fattura come fonte; prezzo collegato alla fattura
+        $ch = $this->ok($this->a->get("/api/ingredients/{$esistente}"))['changes'];
+        $this->assertStringContainsString('primo prezzo 9,50 € al litro', $ch[0]['lines'][0]);
+        $this->assertStringContainsString('Fattura FT/1234 del 10/11/2026 · Caseificio Esempio S.r.l.', $ch[0]['source']);
+        $this->assertSame($id, DB::table('ingredient_prices')->where('ingredient_id', $esistente)->value('supplier_invoice_id'));
 
         // stessa fattura di nuovo: già importata
         $again = $this->ok($this->upload(['f.xml' => self::xml()]));

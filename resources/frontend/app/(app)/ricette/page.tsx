@@ -8,6 +8,7 @@ import { useCan } from '@/lib/session'
 import { PageHead } from '@/components/AppShell'
 import { DataTable, useList, useListState, type Column } from '@/components/DataTable'
 import { CompletenessBadge, Empty, Icon, StatusBadge } from '@/components/ui'
+import { ChangedBadge, ChangedListBanner, useChangedSet } from '@/components/ChangeAlerts'
 
 interface Row {
   id: string
@@ -28,6 +29,7 @@ export default function RecipesPage() {
   const query = useList<Row>('recipes', '/recipes', state)
   const cats = useQuery({ queryKey: ['recipes', 'categories'], queryFn: () => api.get<{ data: string[] }>('/recipes/categories'), staleTime: 60_000 })
   const showCosts = can('costs.read')
+  const changed = useChangedSet('recipe')
   const columns: Column<Row>[] = [
     { key: 'code', label: 'Codice', sortable: true, render: (r) => <span className="mono">{r.code}</span> },
     {
@@ -35,9 +37,12 @@ export default function RecipesPage() {
       label: 'Ricetta',
       sortable: true,
       render: (r) => (
-        <Link className="link" href={`/ricette/${r.id}`}>
-          {r.title}
-        </Link>
+        <>
+          <Link className="link" href={`/ricette/${r.id}`}>
+            {r.title}
+          </Link>{' '}
+          <ChangedBadge changed={changed.has(r.id)} type="recipe" />
+        </>
       ),
     },
     { key: 'category', label: 'Categoria', sortable: true, render: (r) => r.category ?? <span className="faint">—</span> },
@@ -75,6 +80,7 @@ export default function RecipesPage() {
           ) : null
         }
       />
+      <ChangedListBanner type="recipe" />
       <DataTable
         columns={columns}
         query={query}

@@ -10,6 +10,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Schemas;
 use App\Services\Audit;
 use App\Services\Codes;
+use App\Services\ChangeAlerts;
 use App\Services\Costing;
 use App\Services\Presentation;
 use App\Services\Recipes;
@@ -190,6 +191,8 @@ final class RecipeController extends Controller
             'usedBy' => Row::all($usedBy),
             // NUOVO: semilavorati con il loro tempo di preparazione (avviso «da preparare prima»)
             'subrecipeLeadTimes' => self::leadTimes($cid, $form),
+            // NUOVO: variazioni di costo non ancora viste da questo utente
+            'changes' => $ctx->can('costs.read') ? ChangeAlerts::forEntity($cid, $ctx->userId(), 'recipe', $id) : [],
             // NUOVO: prezzo in menu (IVA inclusa) solo per l'amministratore, come la pagina Redditività;
             // per gli altri ruoli i campi non esistono proprio nella risposta
             ...($ctx->role === 'admin' ? ['menuPrice' => (function () use ($r) {
@@ -285,6 +288,7 @@ final class RecipeController extends Controller
         ]));
         $cid = $ctx->companyId();
         Recipes::validateRevision($cid, $id, $body['revision']);
+        $watch = ChangeAlerts::watch($cid, 'recipes', [$id]);
         $res = DB::transaction(function () use ($ctx, $body, $cid, $id) {
             $cur = DB::table('recipes')->where('id', $id)->where('company_id', $cid)->lockForUpdate()->first();
             if (! $cur) {
@@ -313,6 +317,7 @@ final class RecipeController extends Controller
             return ['id' => $id, 'revisionId' => $rev['id'], 'revisionNumber' => $rev['number'], 'lockVersion' => $cur->lock_version + 1];
         });
         $affected = Costing::invalidate($cid, 'recipes', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Semilavorato «'.$body['title'].'» modificato', 'skipRecipes' => [$id]]);
 
         return [...$res, 'affectedRecipes' => Costing::describeRecipes($cid, array_values(array_filter($affected, fn ($x) => $x !== $id)))];
     }

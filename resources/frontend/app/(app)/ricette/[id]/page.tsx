@@ -10,6 +10,7 @@ import type { RecipeCost, SubrecipeLine } from '@/lib/cost-types'
 import { SEGMENT_LABEL } from '@/lib/labels'
 import { date, dateTime, euro, euroPer, minutes, num, percent, todayIso, unitLabel } from '@/lib/num'
 import { PageHead } from '@/components/AppShell'
+import { ChangesNotice, type Change } from '@/components/ChangeAlerts'
 import { CostSummary } from '@/components/CostSummary'
 import { fmtDuration, phaseTotals } from '@/components/RecipeEditor'
 import { Confirm, ErrorBox, errorMessage, Icon, NumberInput, Skeleton, StatusBadge, useToast } from '@/components/ui'
@@ -42,6 +43,7 @@ interface Detail {
   } | null
   snapshots: Array<{ id: string; created_at: string; valuation_date: string; label: string | null; total: string; cost_per_kg: string | null; cost_per_portion: string | null; complete: boolean; created_by: string | null; revision_number: number }>
   usedBy: Array<{ id: string; code: string; title: string; status: string }>
+  changes?: Change[]
   permissions: { canEdit: boolean; costsVisible: boolean; salariesVisible: boolean; canSnapshot: boolean; canSetMenuPrice?: boolean }
   menuPrice?: { menuPrice: string; vatPercent: string } | null
   subrecipeLeadTimes?: Array<{ recipeId: string; title: string; minutes: string; waitingMinutes: string }>
@@ -166,6 +168,7 @@ export default function RecipeDetailPage() {
 
       <div className="editor">
         <div className="stack loose">
+          <ChangesNotice key={id} type="recipe" id={id} changes={r.changes} />
           {r.description ? <p className="muted">{r.description}</p> : null}
 
           {r.comparison ? (

@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Api;
 use App\Domain\Costing\Dec;
 use App\Http\Controllers\Controller;
 use App\Services\Audit;
+use App\Services\ChangeAlerts;
 use App\Services\Costing;
 use App\Support\AppError;
 use App\Support\Clock;
@@ -237,6 +238,7 @@ final class TariffController extends Controller
         if (! $t) {
             throw AppError::notFound('Tariffa');
         }
+        $watch = ChangeAlerts::watch($cid, 'tariffs', [$id]);
         $v = DB::transaction(function () use ($cid, $ctx, $t, $body, $id) {
             $v = self::insertVersion($cid, $ctx->userId(), (array) $t, $body);
             if (! empty($body['billFileId'])) {
@@ -246,6 +248,7 @@ final class TariffController extends Controller
             return $v;
         });
         $affected = Costing::invalidate($cid, 'tariffs', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['source' => ! empty($body['billFileId']) || ($body['mode'] ?? '') === 'bill' ? 'Nuova bolletta' : 'Nuovo valore dell’utenza']);
 
         return ['id' => $v, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }
@@ -255,12 +258,14 @@ final class TariffController extends Controller
         $ctx = $this->requireCompany($req, 'tariffs.manage');
         [$id, $versionId] = $this->uuids(['id' => $id, 'versionId' => $versionId]);
         $cid = $ctx->companyId();
+        $watch = ChangeAlerts::watch($cid, 'tariffs', [$id]);
         $n = DB::table('tariff_versions')->where('id', $versionId)->where('tariff_id', $id)->where('company_id', $cid)->delete();
         if (! $n) {
             throw AppError::notFound('Versione della tariffa');
         }
         Audit::log($cid, $ctx->userId(), 'tariff_version', $versionId, 'deleted');
         $affected = Costing::invalidate($cid, 'tariffs', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['source' => 'Valore dell’utenza eliminato']);
 
         return ['ok' => true, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }
@@ -281,6 +286,7 @@ final class TariffController extends Controller
         if (DB::table('tariff_versions')->where('tariff_id', $id)->where('valid_from', $body['validFrom'])->where('id', '<>', $versionId)->exists()) {
             throw AppError::conflict('version_date_conflict', 'Esiste già un valore con questa data di validità.', ['fields' => ['validFrom' => 'Data già usata.']]);
         }
+        $watch = ChangeAlerts::watch($cid, 'tariffs', [$id]);
         DB::transaction(function () use ($versionId, $price, $bill, $body, $cid, $id) {
             DB::table('tariff_versions')->where('id', $versionId)->update([
                 'price_per_unit' => Dec::of($price)->toFixed(8),
@@ -297,6 +303,7 @@ final class TariffController extends Controller
         });
         Audit::log($cid, $ctx->userId(), 'tariff_version', $versionId, 'updated', ['before' => ['pricePerUnit' => $old->price_per_unit, 'validFrom' => $old->valid_from], 'after' => ['pricePerUnit' => $price, 'validFrom' => $body['validFrom']]]);
         $affected = Costing::invalidate($cid, 'tariffs', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['source' => 'Valore dell’utenza corretto']);
 
         return ['ok' => true, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }

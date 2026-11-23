@@ -411,3 +411,25 @@ details.more[open] > summary { margin-bottom: 12px; }
 .inv-desc { font-weight: 600; word-break: break-word; }
 .inv-bar { position: sticky; bottom: 0; z-index: 5; margin-top: 16px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 -6px 18px rgba(0,0,0,.06); display: flex; flex-direction: column; gap: 8px; }
 @media (max-width: 720px) { .seg button { padding: 9px 10px; font-size: 13px; } .inv-bar { margin-left: -4px; margin-right: -4px; } }
+
+/* NUOVO — avvisi di variazione e storico prezzi */
+.chg-badge { margin-left: 4px; font-size: 11px; vertical-align: middle; }
+.chg-notice .chg-lines { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.chg-notice .chg-lines li { color: var(--text); }
+.chg-list .btn { align-self: center; flex: none; }
+@media (max-width: 720px) { .chg-list { flex-wrap: wrap; } }
+.ph-title { margin: 8px 0 0; font-size: 15px; }
+.ph-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ph-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+@media (max-width: 720px) { .ph-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ph-chart { position: relative; }
+.ph-chart svg { display: block; overflow: visible; max-width: 100%; }
+.ph-grid { stroke: var(--border); stroke-width: 1; }
+.ph-axis { fill: var(--text-3); font-size: 11px; }
+.ph-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.ph-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.ph-cross { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; }
+.ph-tip { position: absolute; top: 0; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 6px 8px; font-size: 12px; display: flex; flex-direction: column; pointer-events: none; white-space: nowrap; color: var(--text); }
+.ph-up { color: var(--err); font-weight: 600; }
+.ph-down { color: var(--ok); font-weight: 600; }
+.nav-count { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 11.5px; font-weight: 700; display: inline-grid; place-items: center; }

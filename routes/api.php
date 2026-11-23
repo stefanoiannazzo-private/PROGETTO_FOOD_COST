@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\RecipeController;
 use App\Http\Controllers\Api\SystemController;
 use App\Http\Controllers\Api\TariffBillController;
 use App\Http\Controllers\Api\SupplierInvoiceController;
+use App\Http\Controllers\Api\AlertController;
 use App\Http\Controllers\Api\TariffController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -129,6 +130,9 @@ Route::delete('/recipes/{id}', [RecipeController::class, 'destroy']);
 Route::get('/snapshots/{id}', [RecipeController::class, 'showSnapshot']);
 
 // Importazioni
+// NUOVO — avvisi di variazione dei costi (ricette e prodotti non ancora rivisti dall'utente)
+Route::get('/alerts', [AlertController::class, 'index']);
+Route::post('/alerts/seen', [AlertController::class, 'seen']);
 // NUOVO — fatture elettroniche dei fornitori (XML / P7M / ZIP) caricate dalla pagina Importazioni
 Route::get('/supplier-invoices', [SupplierInvoiceController::class, 'index']);
 Route::post('/supplier-invoices', [SupplierInvoiceController::class, 'upload']);

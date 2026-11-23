@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Schemas;
 use App\Services\Audit;
 use App\Services\Codes;
+use App\Services\ChangeAlerts;
 use App\Services\Costing;
 use App\Support\AppError;
 use App\Support\Clock;
@@ -197,7 +198,7 @@ final class IngredientController extends Controller
         $prices = $showCosts
             ? Row::all(DB::table('ingredient_prices as p')->leftJoin('users as u', 'u.id', '=', 'p.created_by')
                 ->where('p.ingredient_id', $id)->where('p.company_id', $cid)->orderByDesc('p.valid_from')
-                ->get(['p.id', 'p.package_price', 'p.package_content', 'p.package_unit', 'p.valid_from', 'p.source', 'p.supplier', 'p.agent_name', 'p.notes', 'p.created_at', 'p.import_id', 'u.name as created_by']))
+                ->get(['p.id', 'p.package_price', 'p.package_content', 'p.package_unit', 'p.valid_from', 'p.source', 'p.supplier', 'p.agent_name', 'p.notes', 'p.created_at', 'p.import_id', 'p.supplier_invoice_id', 'u.name as created_by']))
             : [];
         $t = Clock::today();
         $usedIn = DB::table('recipes as r')->join('recipe_components as c', 'c.revision_id', '=', 'r.current_revision_id')
@@ -242,6 +243,8 @@ final class IngredientController extends Controller
                 'future' => $p['valid_from'] > $t,
             ], $prices),
             'usedIn' => Row::all($usedIn),
+            // NUOVO: variazioni di prezzo non ancora viste da questo utente
+            'changes' => $showCosts ? ChangeAlerts::forEntity($cid, $ctx->userId(), 'ingredient', $id) : [],
         ];
     }
 
@@ -310,6 +313,7 @@ final class IngredientController extends Controller
         $body = $this->parseBody($req, self::ingredientBody()->extend(['code' => S::reqText('Il codice', 40), 'lockVersion' => S::int()]));
         self::checkConversions($body);
         $cid = $ctx->companyId();
+        $watch = ChangeAlerts::watch($cid, 'ingredients', [$id]);
         $changes = DB::transaction(function () use ($ctx, $body, $cid, $id) {
             $cur = DB::table('ingredients')->where('id', $id)->where('company_id', $cid)->lockForUpdate()->first();
             if (! $cur) {
@@ -348,6 +352,9 @@ final class IngredientController extends Controller
         });
         $costRelevant = array_intersect(['edible_yield', 'density_kg_per_l', 'unit_weight_kg'], array_keys($changes));
         $affected = $costRelevant ? Costing::invalidate($cid, 'ingredients', [$id]) : [];
+        if ($costRelevant) {
+            ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Dati di «'.$body['name'].'» modificati (resa, densità o peso)', 'seenIngredients' => true]);
+        }
 
         return ['ok' => true, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }
@@ -377,6 +384,7 @@ final class IngredientController extends Controller
                 ['fields' => ['validFrom' => 'Data già usata.']],
             );
         }
+        $watch = ChangeAlerts::watch($cid, 'ingredients', [$id]);
         $priceId = (string) Str::uuid();
         DB::table('ingredient_prices')->insert([
             'id' => $priceId,
@@ -395,6 +403,7 @@ final class IngredientController extends Controller
         ]);
         Audit::log($cid, $ctx->userId(), 'ingredient_price', $priceId, 'created', ['ingredient' => $ing->code, 'packagePrice' => $body['packagePrice'], 'validFrom' => $body['validFrom']]);
         $affected = Costing::invalidate($cid, 'ingredients', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['source' => $body['source'] ?? 'Prezzo inserito a mano', 'seenIngredients' => true]);
 
         return ['id' => $priceId, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }
@@ -408,9 +417,11 @@ final class IngredientController extends Controller
         if (! $p) {
             throw AppError::notFound('Prezzo');
         }
+        $watch = ChangeAlerts::watch($cid, 'ingredients', [$id]);
         DB::table('ingredient_prices')->where('id', $priceId)->delete();
         Audit::log($cid, $ctx->userId(), 'ingredient_price', $priceId, 'deleted', ['packagePrice' => $p->package_price, 'validFrom' => $p->valid_from]);
         $affected = Costing::invalidate($cid, 'ingredients', [$id]);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['source' => 'Prezzo eliminato dallo storico', 'seenIngredients' => true]);
 
         return ['ok' => true, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }

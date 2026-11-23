@@ -279,3 +279,13 @@ Erano tutti nel clone, non nell'originale:
 | Memoria degli abbinamenti per fornitore (codice articolo o descrizione): dalla fattura successiva le righe sono «Riconosciute» | ✅ |
 | Tutto o niente: con errori su una riga non viene scritto nulla e la riga è evidenziata | ✅ |
 | Archivio: elenco delle fatture (da abbinare / importate), XML originale scaricabile, bozze scartabili | ✅ |
+
+## 22. Avvisi di variazione e storico prezzi (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Avviso su prodotto e ricette (anche indirette, tramite semilavorati) quando cambia il costo **di oggi**: nuovo prezzo a mano, fattura XML, importazione Excel, prezzo eliminato, bolletta/valore utenza, costo del personale, strumento, semilavorato modificato | ✅ |
+| Nessuna email o notifica push: badge «Costo variato» / «Prezzo variato» negli elenchi, contatore nel menu, riquadro in cima agli elenchi con «Segna tutte come viste» | ✅ |
+| Nella scheda: costo totale e a porzione prima → adesso con differenza e %, motivo («Prezzo di Burro: 11,50 → 12,88 € al kg (+12,0%)»), fonte (fattura, bolletta…), chi e quando | ✅ |
+| L'avviso sparisce dopo aver aperto la scheda, per quel solo utente; prezzi con data futura non generano avvisi; visibili solo a chi vede i costi; conservati 90 giorni | ✅ |
+| Storico prezzi del prodotto: grafico a gradini del prezzo al kg/litro/pezzo con tooltip, variazione dal primo prezzo, minimo, massimo, media, variazione rispetto al prezzo precedente, fornitore, filtro per fornitore, collegamento alla fattura XML di provenienza | ✅ |

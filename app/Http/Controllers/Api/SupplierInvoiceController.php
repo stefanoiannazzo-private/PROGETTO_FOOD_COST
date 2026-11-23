@@ -9,6 +9,7 @@ use App\Domain\Costing\Units;
 use App\Http\Controllers\Controller;
 use App\Services\Audit;
 use App\Services\Codes;
+use App\Services\ChangeAlerts;
 use App\Services\Costing;
 use App\Services\Invoices\FatturaPA;
 use App\Support\AppError;
@@ -207,6 +208,15 @@ final class SupplierInvoiceController extends Controller
             ]))->max(2000),
         ]));
 
+        // NUOVO: prodotti già esistenti toccati dalla fattura, per gli avvisi di variazione
+        $watchIds = array_values(array_filter(array_map(fn ($d) => $d['action'] === 'existing' ? ($d['ingredientId'] ?? null) : null, $body['lines'])));
+        $names = array_values(array_filter(array_map(fn ($d) => $d['action'] === 'new' ? mb_strtolower(trim((string) ($d['name'] ?? ''))) : null, $body['lines'])));
+        if ($names) {
+            array_push($watchIds, ...DB::table('ingredients')->where('company_id', $cid)->whereIn(DB::raw('LOWER(name)'), $names)->pluck('id')->all());
+        }
+        $watch = ChangeAlerts::watch($cid, 'ingredients', $watchIds);
+        $head = DB::table('supplier_invoices')->where('id', $id)->where('company_id', $cid)->first(['number', 'invoice_date', 'supplier_name']);
+
         $summary = DB::transaction(function () use ($ctx, $cid, $id, $body) {
             $inv = DB::table('supplier_invoices')->where('id', $id)->where('company_id', $cid)->lockForUpdate()->first();
             if (! $inv) {
@@ -350,6 +360,7 @@ final class SupplierInvoiceController extends Controller
                         'notes' => null,
                         'created_by' => $ctx->userId(),
                         'created_at' => Clock::now(),
+                        'supplier_invoice_id' => $inv->id,
                     ]);
                     $prices++;
                     $touched[] = $ingId;
@@ -369,6 +380,9 @@ final class SupplierInvoiceController extends Controller
             return $summary;
         });
         $affected = $summary['touched'] ? Costing::invalidate($cid, 'ingredients', $summary['touched']) : [];
+        if ($head) {
+            ChangeAlerts::commit($watch, $ctx->userId(), ['source' => 'Fattura '.$head->number.($head->invoice_date ? ' del '.date('d/m/Y', strtotime($head->invoice_date)) : '').' · '.$head->supplier_name]);
+        }
         unset($summary['touched']);
 
         return [...$summary, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];

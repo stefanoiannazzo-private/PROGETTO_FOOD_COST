@@ -8,6 +8,7 @@ use App\Auth\Permissions;
 use App\Domain\Costing\Dec;
 use App\Services\Audit;
 use App\Services\Codes;
+use App\Services\ChangeAlerts;
 use App\Services\Costing;
 use App\Services\Recipes;
 use App\Support\Clock;
@@ -31,6 +32,13 @@ final class Applier
     /** @return array{applied: bool, reason?: string} */
     public static function run(string $importId): array
     {
+        // NUOVO: elementi già esistenti aggiornati dall'importazione, per gli avvisi di variazione
+        $pre = DB::table('imports')->where('id', $importId)->first(['company_id', 'type', 'original_name', 'created_by']);
+        $watch = null;
+        if ($pre) {
+            $targets = DB::table('import_rows')->where('import_id', $importId)->where('action', 'update')->whereNotNull('target_id')->pluck('target_id')->all();
+            $watch = ChangeAlerts::watch($pre->company_id, $pre->type === 'ingredients' ? 'ingredients' : 'employees', $targets);
+        }
         $result = DB::transaction(function () use ($importId) {
             $imp = DB::table('imports')->where('id', $importId)->lockForUpdate()->first();
             if ($imp->status === 'applied') {
@@ -77,6 +85,9 @@ final class Applier
         });
         if ($result['applied'] && $result['ids']) {
             Costing::invalidate($result['companyId'], $result['type'] === 'ingredients' ? 'ingredients' : 'employees', array_values(array_unique($result['ids'])));
+            if ($watch && $pre) {
+                ChangeAlerts::commit($watch, $pre->created_by, ['source' => 'Importazione da «'.$pre->original_name.'»', 'label' => $pre->type === 'ingredients' ? 'Dati dei prodotti importati' : 'Costo del personale importato']);
+            }
         }
         $out = ['applied' => $result['applied']];
         if (isset($result['reason'])) {

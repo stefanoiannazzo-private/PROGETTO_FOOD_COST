@@ -9,6 +9,7 @@ import { useMe, useSwitchCompany } from '@/lib/session'
 import { Icon, Skeleton } from './ui'
 import { MobileTables } from './MobileTables'
 import { Tour } from './Tour'
+import { useAlerts } from './ChangeAlerts'
 
 const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adminOnly?: boolean }> = [
   { href: '/', label: 'Dashboard', icon: 'home' },
@@ -43,6 +44,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const fetching = useIsFetching()
   // NUOVO: guida del primo accesso (automatica per l'amministratore che non l'ha ancora vista)
   const [tourOpen, setTourOpen] = useState(false)
+  // NUOVO: avvisi di variazione (contatori nel menu), riletti a ogni cambio di pagina
+  const alerts = useAlerts()
+  useEffect(() => {
+    qc.invalidateQueries({ queryKey: ['alerts'] })
+  }, [pathname, qc])
+  const alertCount = (href: string) => (href === '/ricette' ? alerts.data?.recipes.length : href === '/ingredienti' ? alerts.data?.ingredients.length : 0) ?? 0
   useEffect(() => {
     if (me?.company && me.role === 'admin' && !me.assist && me.tourDone === false && !pathname.startsWith('/piattaforma')) {
       const t = setTimeout(() => setTourOpen(true), 700)
@@ -133,6 +140,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link key={n.href} href={n.href} prefetch aria-current={isActive(n.href) ? 'page' : undefined}>
                   <Icon name={n.icon} />
                   {n.label}
+                  {alertCount(n.href) ? (
+                    <span className="nav-count" title={n.href === '/ricette' ? 'Ricette con costo cambiato' : 'Prodotti con prezzo cambiato'}>
+                      {alertCount(n.href)}
+                    </span>
+                  ) : null}
                 </Link>
               ))
             : null}
