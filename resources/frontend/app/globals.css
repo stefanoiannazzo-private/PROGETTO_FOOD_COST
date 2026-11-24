@@ -433,3 +433,9 @@ details.more[open] > summary { margin-bottom: 12px; }
 .ph-up { color: var(--err); font-weight: 600; }
 .ph-down { color: var(--ok); font-weight: 600; }
 .nav-count { margin-left: auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--warn-soft); color: var(--warn); font-size: 11.5px; font-weight: 700; display: inline-grid; place-items: center; }
+
+/* NUOVO — peso totale degli ingredienti nell'editor ricetta */
+.weight-total { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--surface-2); }
+.weight-total > div { display: flex; flex-direction: column; min-width: 150px; }
+.weight-total strong { font-size: 18px; }
+.weight-total > .small { flex: 1 1 260px; }

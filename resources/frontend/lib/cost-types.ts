@@ -92,6 +92,11 @@ export interface RecipeCost {
   finalQuantity: string | null
   finalUnit: string | null
   finalWeightKg: string | null
+  /** NUOVO: da dove viene il peso finale: indicato (dopo cottura) o somma degli ingredienti */
+  finalWeightSource?: 'declared' | 'ingredients' | null
+  /** NUOVO: peso netto totale di ingredienti e semilavorati */
+  ingredientsWeightKg?: string | null
+  ingredientsWeightMissing?: string[]
   portions: string | null
   portionWeightKg: string | null
   costPerKg: string | null

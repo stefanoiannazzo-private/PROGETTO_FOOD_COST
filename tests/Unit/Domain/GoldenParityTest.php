@@ -84,14 +84,26 @@ class GoldenParityTest extends TestCase
         $cases ??= self::load('engine');
         $case = $cases[$i];
         $ctx = self::toDec($case['context']);
+        $ctx['weightFromIngredients'] = false; // NUOVO: il peso dagli ingredienti non esiste nell'originale
         foreach ($case['results'] as $id => $expected) {
             try {
                 $got = json_decode(json_encode(Serializer::serialize(RecipeCostEngine::valueRecipe($ctx, (string) $id))), true);
             } catch (DomainError $e) {
                 $got = ['error' => $e->errorCode, 'message' => $e->getMessage()];
             }
-            $this->assertSame(self::canon($expected), self::canon($got), "ricetta {$id}");
+            $this->assertSame(self::canon($expected), self::canon(self::withoutNew($got)), "ricetta {$id}");
         }
+    }
+
+    /** NUOVO: toglie i campi aggiunti dopo la migrazione (peso degli ingredienti), che l'originale non ha. */
+    private static function withoutNew(mixed $v): mixed
+    {
+        if (! is_array($v)) {
+            return $v;
+        }
+        unset($v['finalWeightSource'], $v['ingredientsWeightKg'], $v['ingredientsWeightMissing'], $v['weightKg']);
+
+        return array_map(fn ($x) => self::withoutNew($x), $v);
     }
 
     /** Ordina le chiavi degli oggetti (l'ordine delle chiavi JSON non è significativo, quello delle liste sì). */

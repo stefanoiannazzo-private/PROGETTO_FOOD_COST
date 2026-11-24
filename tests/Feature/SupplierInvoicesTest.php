@@ -104,6 +104,15 @@ class SupplierInvoicesTest extends TestCase
         $this->assertCount(1, $r['errors']);
         $this->assertSame('rotto.xml', $r['errors'][0]['file']);
 
+        // file dei metadati SDI caricato da solo: messaggio chiaro con il nome della fattura da caricare
+        $meta = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><ns3:FileMetadati xmlns:ns3="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fattura/messaggi/v1.0" versione="1.0"><IdentificativoSdI>1</IdentificativoSdI><NomeFile>IT00433490422_32MT0.XML.P7M</NomeFile></ns3:FileMetadati>';
+        foreach (['fattura_russo.xml', 'IT00433490422_32MT0_MT_001.xml'] as $n) {
+            $r = $this->ok($this->upload([$n => $meta]));
+            $this->assertSame([], $r['created']);
+            $this->assertStringContainsString('metadati dello SDI', $r['errors'][0]['message']);
+            $this->assertStringContainsString('IT00433490422_32MT0.XML.P7M', $r['errors'][0]['message']);
+        }
+
         // DOCTYPE/ENTITY rifiutati
         $this->expectException(\App\Support\AppError::class);
         FatturaPA::parse('<?xml version="1.0"?><!DOCTYPE x [<!ENTITY e SYSTEM "file:///etc/passwd">]><FatturaElettronica>&e;</FatturaElettronica>');

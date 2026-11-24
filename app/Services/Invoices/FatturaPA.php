@@ -35,9 +35,17 @@ final class FatturaPA
         if (str_starts_with($bytes, "PK\x03\x04") || str_ends_with($lower, '.zip')) {
             return self::fromZip($bytes, $name, $depth);
         }
-        // file di metadati dello SDI e ricevute: non sono fatture
-        if (preg_match('/_(MT|RC|NS|MC|NE|DT|AT|EC|SE)_\d+\.xml$/i', $name)) {
-            return [];
+        // file di metadati dello SDI e ricevute: non sono fatture. Dentro uno .zip si saltano in silenzio,
+        // caricati da soli si spiega quale file serve (prima venivano scartati senza alcun messaggio).
+        $sdi = self::sdiMessage($bytes);
+        if ($sdi !== null || preg_match('/_(MT|RC|NS|MC|NE|DT|AT|EC|SE)_\d+\.xml$/i', $name)) {
+            if ($depth > 0) {
+                return [];
+            }
+            $file = $sdi['file'] ?? null;
+
+            return [['name' => $name, 'error' => ($sdi['label'] ?? 'Questo è un file di servizio dello SDI')
+                .', non la fattura. Carica il file della fattura'.($file ? " «{$file}»" : ' (di solito termina con .xml.p7m o .xml)').'.']];
         }
         $xml = self::toXml($bytes);
         if ($xml === null) {
@@ -87,6 +95,23 @@ final class FatturaPA
         }
 
         return $out === [] ? [['name' => $name, 'error' => 'Nell’archivio non ci sono fatture .xml o .p7m.']] : $out;
+    }
+
+    /**
+     * Riconosce i messaggi dello SDI (metadati, ricevute, notifiche) dal contenuto.
+     *
+     * @return array{label: string, file: ?string}|null
+     */
+    private static function sdiMessage(string $bytes): ?array
+    {
+        $head = substr(self::stripBom($bytes), 0, 4000);
+        if (! str_starts_with(ltrim($head), '<') || ! preg_match('/<(?:[A-Za-z0-9_]+:)?(FileMetadati|RicevutaConsegna|NotificaScarto|NotificaMancataConsegna|NotificaEsito|NotificaDecorrenzaTermini|AttestazioneTrasmissioneFattura|NotificaEsitoCommittente|ScartoEsitoCommittente)\b/', $head, $m)) {
+            return null;
+        }
+        $label = $m[1] === 'FileMetadati' ? 'Questo è il file dei metadati dello SDI' : 'Questa è una ricevuta o notifica dello SDI';
+        $file = preg_match('/<NomeFile>\s*([^<\s]+)\s*<\/NomeFile>/', $head, $f) ? $f[1] : null;
+
+        return ['label' => $label, 'file' => $file];
     }
 
     /** XML in chiaro da .xml, .p7m binario o .p7m in base64. */

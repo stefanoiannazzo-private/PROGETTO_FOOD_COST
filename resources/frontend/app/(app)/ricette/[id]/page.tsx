@@ -194,14 +194,21 @@ export default function RecipeDetailPage() {
           {/* resa */}
           <div className="kpis">
             <div className="kpi">
-              <div className="k-label">Resa finale</div>
-              <div className="k-value">{rev?.finalQuantity ? `${num(rev.finalQuantity)} ${rev.finalUnit}` : '—'}</div>
-              <div className="k-sub">{rev?.finalWeightKg ? `peso netto ${num(rev.finalWeightKg)} kg` : 'peso finale non dichiarato'}</div>
+              <div className="k-label">Peso finale</div>
+              <div className="k-value">{v?.finalWeightKg ? `${num(v.finalWeightKg)} kg` : rev?.finalQuantity ? `${num(rev.finalQuantity)} ${rev.finalUnit}` : '—'}</div>
+              <div className="k-sub">
+                {v?.finalWeightSource === 'declared'
+                  ? `dopo la cottura${v.ingredientsWeightKg ? ` · ingredienti ${num(v.ingredientsWeightKg)} kg` : ''}`
+                  : v?.finalWeightSource === 'ingredients'
+                    ? 'somma degli ingredienti'
+                    : 'non calcolabile'}
+                {rev?.finalQuantity && v?.finalWeightKg ? ` · ${num(rev.finalQuantity)} ${rev.finalUnit}` : ''}
+              </div>
             </div>
             <div className="kpi">
               <div className="k-label">Porzioni</div>
               <div className="k-value">{rev?.portions ? num(rev.portions) : '—'}</div>
-              <div className="k-sub">{rev?.finalWeightKg && rev?.portions ? `${num((Number(rev.finalWeightKg) / Number(rev.portions)) * 1000, 0)} g a porzione` : ''}</div>
+              <div className="k-sub">{v?.finalWeightKg && rev?.portions ? `${num((Number(v.finalWeightKg) / Number(rev.portions)) * 1000, 0)} g a porzione` : ''}</div>
             </div>
             <div className="kpi">
               <div className="k-label">Tempo di preparazione</div>

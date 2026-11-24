@@ -175,6 +175,8 @@ function revisionPayload(s: EditorState) {
 }
 
 /* ------------------------------ editor ------------------------------ */
+const fmtKg = (kg: string | number) => (Number(kg) < 1 ? `${num(Number(kg) * 1000, 0)} g` : `${num(kg, 3)} kg`)
+
 export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: string | null; initial: EditorState; lockVersion: number | null }) {
   const router = useRouter()
   const qc = useQueryClient()
@@ -224,6 +226,8 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
     retry: false,
   })
   const cost = preview.data
+  // NUOVO: peso effettivo (dopo cottura se indicato, altrimenti somma degli ingredienti)
+  const effWeight = s.finalWeightKg || (cost?.ingredientsWeightKg && !cost.ingredientsWeightMissing?.length ? cost.ingredientsWeightKg : null)
   const stale = preview.isFetching || debounced !== payload
   const lineCost = (prefix: string, i: number) => {
     if (!cost) return null
@@ -287,7 +291,7 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
   }
   const recipeOptions = async (q: string, signal?: AbortSignal): Promise<PickerOption[]> => {
     const r = await api.get<{ data: Array<{ id: string; code: string; title: string; finalUnit: string | null; finalWeightKg: string | null; finalQuantity: string | null }> }>('/recipes/options', { q, exclude: recipeId ?? undefined }, signal)
-    return r.data.map((x) => ({ id: x.id, label: x.title, sub: x.code, right: x.finalWeightKg ? `resa ${num(x.finalWeightKg)} kg` : x.finalQuantity ? `resa ${num(x.finalQuantity)} ${x.finalUnit}` : 'resa non dichiarata', unit: x.finalWeightKg ? 'g' : (x.finalUnit ?? 'g'), finalUnit: x.finalUnit, hasFinalWeight: !!x.finalWeightKg }))
+    return r.data.map((x) => ({ id: x.id, label: x.title, sub: x.code, right: x.finalWeightKg ? `resa ${num(x.finalWeightKg)} kg` : x.finalQuantity ? `resa ${num(x.finalQuantity)} ${x.finalUnit}` : 'peso dagli ingredienti', unit: x.finalWeightKg ? 'g' : (x.finalUnit ?? 'g'), finalUnit: x.finalUnit, hasFinalWeight: !!x.finalWeightKg }))
   }
   const equipmentOptions = async (q: string, signal?: AbortSignal): Promise<PickerOption[]> => {
     const r = await api.get<{ data: Array<{ id: string; code: string; name: string; powerType: string }> }>('/equipment', { q, pageSize: 20, sort: 'name' }, signal)
@@ -516,7 +520,7 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
         {/* -------- dati e resa -------- */}
         <section className="card" id="dati">
           <div className="card-head">
-            <h2>Dati e resa</h2>
+            <h2>Dati della ricetta</h2>
           </div>
           <div className="card-body stack">
             <div className="grid-3">
@@ -528,54 +532,6 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
               </Field>
               <Field label="Categoria" htmlFor="r-cat">
                 <input id="r-cat" className="input" value={s.category} onChange={(e) => update({ category: e.target.value })} placeholder="es. Primi, Sughi, Dolci" />
-              </Field>
-            </div>
-            <div className="section-title">Resa finale dichiarata</div>
-            <p className="small muted">La resa non è la somma degli ingredienti: cottura ed evaporazione la cambiano. Il peso finale netto serve per il costo al kg e per usare la ricetta come semilavorato a peso.</p>
-            <div className="grid-4">
-              <Field label="Quantità ottenuta" htmlFor="r-fq" error={fieldErr['revision.finalQuantity']}>
-                <NumberInput
-                  id="r-fq"
-                  value={s.finalQuantity}
-                  onChange={(x) => update({ finalQuantity: x })}
-                  suffix={
-                    <select className="addon" value={s.finalUnit} onChange={(e) => update({ finalUnit: e.target.value })} aria-label="Unità resa">
-                      {UNITS.map((u) => (
-                        <option key={u.value}>{u.value}</option>
-                      ))}
-                    </select>
-                  }
-                />
-              </Field>
-              <Field label="Peso finale netto" htmlFor="r-fw" error={fieldErr['revision.finalWeightKg']}>
-                <NumberInput id="r-fw" value={s.finalWeightKg} onChange={(x) => update({ finalWeightKg: x })} suffix="kg" />
-              </Field>
-              <Field label="Porzioni ottenute" htmlFor="r-por" error={fieldErr['revision.portions']}>
-                <NumberInput id="r-por" value={s.portions} onChange={(x) => update({ portions: x })} />
-              </Field>
-              <Field label="Peso porzione" hint="Calcolato">
-                <div className="input" style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-2)' }}>
-                  {s.finalWeightKg && s.portions && Number(s.portions) > 0 ? `${num((Number(s.finalWeightKg) / Number(s.portions)) * 1000, 0)} g` : '—'}
-                </div>
-              </Field>
-            </div>
-            <div className="grid-2">
-              {totalsNow ? (
-                <Field label="Tempo totale di preparazione" hint="Calcolato dalle durate delle fasi qui sotto">
-                  <div className="input" style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-2)', height: 'auto', minHeight: 34, padding: '6px 10px' }}>
-                    <span>
-                      <strong>{fmtDuration(totalsNow.total)}</strong>
-                      {totalsNow.waiting ? <span className="faint small"> · di cui {fmtDuration(totalsNow.waiting)} di attesa</span> : null}
-                    </span>
-                  </div>
-                </Field>
-              ) : (
-                <Field label="Durata complessiva" htmlFor="r-dur" hint="Tempo dall’inizio alla fine. Se indichi la durata delle fasi, si calcola da sola">
-                  <NumberInput id="r-dur" value={s.declaredDurationMinutes} onChange={(x) => update({ declaredDurationMinutes: x })} suffix="min" />
-                </Field>
-              )}
-              <Field label="Note su resa e perdite" htmlFor="r-yn">
-                <input id="r-yn" className="input" value={s.yieldNotes} onChange={(e) => update({ yieldNotes: e.target.value })} />
               </Field>
             </div>
           </div>
@@ -633,6 +589,85 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
               />
               <AsyncPicker queryKey={`recipes-${recipeId}`} fetchOptions={recipeOptions} value={null} onSelect={addSubrecipe} placeholder="+ Aggiungi semilavorato (ricetta)…" ariaLabel="Aggiungi semilavorato" />
             </div>
+          </div>
+        </section>
+
+
+        {/* -------- NUOVO: peso, resa e porzioni (sotto gli ingredienti: il peso totale si calcola da solo) -------- */}
+        <section className="card" id="resa">
+          <div className="card-head">
+            <h2>Peso, resa e porzioni</h2>
+          </div>
+          <div className="card-body stack">
+            <div className="weight-total">
+              <div>
+                <span className="faint small">Peso totale degli ingredienti</span>
+                <strong>{s.components.length === 0 ? '—' : cost?.ingredientsWeightKg && !cost.ingredientsWeightMissing?.length ? fmtKg(cost.ingredientsWeightKg) : cost?.ingredientsWeightMissing?.length ? 'incompleto' : '…'}</strong>
+              </div>
+              <span className="small muted">
+                {s.components.length === 0
+                  ? 'Si calcola da solo man mano che aggiungi ingredienti e semilavorati.'
+                  : cost?.ingredientsWeightMissing?.length
+                    ? `Manca il peso di ${cost.ingredientsWeightMissing.slice(0, 4).join(', ')}: indica il peso al pezzo (o la densità) nella scheda del prodotto, oppure scrivi qui sotto il peso finale.`
+                    : 'Somma delle quantità nette di ingredienti e semilavorati, calcolata in automatico.'}
+              </span>
+            </div>
+            <div className="grid-4">
+              <Field
+                label="Peso finale dopo la cottura"
+                htmlFor="r-fw"
+                error={fieldErr['revision.finalWeightKg']}
+                hint={cost?.ingredientsWeightKg && !cost.ingredientsWeightMissing?.length ? `Facoltativo: se vuoto vale il peso degli ingredienti (${fmtKg(cost.ingredientsWeightKg)})` : 'Facoltativo se il peso degli ingredienti è completo'}
+              >
+                <NumberInput id="r-fw" value={s.finalWeightKg} onChange={(x) => update({ finalWeightKg: x })} suffix="kg" placeholder={cost?.ingredientsWeightKg && !cost.ingredientsWeightMissing?.length ? num(cost.ingredientsWeightKg) : undefined} />
+              </Field>
+              <Field label="Porzioni ottenute" htmlFor="r-por" error={fieldErr['revision.portions']}>
+                <NumberInput id="r-por" value={s.portions} onChange={(x) => update({ portions: x })} />
+              </Field>
+              <Field label="Peso porzione" hint="Calcolato">
+                <div className="input" style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-2)' }}>
+                  {effWeight && s.portions && Number(s.portions) > 0 ? `${num((Number(effWeight) / Number(s.portions)) * 1000, 0)} g` : '—'}
+                </div>
+              </Field>
+              <Field label="Quantità ottenuta" htmlFor="r-fq" error={fieldErr['revision.finalQuantity']} hint="Facoltativa, es. 30 pz, 2 teglie">
+                <NumberInput
+                  id="r-fq"
+                  value={s.finalQuantity}
+                  onChange={(x) => update({ finalQuantity: x })}
+                  suffix={
+                    <select className="addon" value={s.finalUnit} onChange={(e) => update({ finalUnit: e.target.value })} aria-label="Unità resa">
+                      {UNITS.map((u) => (
+                        <option key={u.value}>{u.value}</option>
+                      ))}
+                    </select>
+                  }
+                />
+              </Field>
+            </div>
+            <div className="grid-2">
+              {totalsNow ? (
+                <Field label="Tempo totale di preparazione" hint="Calcolato dalle durate delle fasi qui sotto">
+                  <div className="input" style={{ display: 'flex', alignItems: 'center', background: 'var(--surface-2)', height: 'auto', minHeight: 34, padding: '6px 10px' }}>
+                    <span>
+                      <strong>{fmtDuration(totalsNow.total)}</strong>
+                      {totalsNow.waiting ? <span className="faint small"> · di cui {fmtDuration(totalsNow.waiting)} di attesa</span> : null}
+                    </span>
+                  </div>
+                </Field>
+              ) : (
+                <Field label="Durata complessiva" htmlFor="r-dur" hint="Tempo dall’inizio alla fine. Se indichi la durata delle fasi, si calcola da sola">
+                  <NumberInput id="r-dur" value={s.declaredDurationMinutes} onChange={(x) => update({ declaredDurationMinutes: x })} suffix="min" />
+                </Field>
+              )}
+              <Field label="Note su resa e perdite" htmlFor="r-yn">
+                <input id="r-yn" className="input" value={s.yieldNotes} onChange={(e) => update({ yieldNotes: e.target.value })} placeholder="es. il ragù cala del 30% in cottura" />
+              </Field>
+            </div>
+            {s.finalWeightKg && cost?.ingredientsWeightKg && !cost.ingredientsWeightMissing?.length && Number(cost.ingredientsWeightKg) > 0 ? (
+              <p className="small muted" style={{ margin: 0 }}>
+                Calo in cottura: {num(((Number(cost.ingredientsWeightKg) - Number(s.finalWeightKg)) / Number(cost.ingredientsWeightKg)) * 100, 1)}% ({fmtKg(cost.ingredientsWeightKg)} → {fmtKg(s.finalWeightKg)})
+              </p>
+            ) : null}
           </div>
         </section>
 

@@ -107,6 +107,8 @@ final class RecipeCostEngine
         };
 
         /* ---------------- ingredienti diretti e semilavorati ---------------- */
+        $weightKg = Dec::zero();
+        $weightMissing = [];
         $ingredientLines = [];
         $subrecipeLines = [];
         $subExpanded = [];
@@ -146,9 +148,21 @@ final class RecipeCostEngine
                 ];
                 if (! $ing) {
                     $ingredientLines[] = $line;
+                    $weightMissing[] = $line['name'];
                     $issue('missing_ingredient', 'Ingrediente non trovato o non accessibile.', 'error', $ref);
 
                     continue;
+                }
+                // NUOVO: peso netto della riga in kg (per il peso totale degli ingredienti)
+                try {
+                    $line['weightKg'] = Units::convertToDimension($qty, $c['unit'], 'mass', [
+                        'densityKgPerL' => $ing['densityKgPerL'] ?? null,
+                        'unitWeightKg' => $ing['unitWeightKg'] ?? null,
+                    ]);
+                    $weightKg = $weightKg->plus($line['weightKg']);
+                } catch (UnitConversionError) {
+                    $line['weightKg'] = null;
+                    $weightMissing[] = $ing['name'];
                 }
                 try {
                     $u = Calculators::ingredientUsageCost($ing, $qty, $c['unit']);
@@ -196,12 +210,14 @@ final class RecipeCostEngine
             ];
             if (! $subInput) {
                 $subrecipeLines[] = $line;
+                $weightMissing[] = $line['name'];
                 $issue('missing_subrecipe', 'Sottoricetta non trovata o non accessibile.', 'error', $ref);
 
                 continue;
             }
             if (in_array($subId, $stack, true)) {
                 $subrecipeLines[] = $line;
+                $weightMissing[] = $line['name'];
                 $issue('cycle', "Ciclo rilevato: {$subInput['title']} contiene direttamente o indirettamente {$recipe['title']}.", 'error', $ref);
                 $issues[count($issues) - 1]['path'] = [$recipe['title'], $subInput['title']];
 
@@ -209,6 +225,7 @@ final class RecipeCostEngine
             }
             if (count($stack) >= ($ctx['maxDepth'] ?? self::DEFAULT_MAX_DEPTH)) {
                 $subrecipeLines[] = $line;
+                $weightMissing[] = $line['name'];
                 $issue('max_depth', 'Superato il numero massimo di livelli di annidamento.', 'error', $ref);
 
                 continue;
@@ -216,6 +233,23 @@ final class RecipeCostEngine
 
             $sub = $this->visit($subId, $stack);
             $line['sub'] = $sub;
+            // NUOVO: peso della quantità di semilavorato usata
+            $line['weightKg'] = null;
+            try {
+                $dim = Units::dimensionOf($c['unit']);
+                if ($dim === 'mass') {
+                    $line['weightKg'] = Units::toBase($qty, $c['unit']);
+                } elseif ($sub['finalWeightKg'] !== null && $sub['finalUnit'] !== null && $sub['finalQuantity'] !== null && $sub['finalQuantity']->gt(0) && Units::dimensionOf($sub['finalUnit']) === $dim) {
+                    $line['weightKg'] = Units::toBase($qty, $c['unit'])->div(Units::toBase($sub['finalQuantity'], $sub['finalUnit']))->times($sub['finalWeightKg']);
+                }
+            } catch (UnitConversionError) {
+                $line['weightKg'] = null;
+            }
+            if ($line['weightKg'] === null) {
+                $weightMissing[] = $sub['title'];
+            } else {
+                $weightKg = $weightKg->plus($line['weightKg']);
+            }
             // Si propagano errori e avvisi sui costi; non le note sulla resa della sottoricetta.
             foreach ($sub['issues'] as $si) {
                 if ($si['severity'] === 'info' || in_array($si['code'], self::LOCAL_ONLY, true)) {
@@ -402,16 +436,27 @@ final class RecipeCostEngine
             'labor' => $labor->plus(Dec::sum(array_column($subExpanded, 'labor'))),
         ];
 
-        $finalWeightKg = $recipe['finalWeightKg'] !== null && $recipe['finalWeightKg']->gt(0) ? $recipe['finalWeightKg'] : null;
+        // NUOVO: se il peso finale (dopo cottura) non è indicato si usa il peso totale degli ingredienti
+        $ingredientsWeightKg = $recipe['components'] && ! $weightMissing && $weightKg->gt(0) ? $weightKg : null;
+        $declaredWeight = $recipe['finalWeightKg'] !== null && $recipe['finalWeightKg']->gt(0) ? $recipe['finalWeightKg'] : null;
+        // il motore originale (verifiche di parità) non usa il ripiego
+        if (($ctx['weightFromIngredients'] ?? true) === false) {
+            $ingredientsWeightKg = null;
+            $weightMissing = [];
+        }
+        $finalWeightKg = $declaredWeight ?? $ingredientsWeightKg;
+        $finalWeightSource = $declaredWeight ? 'declared' : ($ingredientsWeightKg ? 'ingredients' : null);
         $portions = $recipe['portions'] !== null && $recipe['portions']->gt(0) ? $recipe['portions'] : null;
         $rref = ['type' => 'recipe', 'id' => $recipe['id']];
         if (! $finalWeightKg) {
-            $issue('missing_final_weight', 'Peso finale netto non dichiarato: costo al kg non calcolabile.', 'warning', $rref);
+            $issue('missing_final_weight', $weightMissing
+                ? 'Peso finale non calcolabile: manca il peso di '.implode(', ', array_slice(array_values(array_unique($weightMissing)), 0, 4)).' (indica il peso al pezzo o la densità, oppure il peso finale): costo al kg non calcolabile.'
+                : 'Peso finale netto non dichiarato: costo al kg non calcolabile.', 'warning', $rref);
         }
         if (! $portions) {
             $issue('missing_portions', 'Numero di porzioni non dichiarato: costo per porzione non calcolabile.', 'warning', $rref);
         }
-        if ($recipe['finalQuantity'] === null || $recipe['finalQuantity']->lte(0) || ! $recipe['finalUnit']) {
+        if ((! $finalWeightKg || ($ctx['weightFromIngredients'] ?? true) === false) && ($recipe['finalQuantity'] === null || $recipe['finalQuantity']->lte(0) || ! $recipe['finalUnit'])) {
             $issue('missing_yield', 'Resa finale non dichiarata.', 'warning', $rref);
         }
 
@@ -447,6 +492,9 @@ final class RecipeCostEngine
             'finalQuantity' => $recipe['finalQuantity'],
             'finalUnit' => $recipe['finalUnit'],
             'finalWeightKg' => $finalWeightKg,
+            'finalWeightSource' => $finalWeightSource,
+            'ingredientsWeightKg' => $recipe['components'] ? $weightKg : null,
+            'ingredientsWeightMissing' => array_values(array_unique($weightMissing)),
             'portions' => $portions,
             'portionWeightKg' => $finalWeightKg && $portions ? $finalWeightKg->div($portions) : null,
             'costPerKg' => $finalWeightKg ? $total->div($finalWeightKg) : null,

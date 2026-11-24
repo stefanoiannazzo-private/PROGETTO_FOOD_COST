@@ -37,7 +37,7 @@ export function CostSummary({ cost, compact, stale }: { cost: RecipeCost; compac
         <div className="card card-pad" style={{ padding: 10 }}>
           <div className="faint small">Costo al kg</div>
           <div style={{ fontWeight: 650, fontSize: 17 }}>{cost.costPerKg ? euro(cost.costPerKg) : '—'}</div>
-          <div className="faint small">{cost.finalWeightKg ? `resa ${num(cost.finalWeightKg)} kg` : 'peso finale non dichiarato'}</div>
+          <div className="faint small">{cost.finalWeightKg ? `resa ${num(cost.finalWeightKg)} kg${cost.finalWeightSource === 'ingredients' ? ' (peso ingredienti)' : ''}` : 'peso finale non calcolabile'}</div>
         </div>
         <div className="card card-pad" style={{ padding: 10 }}>
           <div className="faint small">Costo a porzione</div>

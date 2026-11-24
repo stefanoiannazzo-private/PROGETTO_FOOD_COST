@@ -150,6 +150,7 @@ export default function ImportsPage() {
                         </div>
                       </div>
                     ) : null}
+                    {!invResult.created.length && !invResult.duplicates.length && !invResult.errors.length ? <div className="alert err">Nei file caricati non c’è nessuna fattura elettronica.</div> : null}
                     {invResult.errors.length ? (
                       <div className="alert err">
                         <div>

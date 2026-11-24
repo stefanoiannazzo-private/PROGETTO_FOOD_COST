@@ -289,3 +289,13 @@ Erano tutti nel clone, non nell'originale:
 | Nella scheda: costo totale e a porzione prima → adesso con differenza e %, motivo («Prezzo di Burro: 11,50 → 12,88 € al kg (+12,0%)»), fonte (fattura, bolletta…), chi e quando | ✅ |
 | L'avviso sparisce dopo aver aperto la scheda, per quel solo utente; prezzi con data futura non generano avvisi; visibili solo a chi vede i costi; conservati 90 giorni | ✅ |
 | Storico prezzi del prodotto: grafico a gradini del prezzo al kg/litro/pezzo con tooltip, variazione dal primo prezzo, minimo, massimo, media, variazione rispetto al prezzo precedente, fornitore, filtro per fornitore, collegamento alla fattura XML di provenienza | ✅ |
+
+## 23. Peso della ricetta dagli ingredienti e file SDI non validi (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Peso totale di ingredienti e semilavorati calcolato in automatico (g, kg; litri con densità; pezzi con peso al pezzo; semilavorati in base alla loro resa) e mostrato sotto la lista degli ingredienti | ✅ |
+| Se il peso dopo la cottura non è indicato, vale il peso degli ingredienti: costo al kg, peso porzione e uso come semilavorato a peso funzionano subito. Se manca il peso di qualche ingrediente si dice quale | ✅ |
+| Sezione «Peso, resa e porzioni» spostata sotto gli ingredienti: peso dopo cottura (facoltativo) con calo in cottura %, porzioni, peso porzione, quantità ottenuta facoltativa (es. 30 pz), durata, note | ✅ |
+| Le verifiche di parità con l'originale girano con il comportamento originale (opzione del motore); i costi già calcolati vengono ricalcolati, gli snapshot no | ✅ |
+| Fatture: il file dei metadati SDI (FileMetadati) e le ricevute/notifiche SDI caricati da soli danno un messaggio chiaro con il nome del file della fattura da caricare (prima venivano scartati senza messaggio); messaggio anche quando nei file non c'è nessuna fattura | ✅ |
