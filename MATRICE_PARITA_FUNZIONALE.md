@@ -356,3 +356,4 @@ Erano tutti nel clone, non nell'originale:
 - **Altro** apre il menu completo come foglio dal basso (sezioni, piattaforma per il superadmin, Aiuto: Guida, Assistenza, FAQ). Il pulsante ☰ in alto è nascosto quando c'è la barra.
 - Contatori delle variazioni sulle icone; i pulsanti fissi in basso (riepilogo ricetta, conferma fattura, avvisi) salgono sopra la barra.
 - Su computer e nella sola console piattaforma resta il menu laterale.
+- Editor ricetta su smartphone (soluzione B): la barra in basso resta visibile; sopra c'è un'unica striscia con il costo (tocco = riepilogo) e «Crea ricetta»/«Salva»; «‹ Annulla» in alto a sinistra; lo stato Bozza/Attiva si sceglie nella scheda «Dati della ricetta».

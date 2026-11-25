@@ -646,9 +646,30 @@ span.ellipsis.topbar-company { display: inline-block; }
 @keyframes bn-fade { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .bn-sheet, .bn-scrim { animation: none !important; } .bn-fab { transition: none; } }
 
-/* NUOVO — nelle schermate di modifica (editor ricetta) la barra in basso lascia il posto a «Salva» */
+/* NUOVO — editor ricetta su smartphone (soluzione B): barra in basso sempre visibile,
+   sopra di essa un'unica striscia «costo · riepilogo | Crea ricetta»; «Annulla» in alto a sinistra */
+.strip-only, .edit-cancel, .edit-strip-bar { display: none; }
 @media (max-width: 900px) {
-  body.no-bnav .has-bnav { --bnav-space: env(safe-area-inset-bottom); }
-  body.no-bnav .bottom-nav, body.no-bnav .bn-sheet, body.no-bnav .bn-scrim { display: none !important; }
-  .has-bnav .save-bar { bottom: calc(var(--bnav-space) + 64px); }
+  body.edit-strip .has-bnav .content { padding-bottom: calc(var(--bnav-space) + 90px); }
+  body.edit-strip .save-bar, body.edit-strip .summary-mobile-btn { display: none !important; }
+  body.edit-strip .strip-only { display: flex; flex-direction: column; gap: 6px; }
+  body.edit-strip .strip-only .seg { display: grid; grid-template-columns: 1fr 1fr; align-self: stretch; }
+  body.edit-strip .strip-only .seg button { padding: 10px; font-size: 14.5px; }
+  body.edit-strip .strip-only .seg button[aria-checked='true'] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-weight: 600; }
+  body.edit-strip .edit-cancel {
+    display: inline-flex; align-items: center; position: fixed; z-index: 25; left: 6px; top: calc(7px + env(safe-area-inset-top)); height: 40px;
+    padding: 0 10px; border: 0; background: none; font: inherit; font-size: 15px; color: var(--text-2); cursor: pointer;
+  }
+  body.edit-strip .edit-strip-bar {
+    display: flex; align-items: center; gap: 10px; position: fixed; z-index: 36; left: 14px; right: 14px;
+    bottom: calc(var(--bnav-space) - 6px); min-height: 56px; padding: 6px 6px 6px 14px; border-radius: 14px;
+    background: var(--surface-2); border: 1px solid var(--border-strong); box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+  }
+  .es-cost { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2; padding: 0; border: 0; background: none; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  .es-cost small { font-size: 12px; color: var(--text-3); }
+  .es-cost b { font-size: 17px; font-variant-numeric: tabular-nums; }
+  .edit-strip-bar .btn { height: 44px; padding: 0 18px; font-size: 15px; }
+  /* le azioni di «+» e «Altro» restano disponibili: i fogli coprono la striscia */
+  body.edit-strip .bn-sheet { z-index: 37; }
+  body.edit-strip .bn-scrim { z-index: 36; }
 }

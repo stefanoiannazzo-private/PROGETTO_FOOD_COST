@@ -200,10 +200,10 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
 
   // bozza locale: protegge da errori di rete, chiusure e conflitti
   useLocalDraft(draftKey, s, dirty)
-  // NUOVO: durante la modifica la barra di salvataggio prende il posto della barra di navigazione in basso
+  // NUOVO: su smartphone l'editor usa la striscia «costo + salva» sopra la barra in basso (soluzione B)
   useEffect(() => {
-    document.body.classList.add('no-bnav')
-    return () => document.body.classList.remove('no-bnav')
+    document.body.classList.add('edit-strip')
+    return () => document.body.classList.remove('edit-strip')
   }, [])
   useEffect(() => {
     const d = readLocalDraft<EditorState>(draftKey)
@@ -539,6 +539,17 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
                 <input id="r-cat" className="input" value={s.category} onChange={(e) => update({ category: e.target.value })} placeholder="es. Primi, Sughi, Dolci" />
               </Field>
             </div>
+            {/* su smartphone lo stato si sceglie qui (la barra di salvataggio in fondo è sostituita dalla striscia) */}
+            <div className="field strip-only">
+              <span className="label">Stato</span>
+              <div className="seg" role="radiogroup" aria-label="Stato della ricetta">
+                {(['draft', 'active'] as const).map((v) => (
+                  <button key={v} type="button" role="radio" aria-checked={s.status === v} aria-pressed={s.status === v} onClick={() => update({ status: v })}>
+                    {v === 'draft' ? 'Bozza' : 'Attiva'}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -828,6 +839,28 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
           </button>
         </>
       ) : null}
+
+      {/* NUOVO — smartphone: «Annulla» in alto a sinistra e un'unica striscia costo + salva sopra la barra in basso */}
+      <button type="button" className="edit-cancel" onClick={() => router.back()}>
+        ‹ Annulla
+      </button>
+      <div className="edit-strip-bar">
+        {costsVisible ? (
+          <button type="button" className="es-cost" onClick={() => setSummaryOpen(true)} aria-label="Apri il riepilogo dei costi">
+            <small>
+              {cost && !cost.complete ? 'Costo incompleto' : 'Costo ricetta'} ▴ riepilogo
+            </small>
+            <b>{cost ? euro(cost.total) : '—'}</b>
+          </button>
+        ) : (
+          <span className="es-cost">
+            <small>{dirty ? 'Modifiche non salvate' : recipeId ? 'Nessuna modifica' : 'Nuova ricetta'}</small>
+          </span>
+        )}
+        <button className="btn primary" onClick={save} disabled={saving || !s.title.trim()}>
+          {saving ? <span className="spinner" /> : null} {recipeId ? 'Salva' : 'Crea ricetta'}
+        </button>
+      </div>
 
       {newIngredient !== null ? (
         <CreateIngredientDrawer initialName={newIngredient} onClose={() => setNewIngredient(null)} onCreated={(ing) => addIngredient({ id: ing.id, label: ing.name, sub: ing.code, unit: ing.usageUnit } as PickerOption & { unit: string })} />
