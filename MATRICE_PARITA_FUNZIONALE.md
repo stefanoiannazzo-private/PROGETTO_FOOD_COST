@@ -317,3 +317,9 @@ Erano tutti nel clone, non nell'originale:
 | «Installa l'app»: pulsante nella barra laterale, invito chiudibile sulla dashboard degli smartphone, pagina pubblica `/installa` (link dalla pagina di accesso) con istruzioni per iPhone/iPad (Safari → Condividi → Aggiungi alla schermata Home), Android e computer; su Android e computer apre direttamente la richiesta del browser | ✅ |
 | App installata: a tutto schermo, rispetto di tacca e barra in basso dell'iPhone, avviso «Sei offline» quando cade la connessione | ✅ |
 | `.htaccess`: service worker e manifest senza cache lunga, tipo MIME corretto del manifest | ✅ |
+
+## 26. Filtri delle tabelle su smartphone (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Su smartphone resta la ricerca; tendine di filtro e ordinamento dietro un pulsante di solo testo «Filtri» con icona, numero di filtri attivi e «Azzera filtri»; su computer tutto invariato in fila. Un solo componente (FilterBar) per Ingredienti, Ricette, Strumenti, Dipendenti, Utenze, Redditività e le pagine della piattaforma | ✅ |

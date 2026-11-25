@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { FilterBar } from '@/components/FilterBar'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
@@ -77,12 +78,12 @@ export default function PlatformPage() {
         </div>
       ) : null}
       <div className="card" style={{ marginTop: 16 }}>
-        <div className="toolbar">
+        <FilterBar>
           <select className="input" value={archived ? '1' : '0'} onChange={(e) => setArchived(e.target.value === '1')} aria-label="Stato">
             <option value="0">Attive</option>
             <option value="1">Archiviate</option>
           </select>
-        </div>
+        </FilterBar>
         {q.error ? (
           <div className="card-body">
             <ErrorBox error={q.error} retry={() => q.refetch()} />

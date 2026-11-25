@@ -1,6 +1,7 @@
 'use client'
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { FilterBar } from './FilterBar'
 import { useEffect, useState, type ReactNode } from 'react'
 import { api, type Paged } from '@/lib/api'
 import { Empty, ErrorBox, Icon, Skeleton, useDebounced } from './ui'
@@ -86,16 +87,22 @@ export function DataTable<T extends { id: string }>({
   const pages = Math.max(1, Math.ceil(total / state.pageSize))
   return (
     <div className="card">
-      <div className="toolbar">
-        <div className="input-group" style={{ maxWidth: 300, flex: '1 1 220px' }}>
-          <input className="input" type="search" placeholder={searchPlaceholder} value={state.q} onChange={(e) => update({ q: e.target.value })} aria-label="Cerca" />
-          <span className="addon">{isFetching ? <span className="spinner" aria-label="Aggiornamento" /> : <Icon name="search" size={14} />}</span>
-        </div>
+      {/* NUOVO: su smartphone filtri e ordinamento dietro il pulsante «Filtri» */}
+      <FilterBar
+        onReset={() => update({ filters: {} })}
+        search={
+          <div className="input-group filterbar-search" style={{ maxWidth: 300, flex: '1 1 220px' }}>
+            <input className="input" type="search" placeholder={searchPlaceholder} value={state.q} onChange={(e) => update({ q: e.target.value })} aria-label="Cerca" />
+            <span className="addon">{isFetching ? <span className="spinner" aria-label="Aggiornamento" /> : <Icon name="search" size={14} />}</span>
+          </div>
+        }
+      >
         {toolbar}
-        {/* NUOVO: su smartphone le intestazioni non si vedono, quindi l'ordinamento è in una tendina */}
+        {/* su smartphone le intestazioni non si vedono, quindi l'ordinamento è in una tendina */}
         {columns.some((c) => c.sortable) ? (
           <select
             className="input m-only"
+            data-sort=""
             style={{ width: 'auto' }}
             aria-label="Ordina per"
             value={state.sort ? `${state.sort}:${state.dir}` : ''}
@@ -117,7 +124,7 @@ export function DataTable<T extends { id: string }>({
               ])}
           </select>
         ) : null}
-      </div>
+      </FilterBar>
       {error ? (
         <div style={{ padding: 12 }}>
           <ErrorBox error={error} retry={() => refetch()} />

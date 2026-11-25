@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { FilterBar } from '@/components/FilterBar'
 import { useEffect, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -66,11 +67,10 @@ export default function PlatformProductsPage() {
       </div>
       {tab === 'prodotti' ? (
         <div className="card">
-          <div className="toolbar">
-            <input className="input" type="search" placeholder="Cerca prodotto o codice" value={text} onChange={(e) => setText(e.target.value)} aria-label="Cerca" />
+          <FilterBar search={<input className="input filterbar-search" type="search" placeholder="Cerca prodotto o codice" value={text} onChange={(e) => setText(e.target.value)} aria-label="Cerca" />}>
             <input className="input" type="search" placeholder="Fornitore" value={supplier} onChange={(e) => setSupplier(e.target.value)} aria-label="Fornitore" />
             <CompanySelect value={company} onChange={setCompany} />
-          </div>
+          </FilterBar>
           {list.error ? (
             <div className="card-body">
               <ErrorBox error={list.error} retry={() => list.refetch()} />

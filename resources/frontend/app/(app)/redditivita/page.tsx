@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { FilterBar } from '@/components/FilterBar'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
@@ -390,9 +391,7 @@ function MenuPrices({ dishes, onSaved }: { dishes: Dish[]; onSaved: () => void }
       <div className="card-head">
         <h2>Prezzi in menu</h2>
       </div>
-      <div className="toolbar">
-        <input className="input" type="search" placeholder="Cerca piatto" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Cerca piatto" />
-      </div>
+      <FilterBar search={<input className="input filterbar-search" type="search" placeholder="Cerca piatto" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Cerca piatto" />} />
       {dishes.length === 0 ? (
         <Empty title="Nessuna ricetta">Crea le ricette dei piatti che vendi per poterne indicare il prezzo.</Empty>
       ) : (

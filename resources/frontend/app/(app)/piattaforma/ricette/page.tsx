@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { FilterBar } from '@/components/FilterBar'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { api } from '@/lib/api'
@@ -49,15 +50,14 @@ export default function PlatformRecipesPage() {
         }
       />
       <div className="card">
-        <div className="toolbar">
-          <input className="input" type="search" placeholder="Cerca per nome, codice o categoria" value={text} onChange={(e) => setText(e.target.value)} aria-label="Cerca" />
+        <FilterBar search={<input className="input filterbar-search" type="search" placeholder="Cerca per nome, codice o categoria" value={text} onChange={(e) => setText(e.target.value)} aria-label="Cerca" />}>
           <CompanySelect value={company} onChange={setCompany} />
           {selected.size ? (
             <button className="btn ghost sm" onClick={() => setSelected(new Map())}>
               Deseleziona tutto
             </button>
           ) : null}
-        </div>
+        </FilterBar>
         {list.error ? (
           <div className="card-body">
             <ErrorBox error={list.error} retry={() => list.refetch()} />

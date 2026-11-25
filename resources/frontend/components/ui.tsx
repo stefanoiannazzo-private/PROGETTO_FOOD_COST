@@ -23,6 +23,7 @@ const paths: Record<string, string> = {
   up: 'm18 15-6-6-6 6',
   down: 'm6 9 6 6 6-6',
   chevron: 'm9 18 6-6-6-6',
+  filter: 'M4 5h16l-6 7.5V18l-4 2v-7.5z',
   copy: 'M20 9h-9a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zM5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1',
   archive: 'M21 8v13H3V8M1 3h22v5H1zM10 12h4',
   camera: 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
