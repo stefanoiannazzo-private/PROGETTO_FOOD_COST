@@ -645,3 +645,10 @@ span.ellipsis.topbar-company { display: inline-block; }
 @keyframes bn-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes bn-fade { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .bn-sheet, .bn-scrim { animation: none !important; } .bn-fab { transition: none; } }
+
+/* NUOVO — nelle schermate di modifica (editor ricetta) la barra in basso lascia il posto a «Salva» */
+@media (max-width: 900px) {
+  body.no-bnav .has-bnav { --bnav-space: env(safe-area-inset-bottom); }
+  body.no-bnav .bottom-nav, body.no-bnav .bn-sheet, body.no-bnav .bn-scrim { display: none !important; }
+  .has-bnav .save-bar { bottom: calc(var(--bnav-space) + 64px); }
+}

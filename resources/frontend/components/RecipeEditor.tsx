@@ -200,6 +200,11 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
 
   // bozza locale: protegge da errori di rete, chiusure e conflitti
   useLocalDraft(draftKey, s, dirty)
+  // NUOVO: durante la modifica la barra di salvataggio prende il posto della barra di navigazione in basso
+  useEffect(() => {
+    document.body.classList.add('no-bnav')
+    return () => document.body.classList.remove('no-bnav')
+  }, [])
   useEffect(() => {
     const d = readLocalDraft<EditorState>(draftKey)
     if (d && JSON.stringify(d.value) !== JSON.stringify(initial)) setRestore(d)
