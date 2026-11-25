@@ -490,3 +490,16 @@ a.brand { text-decoration: none; color: inherit; }
   .filterbar[data-open='true'] .toolbar-filters > * { width: 100% !important; max-width: none !important; }
   .filterbar .filters-reset { align-self: flex-start; width: auto !important; }
 }
+
+/* NUOVO — avviso «nuova versione» */
+.update-banner {
+  position: fixed; z-index: 90; left: 50%; transform: translateX(-50%);
+  top: calc(10px + env(safe-area-inset-top)); width: min(560px, calc(100% - 20px));
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 12px; border-radius: var(--radius); background: #025e3e; color: #fff; box-shadow: var(--shadow);
+}
+.update-banner .grow { min-width: 180px; flex: 1 1 200px; }
+.update-banner .small { opacity: 0.85; }
+.update-banner .btn.update-go { background: #fff; color: #025e3e; border-color: #fff; font-weight: 700; }
+.update-banner .btn.ghost { color: #fff; }
+.update-banner .update-actions { display: flex; gap: 6px; margin-left: auto; }

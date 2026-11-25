@@ -10,6 +10,7 @@ import '../app/globals.css'
 import { Providers } from '../app/providers'
 import AppLayout from '../app/(app)/layout'
 import { setupPwa } from '../lib/pwa'
+import { UpdateBanner } from '../components/UpdateBanner'
 
 // NUOVO: web app installabile (service worker e richiesta di installazione)
 setupPwa()
@@ -44,6 +45,7 @@ function Root() {
   return (
     <Providers>
       <ScrollToTop />
+      <UpdateBanner />
       <Outlet />
     </Providers>
   )

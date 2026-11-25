@@ -323,3 +323,9 @@ Erano tutti nel clone, non nell'originale:
 | Funzione | Stato |
 |---|---|
 | Su smartphone resta la ricerca; tendine di filtro e ordinamento dietro un pulsante di solo testo «Filtri» con icona, numero di filtri attivi e «Azzera filtri»; su computer tutto invariato in fila. Un solo componente (FilterBar) per Ingredienti, Ricette, Strumenti, Dipendenti, Utenze, Redditività e le pagine della piattaforma | ✅ |
+
+## 27. Avviso «nuova versione» (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Ogni build scrive il proprio identificativo nel codice e in `/app/version.json` (sempre ricontrollato, mai in cache); quando l'app torna in primo piano, al ritorno della rete e ogni 10 minuti confronta le due: se sul sito c'è una versione più recente compare la barra «È disponibile una nuova versione» con **Aggiorna** (ricarica) e **Più tardi**; anche il service worker viene ricontrollato | ✅ |

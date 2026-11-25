@@ -11,7 +11,7 @@
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
     # NUOVO (PWA): service worker e manifest sempre ricontrollati, così gli aggiornamenti arrivano subito
-    <FilesMatch "^(sw\.js|site\.webmanifest|offline\.html)$">
+    <FilesMatch "^(sw\.js|manifest\.webmanifest|offline\.html|version\.json)$">
         Header set Cache-Control "no-cache"
     </FilesMatch>
     <FilesMatch "^sw\.js$">
