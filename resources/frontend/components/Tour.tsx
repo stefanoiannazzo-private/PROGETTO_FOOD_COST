@@ -82,7 +82,7 @@ const STEPS: Step[] = [
   {
     target: () => document.querySelector('[data-tour="help"]'),
     title: 'Tutto pronto!',
-    body: 'Ti consigliamo di cominciare dalla bolletta della luce, poi strumenti, dipendenti, prodotti e la prima ricetta. Puoi riaprire questa guida quando vuoi da questo pulsante.',
+    body: 'Ti consigliamo di cominciare dalla bolletta della luce, poi strumenti, dipendenti, prodotti e la prima ricetta. Questa guida, l’Assistenza e le Domande frequenti sono sempre qui, nel cerchio con le tue iniziali in alto a destra.',
   },
 ]
 

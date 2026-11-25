@@ -340,3 +340,11 @@ Erano tutti nel clone, non nell'originale:
 | Console «Assistenza clienti» del superadmin: richieste di tutte le aziende per stato, contatore delle richieste da rispondere nel menu, dettagli tecnici (pagina precedente, dispositivo), richiamata, «Assisti» per entrare nell'azienda, risposta con allegato, chiusura/riapertura | ✅ |
 | Email automatiche: al supporto (amministratori della piattaforma) per nuove richieste e messaggi, al cliente quando arriva una risposta, con il link | ✅ |
 | Domande frequenti `/assistenza/faq`: 25 risposte in 11 sezioni, ricerca e filtro per sezione, rimando all'assistenza | ✅ |
+
+## 29. Testata «soluzione C» (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Smartphone: ☰ a sinistra, logo completo al centro della barra, cerchio con le iniziali dell'azienda a destra; niente più nome dell'azienda su due righe né «Guida» nella barra | ✅ |
+| Menu delle iniziali: azienda attiva con utente e ruolo, cambio azienda (se più di una), Guida all'uso, Assistenza, Domande frequenti, Installa l'app, Esci; si chiude toccando fuori o con Esc; in modalità assistenza il cerchio è evidenziato | ✅ |
+| Computer: barra laterale invariata, a destra nome dell'azienda e iniziali con lo stesso menu; l'ultimo passo della guida indica il cerchio delle iniziali | ✅ |

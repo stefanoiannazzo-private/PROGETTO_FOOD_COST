@@ -9,7 +9,8 @@ import { useMe, useSwitchCompany } from '@/lib/session'
 import { Icon, Skeleton } from './ui'
 import { MobileTables } from './MobileTables'
 import { Tour } from './Tour'
-import { BrandLogo, BrandMark } from './Brand'
+import { BrandLogo } from './Brand'
+import { AccountMenu } from './AccountMenu'
 import { InstallButton, OfflineBanner } from './InstallApp'
 import { useAlerts } from './ChangeAlerts'
 import { trackPath } from '@/lib/nav-history'
@@ -207,54 +208,25 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button className="btn ghost icon menu-toggle" onClick={() => setMenuOpen(true)} aria-label="Apri menu">
             <Icon name="menu" />
           </button>
-          <Link href={me.company ? '/' : '/piattaforma'} className="topbar-mark" aria-label="Ricetta Quadra">
-            <BrandMark size={28} />
+          {/* NUOVO (soluzione C): su smartphone il logo completo al centro della barra */}
+          <Link href={me.company ? '/' : '/piattaforma'} className="topbar-logo" aria-label="Ricetta Quadra, vai alla dashboard">
+            <BrandLogo height={30} />
           </Link>
           <div className="grow" />
-          {me.company ? (
-            <button
-              className="btn ghost sm"
-              data-tour="help"
-              onClick={() => {
-                setMenuOpen(false)
-                setTourOpen(true)
-              }}
-              title="Riapri la guida"
-            >
-              <Icon name="help" /> Guida
-            </button>
-          ) : null}
           {me.assist ? (
-            <span className="badge warn" title="Stai operando come amministratore di un'azienda cliente: ogni accesso è registrato">
+            <span className="badge warn topbar-assist" title="Stai operando come amministratore di un'azienda cliente: ogni accesso è registrato">
               Assistenza
             </span>
           ) : null}
-          {!me.company ? (
-            <span className="muted" style={{ fontWeight: 600 }}>
-              Console piattaforma
-            </span>
-          ) : me.companies.length > 1 && !me.assist ? (
-            <select
-              className="input"
-              style={{ width: 'auto', maxWidth: 260 }}
-              value={me.company.id}
-              aria-label="Azienda attiva"
-              onChange={async (e) => {
-                await switchCompany(e.target.value)
-                router.push('/')
-              }}
-            >
-              {me.companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="muted" style={{ fontWeight: 600 }}>
-              {me.company.name}
-            </span>
-          )}
+          {/* su computer il nome dell'azienda resta visibile accanto alle iniziali */}
+          <span className="topbar-company muted ellipsis">{me.company ? me.company.name : 'Console piattaforma'}</span>
+          <AccountMenu
+            me={me}
+            onGuide={() => {
+              setMenuOpen(false)
+              setTourOpen(true)
+            }}
+          />
         </header>
         <main className="content">{children}</main>
         <MobileTables />

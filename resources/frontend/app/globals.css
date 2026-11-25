@@ -533,3 +533,44 @@ details.faq > p { margin: 0 0 10px 22px; color: var(--text-2); line-height: 1.55
 details.faq-hint { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); }
 details.faq-hint > summary { cursor: pointer; padding: 10px 12px; font-size: 14px; display: flex; gap: 6px; align-items: center; color: var(--text-2); }
 details.faq-hint .faq { padding: 0 12px; }
+
+/* NUOVO — testata soluzione C: logo al centro (smartphone), iniziali con menu account */
+.topbar { position: sticky; }
+.topbar-logo { display: none; }
+.topbar-company { max-width: 260px; font-weight: 600; font-size: 14px; }
+.ellipsis { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+span.ellipsis.topbar-company { display: inline-block; }
+.account { position: relative; flex: none; }
+.avatar-btn {
+  width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; cursor: pointer;
+  background: color-mix(in srgb, #025e3e 22%, var(--surface)); color: color-mix(in srgb, #025e3e 30%, var(--text));
+  border: 1.5px solid color-mix(in srgb, #025e3e 55%, var(--border));
+}
+.avatar-btn:hover { border-color: #2f8a63; }
+.avatar-btn.assist { border-color: var(--warn); box-shadow: 0 0 0 2px var(--warn-soft); }
+.avatar-btn.static { cursor: default; width: 40px; height: 40px; }
+.account-menu {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: 290px; max-width: calc(100vw - 16px);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 6px;
+}
+.account-head { display: flex; gap: 10px; align-items: center; padding: 10px; }
+.account-head strong { font-size: 15px; }
+.account-section { border-top: 1px solid var(--border); padding: 4px 0; }
+.account-title { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-3); padding: 8px 10px 4px; }
+.account-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-width: 0; padding: 10px; border: 0; background: none; border-radius: 8px;
+  font: inherit; font-size: 14.5px; color: var(--text); text-align: left; cursor: pointer; text-decoration: none;
+}
+.account-item:hover, .account-item:focus-visible { background: var(--surface-2); }
+.account-item[aria-checked='true'] { color: var(--accent); font-weight: 600; }
+@media (max-width: 900px) {
+  .topbar { padding: 0 12px 0 8px; }
+  .topbar-logo { display: inline-flex; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .topbar-company, .topbar-mark { display: none !important; }
+  .topbar-assist { font-size: 11px; }
+  .account-menu { position: fixed; top: calc(58px + env(safe-area-inset-top)); right: 8px; }
+}
+@media (display-mode: standalone) and (max-width: 900px) {
+  .topbar-logo { top: calc(50% + env(safe-area-inset-top) / 2); }
+}
