@@ -56,9 +56,14 @@ export default function LoginPage() {
         <button className="btn primary" type="submit" disabled={busy}>
           {busy ? <span className="spinner" /> : null} Accedi
         </button>
-        <Link className="link small" href="/password-dimenticata">
-          Password dimenticata?
-        </Link>
+        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <Link className="link small" href="/password-dimenticata">
+            Password dimenticata?
+          </Link>
+          <Link className="link small" href="/installa">
+            Installa l’app sul telefono
+          </Link>
+        </div>
       </form>
     </div>
   )

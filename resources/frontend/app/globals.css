@@ -455,3 +455,19 @@ a.brand { text-decoration: none; color: inherit; }
 .topbar-mark { display: none; margin-left: 4px; }
 .auth-brand { display: flex; justify-content: center; padding: 4px 0 8px; }
 @media (max-width: 900px) { .topbar-mark { display: inline-flex; } }
+
+/* NUOVO — web app installabile (PWA) */
+.install-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; line-height: 1.5; }
+.install-steps .ios-share { vertical-align: -3px; color: var(--accent); }
+.install-banner { display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.install-banner .grow { min-width: 0; }
+.offline-banner { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 80; display: flex; gap: 8px; align-items: center; padding: 10px 14px; border-radius: 999px; background: var(--text); color: var(--surface); font-size: 13.5px; box-shadow: var(--shadow); max-width: calc(100% - 24px); }
+/* app installata: rispetta tacca e barra in basso dell'iPhone */
+@media (display-mode: standalone) {
+  .topbar { padding-top: env(safe-area-inset-top); height: calc(54px + env(safe-area-inset-top)); }
+  .sidebar { padding-top: calc(env(safe-area-inset-top) + 12px); padding-bottom: env(safe-area-inset-bottom); }
+  .inv-bar { bottom: env(safe-area-inset-bottom); }
+}
+@media (display-mode: standalone) and (max-width: 900px) {
+  .content { padding-bottom: calc(96px + env(safe-area-inset-bottom)); padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+}

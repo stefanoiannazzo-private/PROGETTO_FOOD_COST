@@ -9,6 +9,10 @@ import { createBrowserRouter, Outlet, RouterProvider, useLocation } from 'react-
 import '../app/globals.css'
 import { Providers } from '../app/providers'
 import AppLayout from '../app/(app)/layout'
+import { setupPwa } from '../lib/pwa'
+
+// NUOVO: web app installabile (service worker e richiesta di installazione)
+setupPwa()
 
 // pagine caricate subito (come il prefetch di Next.js): nessuna attesa né stato intermedio durante la navigazione
 const pages = import.meta.glob<{ default: ComponentType }>('../app/**/page.tsx', { eager: true })

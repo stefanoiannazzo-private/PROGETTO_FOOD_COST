@@ -50,7 +50,10 @@ export default function ImportsPage() {
   const router = useRouter()
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['imports'], queryFn: () => api.get<{ data: ImportRow[] }>('/imports') })
-  const [type, setType] = useState<'ingredients' | 'employees' | 'invoices'>('ingredients')
+  // NUOVO: ?tipo=fatture (scorciatoia dell'app installata) apre direttamente le fatture XML
+  const [type, setType] = useState<'ingredients' | 'employees' | 'invoices'>(() =>
+    typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tipo') === 'fatture' ? 'invoices' : 'ingredients',
+  )
   const canInvoices = can('imports.manage') && can('ingredients.manage') && can('costs.read')
   const inv = useQuery({ queryKey: ['supplier-invoices'], queryFn: () => api.get<{ data: InvoiceRow[] }>('/supplier-invoices'), enabled: canInvoices })
   const [invResult, setInvResult] = useState<InvoiceUpload | null>(null)

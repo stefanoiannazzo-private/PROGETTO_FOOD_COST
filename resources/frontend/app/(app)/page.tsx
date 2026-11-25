@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { InstallBanner } from '@/components/InstallApp'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { date, dateTime, euro } from '@/lib/num'
@@ -29,6 +30,7 @@ export default function DashboardPage() {
 
   return (
     <>
+      <InstallBanner />
       <PageHead
         title="Dashboard"
         sub={`${me?.company?.name ?? ''} · valori al ${date(d?.date)}`}

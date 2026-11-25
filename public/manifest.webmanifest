@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "Ricetta Quadra",
+  "short_name": "Ricetta Quadra",
+  "description": "Food cost di ricette e preparazioni: ingredienti, energia e manodopera.",
+  "lang": "it",
+  "dir": "ltr",
+  "start_url": "/?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#025e3e",
+  "categories": ["business", "food", "productivity"],
+  "icons": [
+    { "src": "/app/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/app/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/app/brand/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/app/brand/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Nuova ricetta", "url": "/ricette/nuova", "icons": [{ "src": "/app/brand/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Carica fatture XML", "short_name": "Fatture", "url": "/importazioni?tipo=fatture", "icons": [{ "src": "/app/brand/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Ricette", "url": "/ricette", "icons": [{ "src": "/app/brand/icon-96.png", "sizes": "96x96" }] },
+    { "name": "Prodotti", "url": "/ingredienti", "icons": [{ "src": "/app/brand/icon-96.png", "sizes": "96x96" }] }
+  ]
+}

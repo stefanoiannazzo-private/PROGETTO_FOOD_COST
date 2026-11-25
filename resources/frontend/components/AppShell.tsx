@@ -10,6 +10,7 @@ import { Icon, Skeleton } from './ui'
 import { MobileTables } from './MobileTables'
 import { Tour } from './Tour'
 import { BrandLogo, BrandMark } from './Brand'
+import { InstallButton, OfflineBanner } from './InstallApp'
 import { useAlerts } from './ChangeAlerts'
 
 const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adminOnly?: boolean }> = [
@@ -165,6 +166,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div style={{ fontWeight: 600 }}>{me.user.name}</div>
             <div className="faint">{me.roleLabel ?? (platform ? 'Superadmin' : null)}</div>
           </div>
+          <InstallButton />
           <button
             className="btn ghost sm"
             style={{ justifyContent: 'flex-start' }}
@@ -234,6 +236,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
         <main className="content">{children}</main>
         <MobileTables />
+        <OfflineBanner />
         {tourOpen && me.company ? <Tour me={me} onClose={() => setTourOpen(false)} /> : null}
       </div>
     </div>

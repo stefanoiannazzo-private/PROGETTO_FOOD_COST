@@ -307,3 +307,13 @@ Erano tutti nel clone, non nell'originale:
 | Logo completo senza sfondo (occhielli delle lettere trasparenti, bordi sfumati) nella barra laterale e nelle pagine di accesso, invito e recupero password; variante con «Ricetta» chiaro per il tema scuro | ✅ |
 | Pittogramma: favicon (.ico 16/32/48 e PNG 32), icona Apple 180, icone 192/512 con manifest, barra in alto su smartphone | ✅ |
 | Nome «Ricetta Quadra» nel titolo delle pagine, nelle email (oggetto e mittente) e nella configurazione di produzione | ✅ |
+
+## 25. Web app installabile (PWA) (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Manifest `/manifest.webmanifest` (nome, colori, icone normali e «maskable», scorciatoie Nuova ricetta / Carica fatture XML / Ricette / Prodotti); Chrome la considera installabile senza errori | ✅ |
+| Service worker `/sw.js`: le API (`/api/*`) non passano mai dalla cache; file dell'interfaccia e marchio in cache; senza rete la pagina «Sei offline» che si ricarica da sola al ritorno della connessione | ✅ |
+| «Installa l'app»: pulsante nella barra laterale, invito chiudibile sulla dashboard degli smartphone, pagina pubblica `/installa` (link dalla pagina di accesso) con istruzioni per iPhone/iPad (Safari → Condividi → Aggiungi alla schermata Home), Android e computer; su Android e computer apre direttamente la richiesta del browser | ✅ |
+| App installata: a tutto schermo, rispetto di tacca e barra in basso dell'iPhone, avviso «Sei offline» quando cade la connessione | ✅ |
+| `.htaccess`: service worker e manifest senza cache lunga, tipo MIME corretto del manifest | ✅ |
