@@ -299,3 +299,11 @@ Erano tutti nel clone, non nell'originale:
 | Sezione «Peso, resa e porzioni» spostata sotto gli ingredienti: peso dopo cottura (facoltativo) con calo in cottura %, porzioni, peso porzione, quantità ottenuta facoltativa (es. 30 pz), durata, note | ✅ |
 | Le verifiche di parità con l'originale girano con il comportamento originale (opzione del motore); i costi già calcolati vengono ricalcolati, gli snapshot no | ✅ |
 | Fatture: il file dei metadati SDI (FileMetadati) e le ricevute/notifiche SDI caricati da soli danno un messaggio chiaro con il nome del file della fattura da caricare (prima venivano scartati senza messaggio); messaggio anche quando nei file non c'è nessuna fattura | ✅ |
+
+## 24. Marchio Ricetta Quadra (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Logo completo senza sfondo (occhielli delle lettere trasparenti, bordi sfumati) nella barra laterale e nelle pagine di accesso, invito e recupero password; variante con «Ricetta» chiaro per il tema scuro | ✅ |
+| Pittogramma: favicon (.ico 16/32/48 e PNG 32), icona Apple 180, icone 192/512 con manifest, barra in alto su smartphone | ✅ |
+| Nome «Ricetta Quadra» nel titolo delle pagine, nelle email (oggetto e mittente) e nella configurazione di produzione | ✅ |

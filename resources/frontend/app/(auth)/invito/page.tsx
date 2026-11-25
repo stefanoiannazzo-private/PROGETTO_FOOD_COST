@@ -1,6 +1,7 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
+import { BrandLogo } from '@/components/Brand'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '@/lib/api'
@@ -22,7 +23,10 @@ export default function InvitePage() {
   return (
     <div className="auth-wrap">
       <div className="auth-card card card-body stack">
-        <h1>Invito a Food Cost</h1>
+        <div className="auth-brand">
+          <BrandLogo height={56} />
+        </div>
+        <h1>Invito a Ricetta Quadra</h1>
         {token === null ? <div className="alert err">Link di invito non valido.</div> : null}
         {info.isLoading ? <Skeleton rows={3} /> : null}
         {info.error ? <ErrorBox error={info.error} /> : null}

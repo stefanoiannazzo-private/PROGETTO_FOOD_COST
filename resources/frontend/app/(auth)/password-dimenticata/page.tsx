@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { BrandLogo } from '@/components/Brand'
 import { useState } from 'react'
 import { api } from '@/lib/api'
 import { errorMessage, Field } from '@/components/ui'
@@ -23,6 +24,9 @@ export default function ForgotPage() {
           }
         }}
       >
+        <div className="auth-brand">
+          <BrandLogo height={56} />
+        </div>
         <h1>Recupero password</h1>
         {done ? (
           <div className="alert ok">

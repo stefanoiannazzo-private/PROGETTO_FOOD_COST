@@ -165,7 +165,7 @@ final class AuthController extends Controller
             ]);
             $link = config('foodcost.app_url')."/reimposta-password?token={$token}";
             try {
-                Mailer::send($user->email, 'Food Cost — reimpostazione password', "Per reimpostare la password apri questo link entro 60 minuti:\n{$link}\n");
+                Mailer::send($user->email, 'Ricetta Quadra — reimpostazione password', "Per reimpostare la password apri questo link entro 60 minuti:\n{$link}\n");
             } catch (\Throwable $e) {
                 // la risposta resta identica: non si rivela se l'indirizzo esiste
                 Log::error('invio email di reset non riuscito', ['err' => $e->getMessage()]);

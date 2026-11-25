@@ -4,7 +4,7 @@ import './globals.css'
 import { Providers } from './providers'
 
 export const metadata: Metadata = {
-  title: { default: 'Food Cost', template: '%s · Food Cost' },
+  title: { default: 'Ricetta Quadra', template: '%s · Ricetta Quadra' },
   description: 'Costi di produzione di ricette e preparazioni: ingredienti, energia e manodopera.',
   robots: { index: false, follow: false },
 }

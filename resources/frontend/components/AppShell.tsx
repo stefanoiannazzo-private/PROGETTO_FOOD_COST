@@ -9,6 +9,7 @@ import { useMe, useSwitchCompany } from '@/lib/session'
 import { Icon, Skeleton } from './ui'
 import { MobileTables } from './MobileTables'
 import { Tour } from './Tour'
+import { BrandLogo, BrandMark } from './Brand'
 import { useAlerts } from './ChangeAlerts'
 
 const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adminOnly?: boolean }> = [
@@ -130,10 +131,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       {fetching > 0 ? <div className="progress-bar" aria-hidden="true" /> : null}
       {menuOpen ? <div className="scrim" onClick={() => setMenuOpen(false)} /> : null}
       <aside className="sidebar" data-open={menuOpen}>
-        <div className="brand">
-          <span className="brand-mark">€</span>
-          Food Cost
-        </div>
+        <Link href={me.company ? '/' : '/piattaforma'} className="brand" aria-label="Ricetta Quadra, vai alla dashboard">
+          <BrandLogo height={38} />
+        </Link>
         <nav className="nav" aria-label="Navigazione principale">
           {me.company
             ? NAV.filter((n) => (!n.perm || perms.has(n.perm)) && (!n.adminOnly || me.role === 'admin')).map((n) => (
@@ -183,6 +183,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button className="btn ghost icon menu-toggle" onClick={() => setMenuOpen(true)} aria-label="Apri menu">
             <Icon name="menu" />
           </button>
+          <Link href={me.company ? '/' : '/piattaforma'} className="topbar-mark" aria-label="Ricetta Quadra">
+            <BrandMark size={28} />
+          </Link>
           <div className="grow" />
           {me.company ? (
             <button

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { BrandLogo } from '@/components/Brand'
 import { useState } from 'react'
 import { api } from '@/lib/api'
 import { useQueryParam } from '@/lib/hooks'
@@ -30,6 +31,9 @@ export default function ResetPage() {
           }
         }}
       >
+        <div className="auth-brand">
+          <BrandLogo height={56} />
+        </div>
         <h1>Nuova password</h1>
         {token === null ? <div className="alert err">Link non valido.</div> : null}
         {done ? (

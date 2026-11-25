@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { BrandLogo } from '@/components/Brand'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -37,8 +38,8 @@ export default function LoginPage() {
           }
         }}
       >
-        <div className="brand" style={{ padding: 0 }}>
-          <span className="brand-mark">€</span> Food Cost
+        <div className="auth-brand">
+          <BrandLogo height={56} />
         </div>
         <h1>Accedi</h1>
         {error ? (

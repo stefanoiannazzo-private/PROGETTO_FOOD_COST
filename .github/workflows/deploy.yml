@@ -145,7 +145,7 @@ jobs:
             $other = str_starts_with($host, "www.") ? substr($host, 4) : "www." . $host;
             $origins = $url . ",https://" . $other;
             $e = [
-              "APP_NAME" => "Food Cost", "APP_ENV" => "production", "APP_DEBUG" => "false", "APP_KEY" => getenv("APP_KEY"),
+              "APP_NAME" => "Ricetta Quadra", "APP_ENV" => "production", "APP_DEBUG" => "false", "APP_KEY" => getenv("APP_KEY"),
               "APP_URL" => $url, "APP_TZ" => "Europe/Rome", "APP_LOCALE" => "it", "APP_FALLBACK_LOCALE" => "it",
               "LOG_CHANNEL" => "daily", "LOG_LEVEL" => "warning",
               "DB_CONNECTION" => "mysql", "DB_HOST" => getenv("DB_HOST"), "DB_PORT" => "3306",
@@ -154,7 +154,7 @@ jobs:
               "CACHE_STORE" => "database", "QUEUE_CONNECTION" => "sync", "JOB_SLICE_SECONDS" => "4",
               "CRON_KEY" => getenv("CRON_KEY"), "DEPLOY_KEY" => getenv("DEPLOY_KEY"),
               "IMPORT_MAX_BYTES" => "10485760", "IMPORT_MAX_ROWS" => "20000", "IMPORT_RETENTION_DAYS" => "30",
-              "DEV_EXPOSE_TOKENS" => "false", "MAIL_MAILER" => "log", "MAIL_FROM_NAME" => "Food Cost",
+              "DEV_EXPOSE_TOKENS" => "false", "MAIL_MAILER" => "log", "MAIL_FROM_NAME" => "Ricetta Quadra",
             ];
             if (getenv("SMTP_USER") && getenv("SMTP_PASS")) {
               $e["MAIL_MAILER"] = "smtp";

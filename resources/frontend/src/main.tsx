@@ -35,7 +35,7 @@ function ScrollToTop() {
 
 function Root() {
   useEffect(() => {
-    document.title = 'Food Cost'
+    document.title = 'Ricetta Quadra'
   }, [])
   return (
     <Providers>

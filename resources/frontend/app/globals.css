@@ -439,3 +439,19 @@ details.more[open] > summary { margin-bottom: 12px; }
 .weight-total > div { display: flex; flex-direction: column; min-width: 150px; }
 .weight-total strong { font-size: 18px; }
 .weight-total > .small { flex: 1 1 260px; }
+
+/* NUOVO — marchio Ricetta Quadra (logo trasparente, variante per il tema scuro) */
+.brand-logo { display: inline-flex; align-items: center; }
+.brand-logo img { height: 100%; width: auto; display: block; }
+.brand-logo .logo-dark { display: none; }
+:root[data-theme='dark'] .brand-logo .logo-light { display: none; }
+:root[data-theme='dark'] .brand-logo .logo-dark { display: block; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .brand-logo .logo-light { display: none; }
+  :root:not([data-theme='light']) .brand-logo .logo-dark { display: block; }
+}
+a.brand { text-decoration: none; color: inherit; }
+.brand-mark-img { display: block; border-radius: 22%; }
+.topbar-mark { display: none; margin-left: 4px; }
+.auth-brand { display: flex; justify-content: center; padding: 4px 0 8px; }
+@media (max-width: 900px) { .topbar-mark { display: inline-flex; } }

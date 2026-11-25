@@ -88,7 +88,7 @@ final class UserController extends Controller
     /** Invia l'email di invito con il link. @return 'sent'|'outbox' */
     public static function sendInviteMail(string $email, string $companyName, string $byName, string $role, string $link): string
     {
-        return Mailer::send($email, "Invito a Food Cost — {$companyName}", "{$byName} ti ha invitato su Food Cost per {$companyName} come ".Permissions::ROLE_LABELS[$role].".\nAccetta l’invito entro 7 giorni:\n{$link}\n");
+        return Mailer::send($email, "Invito a Ricetta Quadra — {$companyName}", "{$byName} ti ha invitato su Ricetta Quadra per {$companyName} come ".Permissions::ROLE_LABELS[$role].".\nAccetta l’invito entro 7 giorni:\n{$link}\n");
     }
 
     /**
