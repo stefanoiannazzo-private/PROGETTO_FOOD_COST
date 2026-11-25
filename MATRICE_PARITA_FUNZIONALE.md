@@ -329,3 +329,14 @@ Erano tutti nel clone, non nell'originale:
 | Funzione | Stato |
 |---|---|
 | Ogni build scrive il proprio identificativo nel codice e in `/app/version.txt` (sempre ricontrollato, mai in cache; testo perché la radice blocca i .json); quando l'app torna in primo piano, al ritorno della rete e ogni 10 minuti confronta le due: se sul sito c'è una versione più recente compare la barra «È disponibile una nuova versione» con **Aggiorna** (ricarica) e **Più tardi**; anche il service worker viene ricontrollato | ✅ |
+
+## 28. Assistenza e domande frequenti (NUOVO)
+
+| Funzione | Stato |
+|---|---|
+| Voce «Assistenza» nel menu per tutti gli utenti: chiamata al numero di supporto (`SUPPORT_PHONE`, predefinito +39 391 732 6882) che su smartphone avvia la telefonata e su computer si mostra con «Copia»; orari facoltativi (`SUPPORT_HOURS`) | ✅ |
+| Nuova richiesta: pagina dell'app (select, proposta in automatico dalla pagina da cui si arriva), tipo (Domanda / Problema / Suggerimento), oggetto, messaggio, screenshot o PDF facoltativo, telefono per essere richiamati; risposte frequenti pertinenti proposte sopra il modulo | ✅ |
+| Conversazione con l'assistenza, «Nuova risposta» e contatore nel menu finché non la si legge, chiusura «Problema risolto» (un nuovo messaggio la riapre); l'amministratore vede le richieste di tutta l'azienda, gli altri solo le proprie | ✅ |
+| Console «Assistenza clienti» del superadmin: richieste di tutte le aziende per stato, contatore delle richieste da rispondere nel menu, dettagli tecnici (pagina precedente, dispositivo), richiamata, «Assisti» per entrare nell'azienda, risposta con allegato, chiusura/riapertura | ✅ |
+| Email automatiche: al supporto (amministratori della piattaforma) per nuove richieste e messaggi, al cliente quando arriva una risposta, con il link | ✅ |
+| Domande frequenti `/assistenza/faq`: 25 risposte in 11 sezioni, ricerca e filtro per sezione, rimando all'assistenza | ✅ |

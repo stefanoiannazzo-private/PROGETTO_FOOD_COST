@@ -21,6 +21,10 @@ return [
     // chiave del passo finale del deploy automatico (POST /api/system/deploy, header X-Deploy-Key); vuota = disattivato
     'deploy_key' => (string) env('DEPLOY_KEY', ''),
     // NUOVO — bollette delle utenze: archivio dei file e lettura automatica con Claude (Anthropic)
+    // NUOVO: assistenza (numero pubblico mostrato nel pannello; sullo smartphone avvia la chiamata)
+    'support_phone' => (string) env('SUPPORT_PHONE', '+393917326882'),
+    'support_hours' => (string) env('SUPPORT_HOURS', ''),
+    'support_max_bytes' => (int) env('SUPPORT_MAX_BYTES', 8 * 1024 * 1024),
     'bill_max_bytes' => (int) env('BILL_MAX_BYTES', 10 * 1024 * 1024),
     'bill_ai' => [
         'key' => (string) env('ANTHROPIC_API_KEY', ''),

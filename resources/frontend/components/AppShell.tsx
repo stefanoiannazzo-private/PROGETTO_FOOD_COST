@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState, type ReactNode } from 'react'
-import { useIsFetching, useQueryClient } from '@tanstack/react-query'
+import { useIsFetching, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '@/lib/api'
 import { useMe, useSwitchCompany } from '@/lib/session'
 import { Icon, Skeleton } from './ui'
@@ -12,6 +12,7 @@ import { Tour } from './Tour'
 import { BrandLogo, BrandMark } from './Brand'
 import { InstallButton, OfflineBanner } from './InstallApp'
 import { useAlerts } from './ChangeAlerts'
+import { trackPath } from '@/lib/nav-history'
 
 const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adminOnly?: boolean }> = [
   { href: '/', label: 'Dashboard', icon: 'home' },
@@ -25,6 +26,7 @@ const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adm
   { href: '/importazioni', label: 'Importazioni', icon: 'upload', perm: 'imports.manage' },
   { href: '/utenti', label: 'Utenti', icon: 'key', perm: 'users.manage' },
   { href: '/impostazioni', label: 'Impostazioni', icon: 'settings' },
+  { href: '/assistenza', label: 'Assistenza', icon: 'lifebuoy' },
 ]
 
 /** NUOVO: console del superadmin (piattaforma SaaS), visibile solo a chi ha is_platform_admin. */
@@ -34,6 +36,7 @@ const PLATFORM_NAV: Array<{ href: string; label: string; icon: string }> = [
   { href: '/piattaforma/prodotti', label: 'Tutti i prodotti', icon: 'box' },
   { href: '/piattaforma/prezzi', label: 'Statistiche prezzi', icon: 'search' },
   { href: '/piattaforma/confronti', label: 'Confronti ricette', icon: 'copy' },
+  { href: '/piattaforma/assistenza', label: 'Assistenza clienti', icon: 'lifebuoy' },
 ]
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -50,8 +53,26 @@ export function AppShell({ children }: { children: ReactNode }) {
   const alerts = useAlerts()
   useEffect(() => {
     qc.invalidateQueries({ queryKey: ['alerts'] })
+    qc.invalidateQueries({ queryKey: ['support', 'tickets'] })
+    qc.invalidateQueries({ queryKey: ['support', 'platform-counts'] })
+    trackPath(pathname)
   }, [pathname, qc])
-  const alertCount = (href: string) => (href === '/ricette' ? alerts.data?.recipes.length : href === '/ingredienti' ? alerts.data?.ingredients.length : 0) ?? 0
+  // NUOVO: assistenza — risposte da leggere (cliente) e richieste aperte (supporto)
+  const myTickets = useQuery({
+    queryKey: ['support', 'tickets'],
+    queryFn: () => api.get<{ data: Array<{ status: string; unread: boolean }> }>('/support/tickets'),
+    enabled: !!me?.company,
+    staleTime: 30_000,
+  })
+  const staffTickets = useQuery({
+    queryKey: ['support', 'platform-counts'],
+    queryFn: () => api.get<{ counts: { open: number } }>('/platform/support?status=open'),
+    enabled: !!me?.user?.isPlatformAdmin,
+    staleTime: 30_000,
+  })
+  const answered = myTickets.data?.data.filter((t) => t.unread).length ?? 0
+  const alertCount = (href: string) =>
+    (href === '/ricette' ? alerts.data?.recipes.length : href === '/ingredienti' ? alerts.data?.ingredients.length : href === '/assistenza' ? answered : href === '/piattaforma/assistenza' ? staffTickets.data?.counts.open : 0) ?? 0
   useEffect(() => {
     if (me?.company && me.role === 'admin' && !me.assist && me.tourDone === false && !pathname.startsWith('/piattaforma')) {
       const t = setTimeout(() => setTourOpen(true), 700)
@@ -142,7 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <Icon name={n.icon} />
                   {n.label}
                   {alertCount(n.href) ? (
-                    <span className="nav-count" title={n.href === '/ricette' ? 'Ricette con costo cambiato' : 'Prodotti con prezzo cambiato'}>
+                    <span className="nav-count" title={n.href === '/ricette' ? 'Ricette con costo cambiato' : n.href === '/assistenza' ? 'Risposte dell’assistenza da leggere' : 'Prodotti con prezzo cambiato'}>
                       {alertCount(n.href)}
                     </span>
                   ) : null}
@@ -156,6 +177,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link key={n.href} href={n.href} prefetch aria-current={isActive(n.href) ? 'page' : undefined}>
                   <Icon name={n.icon} />
                   {n.label}
+                  {alertCount(n.href) ? <span className="nav-count">{alertCount(n.href)}</span> : null}
                 </Link>
               ))}
             </>

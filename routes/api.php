@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\SystemController;
 use App\Http\Controllers\Api\TariffBillController;
 use App\Http\Controllers\Api\SupplierInvoiceController;
 use App\Http\Controllers\Api\AlertController;
+use App\Http\Controllers\Api\SupportController;
 use App\Http\Controllers\Api\TariffController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -130,6 +131,18 @@ Route::delete('/recipes/{id}', [RecipeController::class, 'destroy']);
 Route::get('/snapshots/{id}', [RecipeController::class, 'showSnapshot']);
 
 // Importazioni
+// NUOVO — assistenza: richieste dei ristoratori e console del supporto
+Route::get('/support/info', [SupportController::class, 'info']);
+Route::get('/support/tickets', [SupportController::class, 'index']);
+Route::post('/support/tickets', [SupportController::class, 'store']);
+Route::get('/support/tickets/{id}', [SupportController::class, 'show']);
+Route::post('/support/tickets/{id}/messages', [SupportController::class, 'reply']);
+Route::post('/support/tickets/{id}/close', [SupportController::class, 'close']);
+Route::get('/support/tickets/{id}/attachments/{messageId}', [SupportController::class, 'attachmentFile']);
+Route::get('/platform/support', [SupportController::class, 'platformIndex']);
+Route::get('/platform/support/{id}', [SupportController::class, 'show']);
+Route::post('/platform/support/{id}/messages', [SupportController::class, 'platformReply']);
+Route::post('/platform/support/{id}/status', [SupportController::class, 'platformStatus']);
 // NUOVO — avvisi di variazione dei costi (ricette e prodotti non ancora rivisti dall'utente)
 Route::get('/alerts', [AlertController::class, 'index']);
 Route::post('/alerts/seen', [AlertController::class, 'seen']);
