@@ -11,6 +11,7 @@ import { MobileTables } from './MobileTables'
 import { Tour } from './Tour'
 import { BrandLogo } from './Brand'
 import { AccountMenu } from './AccountMenu'
+import { BottomNav } from './BottomNav'
 import { InstallButton, OfflineBanner } from './InstallApp'
 import { useAlerts } from './ChangeAlerts'
 import { trackPath } from '@/lib/nav-history'
@@ -149,8 +150,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const perms = new Set(me.permissions)
   const isActive = (href: string) => (href === '/' || href === '/piattaforma' ? pathname === href : pathname === href || pathname.startsWith(`${href}/`))
 
+  // NUOVO: barra in basso su smartphone (solo dentro un'azienda; la console piattaforma usa il menu laterale)
+  const sections = me.company ? NAV.filter((n) => (!n.perm || perms.has(n.perm)) && (!n.adminOnly || me.role === 'admin')) : []
+  const fourth = me.role === 'admin' ? NAV.find((n) => n.href === '/redditivita')! : NAV[0]!
+  const quick = [
+    perms.has('recipes.manage') ? { key: 'r', label: 'Nuova ricetta', hint: 'Piatto o preparazione', icon: 'book', path: '/ricette/nuova' } : null,
+    perms.has('ingredients.manage') ? { key: 'i', label: 'Nuovo prodotto', hint: 'Ingrediente con il suo prezzo', icon: 'box', path: '/ingredienti', action: 'nuovo-ingrediente' } : null,
+    perms.has('imports.manage') && perms.has('ingredients.manage') && perms.has('costs.read')
+      ? { key: 'f', label: 'Carica fatture XML', hint: 'Aggiorna i prezzi dalle fatture dei fornitori', icon: 'upload', path: '/importazioni', action: 'fattura' }
+      : null,
+    perms.has('tariffs.manage') ? { key: 't', label: 'Nuova tariffa', hint: 'Luce, gas o acqua', icon: 'bolt', path: '/utenze', action: 'nuova-tariffa' } : null,
+  ].filter((q): q is NonNullable<typeof q> => q !== null)
+  const bottomNav = !!me.company
+
   return (
-    <div className="shell">
+    <div className={bottomNav ? 'shell has-bnav' : 'shell'}>
       {fetching > 0 ? <div className="progress-bar" aria-hidden="true" /> : null}
       {menuOpen ? <div className="scrim" onClick={() => setMenuOpen(false)} /> : null}
       <aside className="sidebar" data-open={menuOpen}>
@@ -159,7 +173,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </Link>
         <nav className="nav" aria-label="Navigazione principale">
           {me.company
-            ? NAV.filter((n) => (!n.perm || perms.has(n.perm)) && (!n.adminOnly || me.role === 'admin')).map((n) => (
+            ? sections.map((n) => (
                 <Link key={n.href} href={n.href} prefetch aria-current={isActive(n.href) ? 'page' : undefined}>
                   <Icon name={n.icon} />
                   {n.label}
@@ -231,6 +245,17 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="content">{children}</main>
         <MobileTables />
         <OfflineBanner />
+        {bottomNav ? (
+          <BottomNav
+            sections={sections}
+            platform={platform ? PLATFORM_NAV : []}
+            quick={quick}
+            fourth={fourth}
+            count={alertCount}
+            isActive={isActive}
+            onGuide={() => setTourOpen(true)}
+          />
+        ) : null}
         {tourOpen && me.company ? <Tour me={me} onClose={() => setTourOpen(false)} /> : null}
       </div>
     </div>

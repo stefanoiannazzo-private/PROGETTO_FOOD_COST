@@ -11,6 +11,7 @@ import { useCan } from '@/lib/session'
 import { KIND_LABEL } from '@/lib/labels'
 import { PageHead } from '@/components/AppShell'
 import { Drawer, Empty, ErrorBox, errorMessage, Field, fieldErrors, Icon, NumberInput, Skeleton, useToast } from '@/components/ui'
+import { useQuickAction } from '@/lib/quick'
 
 interface TariffRow {
   id: string
@@ -26,6 +27,7 @@ export default function TariffsPage() {
   const can = useCan()
   const [archived, setArchived] = useState('0')
   const [creating, setCreating] = useState(false)
+  useQuickAction('nuova-tariffa', () => can('tariffs.manage') && setCreating(true))
   const qc = useQueryClient()
   const toast = useToast()
   // NUOVO: eliminazione di un'utenza creata per errore (con i suoi valori e le bollette archiviate)

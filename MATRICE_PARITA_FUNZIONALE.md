@@ -348,3 +348,11 @@ Erano tutti nel clone, non nell'originale:
 | Smartphone: ☰ a sinistra, logo completo al centro della barra, cerchio con le iniziali dell'azienda a destra; niente più nome dell'azienda su due righe né «Guida» nella barra | ✅ |
 | Menu delle iniziali: azienda attiva con utente e ruolo, cambio azienda (se più di una), Guida all'uso, Assistenza, Domande frequenti, Installa l'app, Esci; si chiude toccando fuori o con Esc; in modalità assistenza il cerchio è evidenziato | ✅ |
 | Computer: barra laterale invariata, a destra nome dell'azienda e iniziali con lo stesso menu; l'ultimo passo della guida indica il cerchio delle iniziali | ✅ |
+
+## 30. Barra di navigazione in basso (smartphone)
+
+- Sotto i 900 px di larghezza, dentro un'azienda, compare una barra a pillola fissata in basso con 5 posti: Ricette, Prodotti, **+** (azioni rapide), Redditività (Dashboard per chi non è amministratore), Altro.
+- **+** apre un foglio con le azioni consentite dai permessi: nuova ricetta, nuovo prodotto, carica fatture XML, nuova tariffa. L'azione apre direttamente il modulo (`?azione=` o evento `foodcost:quick`, hook `useQuickAction`).
+- **Altro** apre il menu completo come foglio dal basso (sezioni, piattaforma per il superadmin, Aiuto: Guida, Assistenza, FAQ). Il pulsante ☰ in alto è nascosto quando c'è la barra.
+- Contatori delle variazioni sulle icone; i pulsanti fissi in basso (riepilogo ricetta, conferma fattura, avvisi) salgono sopra la barra.
+- Su computer e nella sola console piattaforma resta il menu laterale.

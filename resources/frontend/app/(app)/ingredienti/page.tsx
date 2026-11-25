@@ -11,6 +11,7 @@ import { DataTable, useList, useListState, type Column } from '@/components/Data
 import { CreateIngredientDrawer } from '@/components/IngredientForm'
 import { Empty, Icon } from '@/components/ui'
 import { ChangedBadge, ChangedListBanner, useChangedSet } from '@/components/ChangeAlerts'
+import { useQuickAction } from '@/lib/quick'
 
 interface Row {
   id: string
@@ -31,6 +32,7 @@ export default function IngredientsPage() {
   const [state, update] = useListState('ingredients', { sort: 'name' })
   const query = useList<Row>('ingredients', '/ingredients', state)
   const [creating, setCreating] = useState(false)
+  useQuickAction('nuovo-ingrediente', () => can('ingredients.manage') && setCreating(true))
   const cats = useQuery({ queryKey: ['ingredients', 'categories'], queryFn: () => api.get<{ data: string[] }>('/ingredients/categories'), staleTime: 60_000 })
   const showCosts = can('costs.read')
   const changed = useChangedSet('ingredient')

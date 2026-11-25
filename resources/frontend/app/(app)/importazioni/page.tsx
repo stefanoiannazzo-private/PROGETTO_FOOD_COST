@@ -10,6 +10,7 @@ import { useCan } from '@/lib/session'
 import { IMPORT_STATUS as STATUS_LABEL } from '@/lib/labels'
 import { PageHead } from '@/components/AppShell'
 import { Empty, errorMessage, Icon, Skeleton } from '@/components/ui'
+import { useQuickAction } from '@/lib/quick'
 
 interface ImportRow {
   id: string
@@ -54,6 +55,7 @@ export default function ImportsPage() {
   const [type, setType] = useState<'ingredients' | 'employees' | 'invoices'>(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tipo') === 'fatture' ? 'invoices' : 'ingredients',
   )
+  useQuickAction('fattura', () => setType('invoices'))
   const canInvoices = can('imports.manage') && can('ingredients.manage') && can('costs.read')
   const inv = useQuery({ queryKey: ['supplier-invoices'], queryFn: () => api.get<{ data: InvoiceRow[] }>('/supplier-invoices'), enabled: canInvoices })
   const [invResult, setInvResult] = useState<InvoiceUpload | null>(null)
