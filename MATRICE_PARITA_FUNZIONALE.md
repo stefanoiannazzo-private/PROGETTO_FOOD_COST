@@ -328,4 +328,4 @@ Erano tutti nel clone, non nell'originale:
 
 | Funzione | Stato |
 |---|---|
-| Ogni build scrive il proprio identificativo nel codice e in `/app/version.json` (sempre ricontrollato, mai in cache); quando l'app torna in primo piano, al ritorno della rete e ogni 10 minuti confronta le due: se sul sito c'è una versione più recente compare la barra «È disponibile una nuova versione» con **Aggiorna** (ricarica) e **Più tardi**; anche il service worker viene ricontrollato | ✅ |
+| Ogni build scrive il proprio identificativo nel codice e in `/app/version.txt` (sempre ricontrollato, mai in cache; testo perché la radice blocca i .json); quando l'app torna in primo piano, al ritorno della rete e ogni 10 minuti confronta le due: se sul sito c'è una versione più recente compare la barra «È disponibile una nuova versione» con **Aggiorna** (ricarica) e **Più tardi**; anche il service worker viene ricontrollato | ✅ |

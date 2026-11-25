@@ -4,13 +4,13 @@ import react from '@vitejs/plugin-react'
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
-/** NUOVO: identificativo della build, scritto nel codice e in /app/version.json per l'avviso «nuova versione». */
+/** NUOVO: identificativo della build, scritto nel codice e in /app/version.txt per l'avviso «nuova versione». */
 const BUILD_ID = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)
 const versionFile = (): Plugin => ({
   name: 'rq-version',
   apply: 'build',
   generateBundle() {
-    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD_ID }) })
+    this.emitFile({ type: 'asset', fileName: 'version.txt', source: BUILD_ID })
   },
 })
 

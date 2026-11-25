@@ -2,7 +2,7 @@
 
 /**
  * NUOVO — «È disponibile una nuova versione». Quando l'app torna in primo piano (e ogni 10 minuti mentre è
- * aperta) confronta la propria build con /app/version.json: se sul sito ce n'è una più recente lo dice,
+ * aperta) confronta la propria build con /app/version.txt: se sul sito ce n'è una più recente lo dice,
  * e «Aggiorna» ricarica la pagina. Serve soprattutto all'app installata su iPhone, che non si ricarica da sola.
  */
 import { useEffect, useState } from 'react'
@@ -23,10 +23,11 @@ export function UpdateBanner() {
       busy = true
       last = Date.now()
       try {
-        const r = await fetch(`/app/version.json?t=${Date.now()}`, { cache: 'no-store' })
+        // file di testo: la radice del sito blocca i .json per sicurezza
+        const r = await fetch(`/app/version.txt?t=${Date.now()}`, { cache: 'no-store' })
         if (r.ok) {
-          const v = (await r.json()) as { build?: string }
-          if (v.build && v.build !== __BUILD_ID__ && v.build > __BUILD_ID__) setNewBuild(v.build)
+          const build = (await r.text()).trim()
+          if (/^\d{14}$/.test(build) && build > __BUILD_ID__) setNewBuild(build)
         }
         // anche il service worker si aggiorna, se è cambiato (senza aspettarlo)
         void navigator.serviceWorker
