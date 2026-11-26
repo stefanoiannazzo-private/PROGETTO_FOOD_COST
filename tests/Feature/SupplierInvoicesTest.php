@@ -191,6 +191,20 @@ class SupplierInvoicesTest extends TestCase
         $this->assertStringContainsString('FatturaElettronica', $this->a->get("/api/supplier-invoices/{$id}/file")->raw->getContent());
     }
 
+    /** NUOVO: nuovo prodotto a confezione «a pezzi» → serve quanto pesa o contiene un pezzo. */
+    public function test_confezione_a_pezzi_chiede_il_peso_del_pezzo(): void
+    {
+        $id = $this->ok($this->upload(['f.xml' => self::xml()]))['created'][0];
+        $base = ['n' => 2, 'action' => 'new', 'name' => 'Passata in bottiglia', 'category' => 'Conserve', 'mode' => 'conf', 'packageContent' => '6', 'packageUnit' => 'pz', 'purchaseUnit' => 'cartone'];
+        $ignore = array_map(fn ($n) => ['n' => $n, 'action' => 'ignore'], [1, 3, 4, 5, 6]);
+        $bad = $this->a->post("/api/supplier-invoices/{$id}/confirm", ['lines' => [$base, ...$ignore]]);
+        $this->assertSame(422, $bad->status);
+        $this->assertArrayHasKey('line2.pieceSize', $bad->body['error']['details']['fields']);
+        $this->ok($this->a->post("/api/supplier-invoices/{$id}/confirm", ['lines' => [[...$base, 'pieceSize' => '700', 'pieceUnit' => 'ml'], ...$ignore]]));
+        $ing = DB::table('ingredients')->where('company_id', $this->company)->where('name', 'Passata in bottiglia')->first();
+        $this->assertSame(['pz', '0.700000', '1.000000'], [$ing->package_unit, $ing->unit_weight_kg, $ing->density_kg_per_l]);
+    }
+
     public function test_permessi_e_isolamento(): void
     {
         $this->assertSame(403, $this->upload(['f.xml' => self::xml()], $this->loginAs('op@fat.test'))->status);

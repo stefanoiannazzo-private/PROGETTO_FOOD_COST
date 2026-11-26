@@ -204,6 +204,9 @@ final class SupplierInvoiceController extends Controller
                 'packageContent' => S::decOpt(['gt' => 0, 'label' => 'Il contenuto della confezione'])->optional(),
                 'packageUnit' => S::measureUnit()->nullable()->optional(),
                 'purchaseUnit' => S::optText(40),
+                // NUOVO: confezione «a pezzi» → quanto pesa o contiene un pezzo (g o ml)
+                'pieceSize' => S::decOpt(['gt' => 0, 'label' => 'Il peso del pezzo'])->optional(),
+                'pieceUnit' => S::enum(['g', 'ml'])->nullable()->optional(),
                 'remember' => S::bool()->default(true),
             ]))->max(2000),
         ]));
@@ -278,6 +281,11 @@ final class SupplierInvoiceController extends Controller
 
                     continue;
                 }
+                if ($d['action'] === 'new' && $mode === 'conf' && $unit === 'pz' && empty($d['pieceSize'])) {
+                    $fields["line{$n}.pieceSize"] = 'Indica quanto pesa o contiene un pezzo: senza, nelle ricette si potrà usare solo a pezzi.';
+
+                    continue;
+                }
                 if ($l['netUnitPrice'] === null || Dec::of($l['netUnitPrice'])->lte(Dec::zero())) {
                     $fields["line{$n}"] = 'Questa riga non ha un prezzo: ignorala.';
 
@@ -333,8 +341,9 @@ final class SupplierInvoiceController extends Controller
                             'package_unit' => $unit,
                             'usage_unit' => match (Units::dimensionOf($unit)) { 'volume' => 'ml', 'count' => 'pz', default => 'g' },
                             'edible_yield' => '1',
-                            'density_kg_per_l' => null,
-                            'unit_weight_kg' => null,
+                            // NUOVO: peso (o volume, con densità 1) di un pezzo per le confezioni a pezzi
+                            'density_kg_per_l' => $unit === 'pz' && ! empty($d['pieceSize']) && ($d['pieceUnit'] ?? 'g') === 'ml' ? '1' : null,
+                            'unit_weight_kg' => $unit === 'pz' && ! empty($d['pieceSize']) ? Dec::of($d['pieceSize'])->div(Dec::of('1000'))->toFixed() : null,
                             'created_at' => Clock::now(),
                             'updated_at' => Clock::now(),
                         ]);

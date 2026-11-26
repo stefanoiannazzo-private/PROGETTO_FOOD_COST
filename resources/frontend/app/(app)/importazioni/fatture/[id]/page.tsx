@@ -80,6 +80,9 @@ interface Choice {
   packageContent: string | null
   packageUnit: string
   purchaseUnit: string
+  /** NUOVO: confezione a pezzi → quanto pesa o contiene un pezzo */
+  pieceSize: string | null
+  pieceUnit: 'g' | 'ml'
   remember: boolean
 }
 
@@ -112,6 +115,8 @@ function initialChoice(l: Line): Choice {
     packageContent: s?.mode ? (s.packageContent ?? null) : l.packageContent,
     packageUnit: (s?.mode ? s.packageUnit : l.packageUnit) ?? 'g',
     purchaseUnit: s?.purchaseUnit && !['kg', 'litro'].includes(s.purchaseUnit) ? s.purchaseUnit : 'confezione',
+    pieceSize: null,
+    pieceUnit: 'g',
     remember: true,
   }
 }
@@ -181,6 +186,8 @@ export default function SupplierInvoicePage() {
           packageContent: c.mode === 'conf' ? c.packageContent : null,
           packageUnit: c.mode === 'conf' ? c.packageUnit : null,
           purchaseUnit: c.mode === 'conf' ? c.purchaseUnit : null,
+          pieceSize: c.action === 'new' && c.mode === 'conf' && c.packageUnit === 'pz' ? c.pieceSize : null,
+          pieceUnit: c.pieceUnit,
           remember: c.remember,
         }
       })
@@ -371,6 +378,24 @@ export default function SupplierInvoicePage() {
                                         {u.label}
                                       </option>
                                     ))}
+                                  </select>
+                                }
+                              />
+                            </Field>
+                          </div>
+                        ) : null}
+                        {c.action === 'new' && c.mode === 'conf' && c.packageUnit === 'pz' ? (
+                          <div className="grid-2">
+                            <Field label="Quanto pesa o contiene un pezzo?" required htmlFor={`pc-${l.n}`} error={e('pieceSize')} hint="es. bustina 12 g · uovo 60 g · bottiglietta 250 ml: così in ricetta lo usi anche a grammi o ml">
+                              <NumberInput
+                                id={`pc-${l.n}`}
+                                value={c.pieceSize}
+                                onChange={(x) => set(l.n, { pieceSize: x })}
+                                invalid={!!e('pieceSize')}
+                                suffix={
+                                  <select className="addon" value={c.pieceUnit} onChange={(ev) => set(l.n, { pieceUnit: ev.target.value as 'g' | 'ml' })} aria-label="Unità del pezzo">
+                                    <option value="g">g</option>
+                                    <option value="ml">ml</option>
                                   </select>
                                 }
                               />

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Services\Imports;
 
+use App\Support\PackSize;
+
 use App\Domain\Costing\Dec;
 use App\Services\Recipes;
 use Illuminate\Support\Facades\DB;
@@ -323,6 +325,13 @@ final class Validator
             if (in_array('pz', $dims, true) && ! self::t($unitWeightG)) {
                 $s['errors'][] = 'Unità in ricetta e confezione di grandezze diverse: serve il peso unitario.';
             }
+        }
+        // NUOVO: contenuto «in pezzi» senza peso → nelle ricette il prodotto si potrà dosare solo a pezzi
+        if ($effUnit === 'pz' && ! self::t($unitWeightG) && $s['action'] !== 'skip' && $s['action'] !== 'error') {
+            $size = PackSize::fromName($name ?? ($hit['name'] ?? null));
+            $s['warnings'][] = 'Contenuto in pezzi senza peso: nelle ricette si potrà usare solo a pezzi, non a grammi o ml. '
+                .($size ? "Dal nome sembra {$size['qty']} {$size['unit']}: scrivi «Contenuto confezione» {$size['qty']} e «Unità contenuto» {$size['unit']}, " : 'Scrivi il contenuto in g, kg, ml o l, ')
+                .'oppure indica il «Peso unitario g» (es. bustina 12 g). Potrai completarlo anche dopo, dalla scheda del prodotto.';
         }
         $s['normalized'] = [
             'code' => $code,

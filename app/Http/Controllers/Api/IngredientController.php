@@ -93,6 +93,8 @@ final class IngredientController extends Controller
         $q = $this->parseQuery($req, Schemas::listQuery([
             'price' => S::enum(['all', 'missing', 'zero'])->default('all'),
             'date' => S::isoDate()->optional(),
+            // NUOVO: prodotti a pezzi senza peso (non dosabili a grammi o ml)
+            'weight' => S::enum(['all', 'missing'])->default('all'),
         ]));
         $cid = $ctx->companyId();
         $date = $q['date'] ?? Clock::today();
@@ -121,12 +123,15 @@ final class IngredientController extends Controller
         if ($q['price'] === 'zero') {
             $query->where('p.package_price', '=', 0);
         }
+        if ($q['weight'] === 'missing') {
+            $query->where('i.package_unit', 'pz')->whereNull('i.unit_weight_kg');
+        }
         $sortCol = self::SORTS[$q['sort'] ?? 'name'] ?? self::SORTS['name'];
         $total = (clone $query)->count();
         // come PostgreSQL: NULL in fondo in ordine crescente, in testa in ordine decrescente
         $rows = $query->orderByRaw("{$sortCol} IS NULL ".($q['dir'] === 'desc' ? 'DESC' : 'ASC'))->orderBy($sortCol, $q['dir'])->orderBy('i.id')
             ->limit($q['pageSize'])->offset(($q['page'] - 1) * $q['pageSize'])
-            ->get(['i.id', 'i.code', 'i.name', 'i.category', 'i.supplier', 'i.package_content', 'i.package_unit', 'i.usage_unit', 'i.purchase_unit', 'i.edible_yield', 'i.archived_at', 'i.updated_at',
+            ->get(['i.id', 'i.code', 'i.name', 'i.category', 'i.supplier', 'i.package_content', 'i.package_unit', 'i.usage_unit', 'i.purchase_unit', 'i.edible_yield', 'i.archived_at', 'i.updated_at', 'i.unit_weight_kg',
                 'p.package_price', 'p.package_content as price_content', 'p.package_unit as price_unit', 'p.valid_from']);
 
         return [
@@ -146,6 +151,7 @@ final class IngredientController extends Controller
                     'edibleYieldPercent' => Dec::of($r->edible_yield)->times(100)->toFixed(),
                     'archived' => $r->archived_at !== null,
                     'updatedAt' => Clock::iso($r->updated_at),
+                    'needsWeight' => $r->package_unit === 'pz' && $r->unit_weight_kg === null,
                     'price' => $showCosts ? [
                         'status' => $hasPrice ? (Dec::of($r->package_price)->isZero() ? 'zero' : 'ok') : 'missing',
                         'packagePrice' => $r->package_price,
@@ -155,7 +161,8 @@ final class IngredientController extends Controller
                     ] : null,
                 ];
             })->all(),
-            'meta' => ['page' => $q['page'], 'pageSize' => $q['pageSize'], 'total' => $rows->isEmpty() ? 0 : $total, 'date' => $date],
+            'meta' => ['page' => $q['page'], 'pageSize' => $q['pageSize'], 'total' => $rows->isEmpty() ? 0 : $total, 'date' => $date,
+                'missingWeight' => DB::table('ingredients')->where('company_id', $cid)->whereNull('archived_at')->where('package_unit', 'pz')->whereNull('unit_weight_kg')->count()],
         ];
     }
 

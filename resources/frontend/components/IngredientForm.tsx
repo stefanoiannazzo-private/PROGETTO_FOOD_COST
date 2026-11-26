@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { euro, todayIso } from '@/lib/num'
 import { useCan } from '@/lib/session'
+import { sizeFromName } from '@/lib/sizes'
 import { Drawer, errorMessage, Field, fieldErrors, Icon, NumberInput, useToast } from './ui'
 
 export const UNITS = [
@@ -189,7 +190,7 @@ export function BuyBlock({
                   ))}
                 </datalist>
               </Field>
-              <Field label="Quanto contiene?" htmlFor={`${idPrefix}-cont`} required error={errors.packageContent} hint="es. sacco 25 kg · cartone 6 bottiglie da 0,75 l → 4,5 l · 30 uova → 30 pz">
+              <Field label="Quanto contiene?" htmlFor={`${idPrefix}-cont`} required error={errors.packageContent} hint="es. sacco 25 kg · bottiglia 0,25 l · cartone 6 bottiglie da 0,75 l → 4,5 l · 90 uova → 90 pz (poi ti chiediamo il peso di un uovo)">
                 <NumberInput
                   id={`${idPrefix}-cont`}
                   value={content}
@@ -295,6 +296,8 @@ export function validateIngredient(v: IngredientFormValue): Record<string, strin
   if (!v.supplier.trim()) e.supplier = 'Scegli o scrivi il fornitore.'
   if (!v.mode) e.mode = 'Scegli come lo paghi.'
   if ((v.mode === 'pz' || v.mode === 'conf') && !(Number(v.packageContent) > 0)) e.packageContent = v.mode === 'pz' ? 'Indica il peso del pezzo.' : 'Indica quanto contiene la confezione.'
+  // NUOVO: confezione «a pezzi» → serve sapere quanto pesa o contiene un pezzo, altrimenti in ricetta si dosa solo a pezzi
+  if (v.mode === 'conf' && dim(v.packageUnit) === 'count' && !(Number(v.unitWeightKg) > 0)) e.unitWeightKg = 'Indica quanto pesa o contiene un pezzo: senza, nelle ricette potrai usarlo solo a pezzi.'
   return e
 }
 
@@ -354,6 +357,7 @@ export function IngredientFields({
           set(next)
         }}
       />
+      {v.mode === 'conf' ? <PackHelpers v={v} set={set} errors={errors} lockDimension={lockDimension} onUsage={(u) => !usageTouched && set({ usageUnit: u })} /> : null}
       {!isNew && v.mode ? <div className="faint small">Vale per i prossimi prezzi: quelli già registrati restano con la loro confezione.</div> : null}
       <div className="grid-3">
         <Field label="Resa" htmlFor="ing-yield" hint="Facoltativa. Su 10 kg te ne restano 8 dopo la pulizia? Scrivi 80%" error={errors.edibleYieldPercent}>
@@ -413,6 +417,7 @@ export function IngredientFields({
             <Field label="Densità" htmlFor="ing-dens" hint={needDensity ? 'Necessaria per passare da litri a grammi' : 'es. olio 0,92 kg/l'} error={errors.densityKgPerL}>
               <NumberInput id="ing-dens" value={v.densityKgPerL} onChange={(x) => set({ densityKgPerL: x })} suffix="kg/l" invalid={!!errors.densityKgPerL || (needDensity && !v.densityKgPerL)} />
             </Field>
+            {v.mode === 'conf' && dim(v.packageUnit) === 'count' ? null : (
             <Field label="Peso medio di un pezzo" htmlFor="ing-uw" hint={needUnitWeight ? 'Necessario per passare da pezzi a grammi' : 'es. un uovo 60 g'} error={errors.unitWeightKg}>
               <NumberInput
                 id="ing-uw"
@@ -422,11 +427,101 @@ export function IngredientFields({
                 invalid={!!errors.unitWeightKg || (needUnitWeight && !v.unitWeightKg)}
               />
             </Field>
+            )}
           </div>
           {moreDetails}
         </div>
       </details>
     </div>
+  )
+}
+
+/**
+ * NUOVO — aiuti per la confezione: (1) il formato letto dal nome («tanica3L» → 3 l) da usare con un clic;
+ * (2) se la confezione contiene pezzi, quanto pesa o contiene un pezzo (g o ml), obbligatorio.
+ */
+function PackHelpers({
+  v,
+  set,
+  errors,
+  lockDimension,
+  onUsage,
+}: {
+  v: IngredientFormValue
+  set: (p: Partial<IngredientFormValue>) => void
+  errors: Record<string, string>
+  lockDimension?: 'mass' | 'volume' | 'count'
+  onUsage: (u: string) => void
+}) {
+  const [pieceUnit, setPieceUnit] = useState<'g' | 'ml'>(v.densityKgPerL && Number(v.densityKgPerL) === 1 && dim(v.usageUnit) === 'volume' ? 'ml' : 'g')
+  const sz = sizeFromName(v.name)
+  const same = sz && Number(v.packageContent) === Number(sz.qty) && v.packageUnit === sz.unit
+  const canUse = sz && !same && (!lockDimension || lockDimension === dim(sz.unit))
+  const counted = dim(v.packageUnit) === 'count'
+  const density = Number(v.densityKgPerL) > 0 ? Number(v.densityKgPerL) : 1
+  const shown = v.unitWeightKg ? String(Math.round((Number(v.unitWeightKg) * 1000 * (pieceUnit === 'ml' ? 1 / density : 1)) * 1000) / 1000) : null
+  const setPiece = (x: string | null, unit = pieceUnit) => {
+    if (!x) return set({ unitWeightKg: null })
+    const d = unit === 'ml' ? (Number(v.densityKgPerL) > 0 ? Number(v.densityKgPerL) : 1) : 1
+    set({ unitWeightKg: String((Number(x) / 1000) * d), ...(unit === 'ml' && !(Number(v.densityKgPerL) > 0) ? { densityKgPerL: '1' } : {}) })
+  }
+  return (
+    <>
+      {canUse ? (
+        <div className="alert info small">
+          <Icon name="book" />
+          <div className="grow">
+            Dal nome sembra una confezione da <strong>{sz.qty.replace('.', ',')} {sz.unit}</strong>.
+          </div>
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => {
+              set({ packageContent: sz.qty, packageUnit: sz.unit, unitWeightKg: null })
+              onUsage(dim(sz.unit) === 'volume' ? 'ml' : 'g')
+            }}
+          >
+            Usa {sz.qty.replace('.', ',')} {sz.unit}
+          </button>
+        </div>
+      ) : null}
+      {counted ? (
+        <div className="grid-3">
+          <Field
+            label="Quanto pesa o contiene un pezzo?"
+            htmlFor="ing-piece"
+            required
+            error={errors.unitWeightKg}
+            hint={Number(v.packageContent) === 1 ? 'es. bottiglietta 250 ml · barattolo 400 g. Se la confezione è un solo pezzo puoi anche scrivere il contenuto qui sopra.' : 'es. bustina 12 g · uovo 60 g · bottiglietta 250 ml'}
+          >
+            <NumberInput
+              id="ing-piece"
+              value={shown}
+              onChange={(x) => setPiece(x)}
+              invalid={!!errors.unitWeightKg}
+              suffix={
+                <select
+                  className="addon"
+                  value={pieceUnit}
+                  aria-label="Unità del pezzo"
+                  onChange={(e) => {
+                    const u = e.target.value as 'g' | 'ml'
+                    setPieceUnit(u)
+                    setPiece(shown, u)
+                  }}
+                >
+                  <option value="g">g</option>
+                  <option value="ml">ml</option>
+                </select>
+              }
+            />
+          </Field>
+          <div className="small muted" style={{ alignSelf: 'center', gridColumn: 'span 2' }}>
+            Così nelle ricette potrai usarlo anche a {pieceUnit === 'ml' ? 'ml o litri' : 'grammi'}, non solo a pezzi{pieceUnit === 'ml' && !(Number(v.densityKgPerL) > 0) ? ' (per i liquidi contiamo 1 ml ≈ 1 g; puoi correggere la densità in «Altri dettagli»)' : ''}.
+          </div>
+        </div>
+      ) : null}
+    </>
   )
 }
 

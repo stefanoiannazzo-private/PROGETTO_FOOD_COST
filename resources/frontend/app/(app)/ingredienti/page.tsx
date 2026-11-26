@@ -24,6 +24,8 @@ interface Row {
   purchaseUnit: string
   edibleYieldPercent: string
   archived: boolean
+  /** NUOVO: a pezzi senza peso → in ricetta si dosa solo a pezzi */
+  needsWeight?: boolean
   price: { status: 'ok' | 'zero' | 'missing'; packagePrice: string | null; validFrom: string | null; unitPrice: string | null; baseUnit: string } | null
 }
 
@@ -49,6 +51,11 @@ export default function IngredientsPage() {
             {r.name}
           </Link>{' '}
           <ChangedBadge changed={changed.has(r.id)} type="ingredient" />
+          {r.needsWeight ? (
+            <span className="badge warn" title="Contenuto in pezzi senza peso: nelle ricette si può usare solo a pezzi. Apri il prodotto e indica quanto pesa o contiene un pezzo.">
+              manca il peso
+            </span>
+          ) : null}
         </>
       ),
     },
@@ -92,6 +99,18 @@ export default function IngredientsPage() {
       />
       <datalist id="ingredient-categories">{cats.data?.data.map((c) => <option key={c} value={c} />)}</datalist>
       <ChangedListBanner type="ingredient" />
+      {/* NUOVO: prodotti a pezzi senza peso (es. importati da Excel con contenuto «1 pz») */}
+      {Number(query.data?.meta.missingWeight ?? 0) > 0 && state.filters.weight !== 'missing' ? (
+        <div className="alert warn" style={{ marginBottom: 12 }}>
+          <Icon name="alert" />
+          <div className="grow">
+            <strong>{String(query.data?.meta.missingWeight)} prodotti</strong> sono registrati a pezzi senza sapere quanto pesa o contiene un pezzo: nelle ricette si possono usare solo a pezzi, non a grammi o ml.
+          </div>
+          <button className="btn sm" onClick={() => update({ filters: { ...state.filters, weight: 'missing' } })}>
+            Mostrali
+          </button>
+        </div>
+      ) : null}
       <DataTable
         columns={columns}
         query={query}
@@ -116,6 +135,10 @@ export default function IngredientsPage() {
                 <option value="zero">Prezzo zero</option>
               </select>
             ) : null}
+            <select className="input" value={state.filters.weight ?? 'all'} onChange={(e) => update({ filters: { ...state.filters, weight: e.target.value } })} aria-label="Peso">
+              <option value="all">Con e senza peso</option>
+              <option value="missing">Manca il peso del pezzo</option>
+            </select>
             <select className="input" value={state.filters.archived ?? '0'} onChange={(e) => update({ filters: { ...state.filters, archived: e.target.value } })} aria-label="Archiviati">
               <option value="0">Attivi</option>
               <option value="1">Archiviati</option>

@@ -369,3 +369,11 @@ Erano tutti nel clone, non nell'originale:
 - **«Invita un collega»** (menu, solo titolare/amministratore): crea il proprio codice e link, Copia/Condividi/WhatsApp/Email; elenco dei colleghi con **solo nome del locale, data e stato** (richiesta inviata, in attivazione, account attivato, non attivata). Nessun dato interno delle aziende presentate. Test: `ReferralTest`.
 - **Un solo codice per persona** (26/11): indice unico su `promoters.user_id`; se superadmin e ristoratore creano il codice nello stesso istante vince il primo (l'altro riceve quello già creato o un messaggio con il codice esistente); eventuali doppioni preesistenti diventano promotori esterni senza perdere aziende.
 - **Importazioni in «Assisti»** (26/11): l'importazione caricata dal superadmin in modalità assistenza si applica con i permessi di amministratore, purché sia ancora superadmin attivo; registrata nell'audit a suo nome.
+
+## 32. Confezioni «a pezzi» (26/11)
+
+- Modulo prodotto, «A confezione» con contenuto in **pz**: campo obbligatorio **«Quanto pesa o contiene un pezzo?»** (g o ml; con ml e densità vuota si usa 1 kg/l). Senza, il prodotto in ricetta si dosa solo a pezzi.
+- **Formato letto dal nome** (solo con l'unità scritta: «tanica3L», «vasc.1,5k», «500ml», «6x1lt»): avviso «Dal nome sembra una confezione da …» con pulsante «Usa» (se compatibile con i prezzi già registrati). Sigle senza unità (es. «B.0,25») non vengono interpretate.
+- **Importazione Excel/CSV**: avviso per le righe con contenuto in pezzi senza «Peso unitario g», con il formato suggerito dal nome se c'è.
+- **Fatture XML**: nuovo prodotto a confezione con contenuto in pz → «Quanto pesa o contiene un pezzo?» obbligatorio.
+- **Elenco prodotti**: badge «manca il peso», riquadro con il numero di prodotti da completare e filtro «Manca il peso del pezzo» (`/api/ingredients?weight=missing`, `meta.missingWeight`, `needsWeight`).

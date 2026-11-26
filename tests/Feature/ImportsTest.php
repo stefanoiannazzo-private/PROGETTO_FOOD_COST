@@ -136,6 +136,40 @@ class ImportsTest extends TestCase
         $this->assertSame(0, DB::table('ingredients')->count());
     }
 
+    /** NUOVO: contenuto in pezzi senza peso → avviso con il formato letto dal nome; segnalato nell'elenco prodotti. */
+    public function test_avviso_pezzi_senza_peso_e_elenco_da_completare(): void
+    {
+        $csv = implode("\r\n", [
+            'Codice;Nome;Categoria;Fornitore;Prezzo confezione;Contenuto confezione;Unità contenuto;Data prezzo;Unità in ricetta;Peso unitario g',
+            'NOV-001;ACETO BALSAMICO di MODENA B.0,25;Aceti;NOV.AL;1,58;1;pz;30/10/2026;pz;',
+            'NOV-002;GLASSA aceto bals. 500ml;Aceti;NOV.AL;3,89;1;pz;30/10/2026;pz;',
+            'NOV-015;KETCHUP bustine 200pz;Salse;NOV.AL;8,22;200;pz;30/10/2026;pz;12',
+            'NOV-003;BISCOTTI 400g;Dolci;NOV.AL;1,13;400;g;30/10/2026;g;',
+        ]);
+        $r = $this->upload($this->admin, 'ingredients', 'listino.csv', $csv);
+        $id = $r->body['id'];
+        $this->validate($this->admin, $id, $r->body['suggestedMapping'], ['delimiter' => ';']);
+        $rows = collect($this->ok($this->admin->get("/api/imports/{$id}/rows?pageSize=50"))['data'])->keyBy(fn ($x) => $x['normalized']['code'] ?? $x['rowNumber']);
+        $this->assertStringContainsString('senza peso', implode(' ', $rows['NOV-001']['warnings']));
+        $this->assertStringNotContainsString('Dal nome', implode(' ', $rows['NOV-001']['warnings']), 'B.0,25 non ha unità: nessuna supposizione');
+        $this->assertStringContainsString('Dal nome sembra 500 ml', implode(' ', $rows['NOV-002']['warnings']));
+        $this->assertSame([], array_values(array_filter($rows['NOV-015']['warnings'] ?? [], fn ($w) => str_contains($w, 'senza peso'))), 'con il peso unitario nessun avviso');
+        $imp = $this->ok($this->admin->get("/api/imports/{$id}"));
+        $this->ok($this->admin->post("/api/imports/{$id}/confirm", ['lockVersion' => $imp['lockVersion']]));
+        $this->drain();
+
+        $list = $this->ok($this->admin->get('/api/ingredients?sort=code'));
+        $this->assertSame(2, $list['meta']['missingWeight']);
+        $flags = collect($list['data'])->mapWithKeys(fn ($x) => [$x['code'] => $x['needsWeight']])->all();
+        $this->assertSame(['NOV-001' => true, 'NOV-002' => true, 'NOV-003' => false, 'NOV-015' => false], $flags);
+        $only = $this->ok($this->admin->get('/api/ingredients?weight=missing&sort=code'));
+        $this->assertSame(['NOV-001', 'NOV-002'], array_column($only['data'], 'code'));
+
+        // completato il peso del pezzo (250 ml con densità 1) esce dall'elenco da completare
+        DB::table('ingredients')->where('id', $only['data'][0]['id'])->update(['unit_weight_kg' => '0.25', 'density_kg_per_l' => '1']);
+        $this->assertSame(1, $this->ok($this->admin->get('/api/ingredients'))['meta']['missingWeight']);
+    }
+
     /** NUOVO: il superadmin in «Assisti» importa per il cliente; un ex superadmin no. */
     public function test_importazione_in_modalita_assistenza(): void
     {
