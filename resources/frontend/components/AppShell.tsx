@@ -12,6 +12,7 @@ import { Tour } from './Tour'
 import { BrandLogo } from './Brand'
 import { AccountMenu } from './AccountMenu'
 import { BottomNav } from './BottomNav'
+import { MonthlyReminder } from './MonthlyReminder'
 import { InstallButton, OfflineBanner } from './InstallApp'
 import { useAlerts } from './ChangeAlerts'
 import { trackPath } from '@/lib/nav-history'
@@ -260,6 +261,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         ) : null}
         {tourOpen && me.company ? <Tour me={me} onClose={() => setTourOpen(false)} /> : null}
+        {/* NUOVO: promemoria mensile fatture e bollette (non sopra la guida, non in «Assisti», non nella console) */}
+        {me.company ? <MonthlyReminder companyId={me.company.id} blocked={tourOpen || !!me.assist || me.tourDone === false || pathname.startsWith('/piattaforma')} /> : null}
       </div>
     </div>
   )

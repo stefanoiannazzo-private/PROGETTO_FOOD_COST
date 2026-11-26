@@ -377,3 +377,9 @@ Erano tutti nel clone, non nell'originale:
 - **Importazione Excel/CSV**: avviso per le righe con contenuto in pezzi senza «Peso unitario g», con il formato suggerito dal nome se c'è.
 - **Fatture XML**: nuovo prodotto a confezione con contenuto in pz → «Quanto pesa o contiene un pezzo?» obbligatorio.
 - **Elenco prodotti**: badge «manca il peso», riquadro con il numero di prodotti da completare e filtro «Manca il peso del pezzo» (`/api/ingredients?weight=missing`, `meta.missingWeight`, `needsWeight`).
+
+## 33. Promemoria mensile fatture e bollette (26/11)
+
+- Dal **giorno 10 del mese** (ora italiana) compare un popup all'apertura dell'app o del sito, e alle **3 aperture successive** (4 in tutto per mese; `REMINDER_DAY`, `REMINDER_TIMES`). Un'apertura è una nuova sessione della scheda/app (sessionStorage): cambiare pagina o ricaricare non conta. Conteggio sul server per utente, azienda e mese (`reminder_views`), quindi vale anche tra telefono e computer.
+- Contenuto: fatture caricate nel mese e ultima, bollette caricate nel mese e ultima; pulsanti «Carica fatture» (Importazioni → fatture XML) e «Carica bolletta» (Utenze); «Ho già fatto» lo chiude fino al mese dopo; «Più tardi».
+- Solo a chi può caricare (fatture: importazioni + prodotti + costi; bollette: tariffe), mai in «Assisti», mai sopra la guida del primo accesso o nella console. Test: `ReminderTest`.

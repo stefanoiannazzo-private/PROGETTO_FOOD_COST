@@ -41,6 +41,10 @@ Route::post('/system/first-admin', [SystemController::class, 'firstAdmin']);
 // NUOVO: richiesta di attivazione pubblica (link del promotore) e controllo del codice promo
 Route::get('/public/promo/{code}', [\App\Http\Controllers\Api\SignupRequestController::class, 'checkCode']);
 Route::post('/public/signup-requests', [\App\Http\Controllers\Api\SignupRequestController::class, 'store']);
+// NUOVO: promemoria mensile fatture e bollette
+Route::get('/reminders/current', [\App\Http\Controllers\Api\ReminderController::class, 'current']);
+Route::post('/reminders/seen', [\App\Http\Controllers\Api\ReminderController::class, 'seen']);
+Route::post('/reminders/done', [\App\Http\Controllers\Api\ReminderController::class, 'done']);
 // NUOVO: «Invita un collega» (codice e link del ristoratore)
 Route::get('/referral', [\App\Http\Controllers\Api\ReferralController::class, 'show']);
 Route::post('/referral', [\App\Http\Controllers\Api\ReferralController::class, 'store']);

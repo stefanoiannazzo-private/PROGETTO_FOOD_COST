@@ -34,4 +34,8 @@ return [
         // letture automatiche per azienda in un mese (controllo dei costi del servizio)
         'monthly_limit' => (int) env('BILL_AI_MONTHLY_LIMIT', 40),
     ],
+    // NUOVO: promemoria mensile per caricare fatture e bollette (dal giorno indicato, per N aperture dell'app)
+    'reminder_day' => (int) env('REMINDER_DAY', 10),
+    'reminder_times' => (int) env('REMINDER_TIMES', 4),
+    'reminder_timezone' => env('REMINDER_TIMEZONE', 'Europe/Rome'),
 ];
