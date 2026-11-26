@@ -131,7 +131,9 @@ class PlatformTest extends TestCase
         $this->assertSame('5.5', $this->ok($a->get("/api/recipes/{$r['id']}"))['valuation']['labor']);
         // il responsabile vede solo il costo aggregato, mai la voce extra
         $m = $this->ok($this->loginAs('resp.t@example.test')->get('/api/employees'));
-        $this->assertStringNotContainsString('600', json_encode($m));
+        // (gli id sono casuali e possono contenere «600»: si controllano solo i valori diversi dagli id)
+        $values = json_encode(array_map(fn ($e) => array_diff_key($e, ['id' => 1]), $m['data']));
+        $this->assertStringNotContainsString('600', $values);
         $this->assertStringNotContainsString('extraMonthly', json_encode($m));
         // il superadmin vede le retribuzioni (in modalità assistenza)
         $s = $this->loginAs('super@example.test');
