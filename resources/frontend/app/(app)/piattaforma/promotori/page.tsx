@@ -21,6 +21,7 @@ interface LinkedUser {
 interface Promoter {
   id: string
   code: string
+  link: string
   name: string
   email: string | null
   phone: string | null
@@ -157,6 +158,16 @@ export default function PromotersPage() {
                         }}
                       >
                         <Icon name="copy" />
+                      </button>
+                      <button
+                        type="button"
+                        className="btn ghost sm"
+                        title="Copia il link con il codice già inserito"
+                        onClick={async () => {
+                          if (await copyText(p.link)) toast('Link copiato: chi lo apre trova la richiesta di attivazione con il codice già compilato.')
+                        }}
+                      >
+                        link
                       </button>
                     </td>
                     <td className="num">{p.companies}</td>

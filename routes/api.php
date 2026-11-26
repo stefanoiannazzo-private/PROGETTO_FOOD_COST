@@ -38,6 +38,13 @@ Route::put('/profitability/prices/{recipeId}', [\App\Http\Controllers\Api\Profit
 Route::post('/system/deploy', [SystemController::class, 'deploy']);
 Route::post('/system/first-admin', [SystemController::class, 'firstAdmin']);
 
+// NUOVO: richiesta di attivazione pubblica (link del promotore) e controllo del codice promo
+Route::get('/public/promo/{code}', [\App\Http\Controllers\Api\SignupRequestController::class, 'checkCode']);
+Route::post('/public/signup-requests', [\App\Http\Controllers\Api\SignupRequestController::class, 'store']);
+// NUOVO: «Invita un collega» (codice e link del ristoratore)
+Route::get('/referral', [\App\Http\Controllers\Api\ReferralController::class, 'show']);
+Route::post('/referral', [\App\Http\Controllers\Api\ReferralController::class, 'store']);
+
 // Accesso e sessione
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -192,4 +199,7 @@ Route::prefix('platform')->group(function () {
     Route::get('/promoters/{id}', [PromoterController::class, 'show']);
     Route::patch('/promoters/{id}', [PromoterController::class, 'update']);
     Route::get('/users', [PromoterController::class, 'users']);
+    Route::get('/signup-requests', [\App\Http\Controllers\Api\SignupRequestController::class, 'index']);
+    Route::post('/signup-requests/{id}/approve', [\App\Http\Controllers\Api\SignupRequestController::class, 'approve']);
+    Route::post('/signup-requests/{id}/reject', [\App\Http\Controllers\Api\SignupRequestController::class, 'reject']);
 });

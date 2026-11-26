@@ -50,6 +50,7 @@ export default function PlatformPage() {
           </button>
         }
       />
+      <SignupRequests />
       {ov.data ? (
         <div className="kpis">
           <div className="kpi">
@@ -413,6 +414,105 @@ function InviteLinkPanel({ invitationId, email, link }: { invitationId: string; 
         {sent === 'outbox' ? <span className="small" style={{ color: 'var(--warn)' }}>L’email non è configurata sul server: copia il link e invialo tu.</span> : null}
         {sent === 'sent' ? <span className="badge ok">email inviata</span> : null}
       </div>
+    </div>
+  )
+}
+
+/** NUOVO — richieste di attivazione arrivate dalla pagina pubblica (spesso dal link di un promotore). */
+interface SignupRequest {
+  id: string
+  businessName: string
+  contactName: string
+  email: string
+  phone: string | null
+  city: string | null
+  message: string | null
+  status: string
+  promoter: { id: string; name: string | null; code: string | null } | null
+  createdAt: string
+}
+function SignupRequests() {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [approved, setApproved] = useState<{ name: string; link: string; email: string; mailed: boolean } | null>(null)
+  const q = useQuery({ queryKey: ['platform', 'signup-requests'], queryFn: () => api.get<{ data: SignupRequest[]; pending: number }>('/platform/signup-requests') })
+  if (!q.data || (q.data.data.length === 0 && !approved)) return null
+  const act = async (r: SignupRequest, what: 'approve' | 'reject') => {
+    if (what === 'reject' && !window.confirm(`Rifiutare la richiesta di ${r.businessName}?`)) return
+    setBusy(r.id)
+    try {
+      if (what === 'approve') {
+        const out = await api.post<{ name: string; invitation: { inviteLink: string; email: string; mail?: string } }>(`/platform/signup-requests/${r.id}/approve`, { sendEmail: true })
+        setApproved({ name: out.name, link: out.invitation.inviteLink, email: out.invitation.email, mailed: out.invitation.mail === 'sent' })
+      } else {
+        await api.post(`/platform/signup-requests/${r.id}/reject`, {})
+        toast('Richiesta rifiutata.')
+      }
+      qc.invalidateQueries({ queryKey: ['platform'] })
+    } catch (e) {
+      toast(errorMessage(e))
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <div className="card" style={{ marginBottom: 16, borderColor: 'var(--accent)' }}>
+      <div className="card-head">
+        <h2>Richieste di attivazione {q.data.pending ? <span className="badge warn">{q.data.pending}</span> : null}</h2>
+      </div>
+      {approved ? (
+        <div className="card-body">
+          <div className="alert ok">
+            <div>
+              <strong>{approved.name}</strong> creata. {approved.mailed ? `Invito inviato a ${approved.email}.` : `Invia tu il link a ${approved.email}:`}
+              <div className="mono small" style={{ wordBreak: 'break-all', marginTop: 4 }}>{approved.link}</div>
+            </div>
+            <button className="btn ghost sm" onClick={() => setApproved(null)}>Chiudi</button>
+          </div>
+        </div>
+      ) : null}
+      {q.data.data.length ? (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Locale</th>
+                <th>Referente</th>
+                <th>Presentato da</th>
+                <th>Arrivata</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {q.data.data.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <strong>{r.businessName}</strong>
+                    {r.city ? <div className="small faint">{r.city}</div> : null}
+                    {r.message ? <div className="small muted" style={{ maxWidth: 320, whiteSpace: 'pre-wrap' }}>{r.message}</div> : null}
+                  </td>
+                  <td className="small">
+                    {r.contactName}
+                    <div className="faint">{r.email}</div>
+                    {r.phone ? <a className="link" href={`tel:${r.phone}`}>{r.phone}</a> : null}
+                  </td>
+                  <td className="small">{r.promoter ? <><span className="badge mono">{r.promoter.code}</span><div className="faint">{r.promoter.name}</div></> : <span className="faint">nessuno</span>}</td>
+                  <td className="small faint">{dateTime(r.createdAt)}</td>
+                  <td className="num" style={{ whiteSpace: 'nowrap' }}>
+                    <button className="btn primary sm" disabled={busy === r.id} onClick={() => void act(r, 'approve')} title="Crea l’azienda e invia l’invito all’indirizzo indicato">
+                      {busy === r.id ? <span className="spinner" /> : null} Approva
+                    </button>{' '}
+                    <button className="btn ghost sm" disabled={busy === r.id} onClick={() => void act(r, 'reject')}>
+                      Rifiuta
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   )
 }

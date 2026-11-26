@@ -28,6 +28,8 @@ const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adm
   { href: '/importazioni', label: 'Importazioni', icon: 'upload', perm: 'imports.manage' },
   { href: '/utenti', label: 'Utenti', icon: 'key', perm: 'users.manage' },
   { href: '/impostazioni', label: 'Impostazioni', icon: 'settings' },
+  // NUOVO: codice promo e link per invitare i colleghi (solo il titolare)
+  { href: '/invita-un-collega', label: 'Invita un collega', icon: 'gift', adminOnly: true },
   { href: '/assistenza', label: 'Assistenza', icon: 'lifebuoy' },
 ]
 

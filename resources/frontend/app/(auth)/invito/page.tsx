@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '@/lib/api'
 import type { Me } from '@/lib/session'
+import { tidyPromo } from '@/lib/promo'
 import { useQueryParam } from '@/lib/hooks'
 import { ErrorBox, errorMessage, Field, fieldErrors, Skeleton, PasswordInput } from '@/components/ui'
 
@@ -60,7 +61,7 @@ export default function InvitePage() {
             </Field>
             {info.data.askPromo ? (
               <Field label="Codice promo" htmlFor="promo" error={promoError} hint="Facoltativo: se qualcuno ti ha consigliato Ricetta Quadra, inserisci il suo codice.">
-                <input id="promo" className="input mono" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} autoCapitalize="characters" autoComplete="off" placeholder="es. MARIO24" />
+                <input id="promo" className="input mono" value={promoCode} onChange={(e) => setPromoCode(tidyPromo(e.target.value))} spellCheck={false} autoCapitalize="characters" autoComplete="off" placeholder="es. MARIO24" />
               </Field>
             ) : null}
             <button className="btn primary" type="submit">

@@ -81,14 +81,14 @@ class PromoterController extends Controller
         $code = ($body['code'] ?? '') !== '' ? $this->checkCode($body['code']) : Promoters::suggest($name);
         $id = (string) Str::uuid();
         DB::table('promoters')->insert([
-            'id' => $id, 'code' => $code, 'name' => $name,
+            'id' => $id, 'code' => $code, 'code_key' => Promoters::key($code), 'name' => $name,
             'email' => $body['email'] ?? $user?->email, 'phone' => $body['phone'] ?? null,
             'user_id' => $user?->id, 'notes' => $body['notes'] ?? null, 'is_active' => 1,
             'created_by' => $auth->userId(), 'created_at' => Clock::now(),
         ]);
         Audit::log(null, $auth->userId(), 'promoter', $id, 'created', ['code' => $code, 'name' => $name]);
 
-        return ['id' => $id, 'code' => $code, 'name' => $name];
+        return ['id' => $id, 'code' => $code, 'name' => $name, 'link' => Promoters::link($code)];
     }
 
     public function update(Request $req, string $id): array
@@ -114,6 +114,7 @@ class PromoterController extends Controller
         }
         if (isset($body['code']) && $body['code'] !== '' && Promoters::normalize($body['code']) !== $p->code) {
             $set['code'] = $this->checkCode($body['code'], $id);
+            $set['code_key'] = Promoters::key($set['code']);
         }
         if (array_key_exists('name', $set) && ! $set['name']) {
             $msg = 'Indica il nome del promotore.';
@@ -168,8 +169,8 @@ class PromoterController extends Controller
             $msg = 'Il codice deve avere da 4 a 24 caratteri: lettere, numeri e trattino.';
             throw new AppError(422, 'validation_failed', $msg, ['fields' => ['code' => $msg]]);
         }
-        if (DB::table('promoters')->where('code', $code)->when($exceptId, fn ($q) => $q->where('id', '<>', $exceptId))->exists()) {
-            $msg = 'Questo codice è già usato da un altro promotore.';
+        if (Promoters::taken($code, $exceptId)) {
+            $msg = 'Questo codice (o uno che si confonde con lui, es. O/0 o I/1) è già usato da un altro promotore.';
             throw new AppError(422, 'validation_failed', $msg, ['fields' => ['code' => $msg]]);
         }
 
@@ -205,7 +206,7 @@ class PromoterController extends Controller
     private function row(object $p, array $memberOf): array
     {
         return [
-            'id' => $p->id, 'code' => $p->code, 'name' => $p->name, 'email' => $p->email, 'phone' => $p->phone,
+            'id' => $p->id, 'code' => $p->code, 'link' => Promoters::link($p->code), 'name' => $p->name, 'email' => $p->email, 'phone' => $p->phone,
             'notes' => $p->notes, 'isActive' => (bool) $p->is_active, 'createdAt' => Clock::iso($p->created_at),
             'user' => $p->user_id ? ['id' => $p->user_id, 'name' => $p->user_name, 'email' => $p->user_email, 'companies' => $memberOf[$p->user_id] ?? []] : null,
         ];

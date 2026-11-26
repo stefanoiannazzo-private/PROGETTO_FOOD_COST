@@ -64,6 +64,13 @@ export default function LoginPage() {
             Installa l’app sul telefono
           </Link>
         </div>
+        {/* NUOVO: richiesta di attivazione */}
+        <div className="small muted" style={{ textAlign: 'center' }}>
+          Non hai ancora un account?{' '}
+          <Link className="link" href="/registrati">
+            Richiedi l’attivazione
+          </Link>
+        </div>
       </form>
     </div>
   )

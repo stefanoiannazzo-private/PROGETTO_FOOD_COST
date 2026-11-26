@@ -104,17 +104,26 @@ final class PlatformController extends Controller
         // NUOVO: codice promo del promotore che ha presentato il cliente (facoltativo)
         $promoter = ($body['promoCode'] ?? '') !== '' ? Promoters::require($body['promoCode']) : null;
 
-        return DB::transaction(function () use ($auth, $body, $promoter) {
-            $id = (string) Str::uuid();
-            DB::table('companies')->insert(['id' => $id, 'name' => $body['name'], 'created_at' => Clock::now()]);
-            if ($promoter) {
-                Promoters::attach($id, $promoter, 'platform');
-            }
-            Audit::log($id, $auth->userId(), 'company', $id, 'created', ['name' => $body['name'], 'by' => 'platform']);
-            // NUOVO: il link è sempre restituito al superadmin, che sceglie se inviarlo anche per email
-            $inv = UserController::createInvitation($id, $body['name'], $auth->userId(), $auth->user['name'], $body['adminEmail'], $body['adminName'], 'admin', [], $body['sendEmail'], true);
+        return self::makeCompany($auth, $body['name'], $body['adminName'], $body['adminEmail'], $body['sendEmail'], $promoter, 'platform');
+    }
 
-            return ['id' => $id, 'name' => $body['name'], 'invitation' => [...$inv, 'email' => $body['adminEmail']]];
+    /** Crea l'azienda con l'invito del suo amministratore (usata anche per approvare le richieste di attivazione). */
+    public static function makeCompany(\App\Auth\AuthContext $auth, string $name, string $adminName, string $adminEmail, bool $sendEmail, ?object $promoter, string $via, ?callable $after = null): array
+    {
+        return DB::transaction(function () use ($auth, $name, $adminName, $adminEmail, $sendEmail, $promoter, $via, $after) {
+            $id = (string) Str::uuid();
+            DB::table('companies')->insert(['id' => $id, 'name' => $name, 'created_at' => Clock::now()]);
+            if ($promoter) {
+                Promoters::attach($id, $promoter, $via);
+            }
+            Audit::log($id, $auth->userId(), 'company', $id, 'created', ['name' => $name, 'by' => 'platform', 'via' => $via]);
+            // NUOVO: il link è sempre restituito al superadmin, che sceglie se inviarlo anche per email
+            $inv = UserController::createInvitation($id, $name, $auth->userId(), $auth->user['name'], $adminEmail, $adminName, 'admin', [], $sendEmail, true);
+            if ($after) {
+                $after($id);
+            }
+
+            return ['id' => $id, 'name' => $name, 'invitation' => [...$inv, 'email' => $adminEmail]];
         });
     }
 

@@ -16,15 +16,39 @@ class Promoters
         return strtoupper(preg_replace('/\s+/', '', (string) $code) ?? '');
     }
 
-    /** Promotore attivo con quel codice, oppure null. */
+    /**
+     * Chiave di confronto tollerante agli errori di battitura: maiuscole/minuscole, spazi, trattini e punti
+     * non contano, e le lettere che si confondono con le cifre valgono come la cifra (O→0, I e L→1).
+     * Così «mario-24», «MARIO 24» e «MAR1O24» trovano lo stesso codice. L'unicità dei codici è su questa chiave.
+     */
+    public static function key(?string $code): string
+    {
+        $k = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $code) ?? '');
+
+        return strtr($k, ['O' => '0', 'I' => '1', 'L' => '1']);
+    }
+
+    /** Promotore attivo con quel codice (confronto tollerante), oppure null. */
     public static function findActive(?string $code): ?object
     {
-        $code = self::normalize($code);
-        if ($code === '') {
+        $key = self::key($code);
+        if ($key === '') {
             return null;
         }
 
-        return DB::table('promoters')->where('code', $code)->where('is_active', 1)->first();
+        return DB::table('promoters')->where('code_key', $key)->where('is_active', 1)->first();
+    }
+
+    /** Il codice (o uno equivalente) è già usato da un altro promotore? */
+    public static function taken(string $code, ?string $exceptId = null): bool
+    {
+        return DB::table('promoters')->where('code_key', self::key($code))->when($exceptId, fn ($q) => $q->where('id', '<>', $exceptId))->exists();
+    }
+
+    /** Link da condividere: apre la richiesta di attivazione con il codice già compilato. */
+    public static function link(string $code): string
+    {
+        return rtrim((string) config('foodcost.app_url'), '/').'/registrati?promo='.rawurlencode($code);
     }
 
     /** Come findActive ma con errore sul campo indicato se il codice non è valido. */
@@ -49,7 +73,7 @@ class Promoters
         }
         for ($i = 0; $i < 50; $i++) {
             $code = $base.random_int(10, 99);
-            if (! DB::table('promoters')->where('code', $code)->exists()) {
+            if (! self::taken($code)) {
                 return $code;
             }
         }
