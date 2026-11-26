@@ -9,6 +9,7 @@ use App\Auth\Crypto;
 use App\Auth\Permissions;
 use App\Http\Controllers\Controller;
 use App\Services\Audit;
+use App\Services\Promoters;
 use App\Services\Mailer;
 use App\Services\Sessions;
 use App\Support\AppError;
@@ -203,23 +204,34 @@ final class AuthController extends Controller
     {
         $inv = DB::table('invitations as i')->join('companies as c', 'c.id', '=', 'i.company_id')
             ->where('i.token_hash', Crypto::hashToken($token))
-            ->first(['i.email', 'i.name', 'i.role', 'i.expires_at', 'i.accepted_at', 'c.name as company']);
+            ->first(['i.email', 'i.name', 'i.role', 'i.expires_at', 'i.accepted_at', 'i.company_id', 'c.name as company', 'c.promoter_id']);
         if (! $inv || $inv->accepted_at || Clock::isPast($inv->expires_at)) {
             throw AppError::badRequest('invalid_token', 'L’invito non è valido o è scaduto.');
         }
         $existing = DB::table('users')->where('email', mb_strtolower($inv->email))->exists();
 
-        return ['email' => $inv->email, 'name' => $inv->name, 'company' => $inv->company, 'role' => $inv->role, 'roleLabel' => Permissions::ROLE_LABELS[$inv->role], 'existingUser' => $existing];
+        return ['email' => $inv->email, 'name' => $inv->name, 'company' => $inv->company, 'role' => $inv->role, 'roleLabel' => Permissions::ROLE_LABELS[$inv->role], 'existingUser' => $existing,
+            'askPromo' => self::asksPromo($inv)];
+    }
+
+    /** NUOVO: il codice promo si chiede solo al primo amministratore di un'azienda appena creata e senza promotore. */
+    private static function asksPromo(object $inv): bool
+    {
+        return $inv->role === 'admin' && $inv->promoter_id === null
+            && ! DB::table('memberships')->where('company_id', $inv->company_id)->where('is_active', 1)->exists();
     }
 
     public function acceptInvitation(Request $req): JsonResponse
     {
         RateLimit::hit('accept', (string) $req->ip(), 10, 15 * 60);
-        $body = $this->parseBody($req, S::object(['token' => S::string()->min(10), 'password' => S::string()->min(1)]));
-        $inv = DB::table('invitations')->where('token_hash', Crypto::hashToken($body['token']))->first();
+        $body = $this->parseBody($req, S::object(['token' => S::string()->min(10), 'password' => S::string()->min(1), 'promoCode' => S::string()->trim()->max(40)->nullable()->optional()]));
+        $inv = DB::table('invitations as i')->join('companies as c', 'c.id', '=', 'i.company_id')
+            ->where('i.token_hash', Crypto::hashToken($body['token']))->first(['i.*', 'c.promoter_id']);
         if (! $inv || $inv->accepted_at || Clock::isPast($inv->expires_at)) {
             throw AppError::badRequest('invalid_token', 'L’invito non è valido o è scaduto.');
         }
+        // NUOVO: codice promo facoltativo, controllato prima di creare l'account
+        $promoter = ($body['promoCode'] ?? '') !== '' && self::asksPromo($inv) ? Promoters::require($body['promoCode']) : null;
         $existing = DB::table('users')->where('email', mb_strtolower($inv->email))->first();
         if ($existing) {
             // un utente già registrato conferma con la propria password
@@ -235,8 +247,11 @@ final class AuthController extends Controller
                 'password_hash' => Crypto::hashPassword($body['password']), 'created_at' => Clock::now(),
             ]);
         }
-        DB::transaction(function () use ($inv, $userId) {
+        DB::transaction(function () use ($inv, $userId, $promoter) {
             DB::table('invitations')->where('id', $inv->id)->update(['accepted_at' => Clock::now()]);
+            if ($promoter) {
+                Promoters::attach($inv->company_id, $promoter, 'invite');
+            }
             $m = DB::table('memberships')->where('company_id', $inv->company_id)->where('user_id', $userId)->first();
             if ($m) {
                 DB::table('memberships')->where('id', $m->id)->update(['role' => $inv->role, 'extra_permissions' => $inv->extra_permissions, 'is_active' => 1]);

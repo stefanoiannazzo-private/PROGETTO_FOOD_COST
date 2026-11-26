@@ -10,6 +10,7 @@ use App\Domain\Costing\Units;
 use App\Http\Controllers\Controller;
 use App\Auth\Crypto;
 use App\Services\Audit;
+use App\Services\Promoters;
 use App\Services\Costing;
 use App\Support\AppError;
 use App\Support\Clock;
@@ -72,6 +73,7 @@ final class PlatformController extends Controller
         $users = DB::table('memberships')->where('is_active', 1)->groupBy('company_id')->selectRaw('company_id, count(*) as n')->pluck('n', 'company_id');
         $admins = DB::table('memberships as m')->join('users as u', 'u.id', '=', 'm.user_id')->where('m.role', 'admin')->where('m.is_active', 1)
             ->orderBy('u.name')->get(['m.company_id', 'u.name', 'u.email'])->groupBy('company_id');
+        $promoters = DB::table('promoters')->pluck('name', 'id');
         $pending = DB::table('invitations')->whereNull('accepted_at')->where('role', 'admin')->get(['id', 'company_id', 'email', 'expires_at'])->groupBy('company_id');
 
         return ['data' => $rows->map(fn ($c) => [
@@ -83,6 +85,7 @@ final class PlatformController extends Controller
             'ingredients' => (int) ($ingredients[$c->id] ?? 0),
             'users' => (int) ($users[$c->id] ?? 0),
             'admins' => ($admins[$c->id] ?? collect())->map(fn ($a) => ['name' => $a->name, 'email' => $a->email])->values()->all(),
+            'promoter' => $c->promoter_id ? ['id' => $c->promoter_id, 'name' => $promoters[$c->promoter_id] ?? null, 'code' => $c->promo_code] : null,
             'pendingAdminInvitations' => ($pending[$c->id] ?? collect())->map(fn ($i) => ['id' => $i->id, 'email' => $i->email, 'expired' => Clock::isPast($i->expires_at)])->values()->all(),
         ])->all()];
     }
@@ -96,11 +99,17 @@ final class PlatformController extends Controller
             'adminName' => S::string()->trim()->min(2, 'Indica il nome dell’amministratore.')->max(120),
             'adminEmail' => S::string()->trim()->toLowerCase()->refine(fn ($v) => filter_var($v, FILTER_VALIDATE_EMAIL) !== false, 'Email non valida.'),
             'sendEmail' => S::bool()->default(false),
+            'promoCode' => S::string()->trim()->max(40)->nullable()->optional(),
         ]));
+        // NUOVO: codice promo del promotore che ha presentato il cliente (facoltativo)
+        $promoter = ($body['promoCode'] ?? '') !== '' ? Promoters::require($body['promoCode']) : null;
 
-        return DB::transaction(function () use ($auth, $body) {
+        return DB::transaction(function () use ($auth, $body, $promoter) {
             $id = (string) Str::uuid();
             DB::table('companies')->insert(['id' => $id, 'name' => $body['name'], 'created_at' => Clock::now()]);
+            if ($promoter) {
+                Promoters::attach($id, $promoter, 'platform');
+            }
             Audit::log($id, $auth->userId(), 'company', $id, 'created', ['name' => $body['name'], 'by' => 'platform']);
             // NUOVO: il link è sempre restituito al superadmin, che sceglie se inviarlo anche per email
             $inv = UserController::createInvitation($id, $body['name'], $auth->userId(), $auth->user['name'], $body['adminEmail'], $body['adminName'], 'admin', [], $body['sendEmail'], true);
@@ -169,11 +178,21 @@ final class PlatformController extends Controller
         $body = $this->parseBody($req, S::object([
             'name' => S::string()->trim()->min(2)->max(160)->optional(),
             'archived' => S::bool()->optional(),
+            'promoCode' => S::string()->trim()->max(40)->nullable()->optional(),
         ]));
         if (! DB::table('companies')->where('id', $id)->exists()) {
             throw AppError::notFound('Azienda');
         }
         $set = [];
+        // NUOVO: il superadmin può assegnare, correggere o togliere il promotore
+        if (array_key_exists('promoCode', $body)) {
+            if (($body['promoCode'] ?? '') === '') {
+                $set += ['promoter_id' => null, 'promo_code' => null, 'referred_via' => null, 'referred_at' => null];
+            } else {
+                $p = Promoters::require($body['promoCode']);
+                $set += ['promoter_id' => $p->id, 'promo_code' => $p->code, 'referred_via' => 'platform', 'referred_at' => Clock::now()];
+            }
+        }
         if (isset($body['name'])) {
             $set['name'] = $body['name'];
         }

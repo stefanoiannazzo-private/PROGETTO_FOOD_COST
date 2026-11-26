@@ -40,4 +40,6 @@ export interface Company {
   users: number
   admins: Array<{ name: string; email: string }>
   pendingAdminInvitations: Array<{ id: string; email: string; expired: boolean }>
+  /** NUOVO: promotore che ha presentato l'azienda (codice promo) */
+  promoter: { id: string; name: string | null; code: string | null } | null
 }

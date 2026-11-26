@@ -357,3 +357,10 @@ Erano tutti nel clone, non nell'originale:
 - Contatori delle variazioni sulle icone; i pulsanti fissi in basso (riepilogo ricetta, conferma fattura, avvisi) salgono sopra la barra.
 - Su computer e nella sola console piattaforma resta il menu laterale.
 - Editor ricetta su smartphone (soluzione B): la barra in basso resta visibile; sopra c'è un'unica striscia con il costo (tocco = riepilogo) e «Crea ricetta»/«Salva»; «‹ Annulla» in alto a sinistra; lo stato Bozza/Attiva si sceglie nella scheda «Dati della ricetta».
+
+## 31. Promotori e codici promo (referral)
+
+- Console superadmin → **Promotori**: anagrafica di chi presenta nuovi clienti, collegabile a un utente del portale oppure esterna (nome, email, telefono, note). Ogni promotore ha un **codice promo** univoco (4–24 caratteri A–Z, 0–9, trattino), generato dal nome (es. GIULIA24) o scelto a mano; si può cambiare o disattivare.
+- Il codice si indica: (1) dal superadmin in **Nuova azienda**; (2) dal **primo amministratore** quando accetta l'invito, solo se l'azienda non ha ancora un promotore; (3) il superadmin può assegnarlo, correggerlo o toglierlo dall'elenco aziende. Codice errato o disattivato → errore sul campo, nessun dato creato.
+- Classifica: aziende **presentate**, **attive** (invito accettato) e **in uso** (almeno una ricetta); ordinata per «in uso». Dettaglio promotore con le aziende presentate, stato e canale. L'azienda conserva il codice usato anche se poi il promotore lo cambia.
+- Tabelle: `promoters`; colonne `companies.promoter_id`, `promo_code`, `referred_via`, `referred_at` (migrazione 2026_11_26_000001). Test: `PromotersTest`.

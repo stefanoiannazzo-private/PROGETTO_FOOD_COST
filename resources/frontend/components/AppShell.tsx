@@ -39,6 +39,7 @@ const PLATFORM_NAV: Array<{ href: string; label: string; icon: string }> = [
   { href: '/piattaforma/prezzi', label: 'Statistiche prezzi', icon: 'search' },
   { href: '/piattaforma/confronti', label: 'Confronti ricette', icon: 'copy' },
   { href: '/piattaforma/assistenza', label: 'Assistenza clienti', icon: 'lifebuoy' },
+  { href: '/piattaforma/promotori', label: 'Promotori', icon: 'gift' },
 ]
 
 export function AppShell({ children }: { children: ReactNode }) {

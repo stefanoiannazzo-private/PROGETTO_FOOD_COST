@@ -41,6 +41,8 @@ const paths: Record<string, string> = {
   eye: 'M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   eyeOff: 'M17.9 17.9A10 10 0 0 1 12 19c-7 0-11-7-11-7a18 18 0 0 1 5.1-5.9M9.9 5.2A9 9 0 0 1 12 5c7 0 11 7 11 7a18 18 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2M1 1l22 22',
   // NUOVO: icona del coefficiente di redditività
+  // NUOVO: promotori (referral)
+  gift: 'M20 12v10H4V12M2 7h20v5H2zM12 22V7M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7zM12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z',
   trend: 'M3 3v18h18M7 15l4-4 3 3 6-6M15 8h5v5',
 }
 export function Icon({ name, size = 16 }: { name: keyof typeof paths | string; size?: number }) {

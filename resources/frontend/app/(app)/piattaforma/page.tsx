@@ -34,6 +34,7 @@ export default function PlatformPage() {
   // NUOVO: link di invito rigenerato per un amministratore che non l'ha ancora usato
   const [renewed, setRenewed] = useState<{ id: string; email: string; inviteLink: string; company: string } | null>(null)
   const [archived, setArchived] = useState(false)
+  const [promoFor, setPromoFor] = useState<Company | null>(null)
   const ov = useQuery({ queryKey: ['platform', 'overview'], queryFn: () => api.get<Overview>('/platform/overview') })
   const q = useQuery({ queryKey: ['platform', 'companies'], queryFn: () => api.get<{ data: Company[] }>('/platform/companies') })
   const rows = (q.data?.data ?? []).filter((c) => c.archived === archived)
@@ -101,6 +102,7 @@ export default function PlatformPage() {
                 <tr>
                   <th>Azienda</th>
                   <th>Amministratori</th>
+                  <th>Presentata da</th>
                   <th className="num">Utenti</th>
                   <th className="num">Ricette</th>
                   <th className="num">Prodotti</th>
@@ -141,6 +143,21 @@ export default function PlatformPage() {
                         </div>
                       ))}
                       {c.admins.length + c.pendingAdminInvitations.length === 0 ? <span className="badge warn">nessun amministratore</span> : null}
+                    </td>
+                    <td className="small">
+                      <div className="row" style={{ gap: 6, flexWrap: 'nowrap', alignItems: 'center' }}>
+                        {c.promoter ? (
+                          <Link className="link" href={`/piattaforma/promotori?id=${c.promoter.id}`} title="Apri il promotore" style={{ whiteSpace: 'nowrap' }}>
+                            <span className="badge mono">{c.promoter.code}</span>
+                          </Link>
+                        ) : (
+                          <span className="faint">diretta</span>
+                        )}
+                        <button type="button" className="btn ghost sm" title="Assegna, cambia o togli il codice promo" aria-label="Modifica codice promo" onClick={() => setPromoFor(c)}>
+                          <Icon name="edit" />
+                        </button>
+                      </div>
+                      {c.promoter?.name ? <div className="faint">{c.promoter.name}</div> : null}
                     </td>
                     <td className="num">{c.users}</td>
                     <td className="num">
@@ -196,6 +213,7 @@ export default function PlatformPage() {
         )}
       </div>
       {creating ? <CreateCompany onClose={() => setCreating(false)} /> : null}
+      {promoFor ? <EditPromo company={promoFor} onClose={() => setPromoFor(null)} /> : null}
       {renewed ? (
         <Drawer
           title={`Nuovo link di invito — ${renewed.company}`}
@@ -215,7 +233,7 @@ export default function PlatformPage() {
 
 function CreateCompany({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
-  const [v, setV] = useState({ name: '', adminName: '', adminEmail: '' })
+  const [v, setV] = useState({ name: '', adminName: '', adminEmail: '', promoCode: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -284,8 +302,62 @@ function CreateCompany({ onClose }: { onClose: () => void }) {
               <input id="co-email" type="email" className="input" value={v.adminEmail} onChange={(e) => setV({ ...v, adminEmail: e.target.value })} />
             </Field>
           </div>
+          <Field label="Codice promo" htmlFor="co-promo" error={errors.promoCode} hint="Facoltativo: il codice del promotore che ti ha presentato il cliente. Se lo lasci vuoto, potrà inserirlo lui quando accetta l’invito.">
+            <input id="co-promo" className="input mono" value={v.promoCode} onChange={(e) => setV({ ...v, promoCode: e.target.value.toUpperCase() })} placeholder="es. MARIO24" autoCapitalize="characters" />
+          </Field>
         </div>
       )}
+    </Drawer>
+  )
+}
+
+/** NUOVO — assegna, cambia o toglie il promotore di un'azienda. */
+function EditPromo({ company, onClose }: { company: Company; onClose: () => void }) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const [code, setCode] = useState(company.promoter?.code ?? '')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const save = async (value: string | null) => {
+    setError('')
+    setBusy(true)
+    try {
+      await api.patch(`/platform/companies/${company.id}`, { promoCode: value })
+      qc.invalidateQueries({ queryKey: ['platform'] })
+      toast(value ? 'Promotore assegnato.' : 'Promotore tolto: l’azienda risulta diretta.')
+      onClose()
+    } catch (e) {
+      setError(fieldErrors(e).promoCode ?? errorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Drawer
+      title={`Codice promo — ${company.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          {company.promoter ? (
+            <button className="btn ghost" disabled={busy} onClick={() => void save(null)}>
+              Togli il promotore
+            </button>
+          ) : null}
+          <button className="btn" onClick={onClose}>
+            Annulla
+          </button>
+          <button className="btn primary" disabled={busy || !code.trim()} onClick={() => void save(code)}>
+            {busy ? <span className="spinner" /> : null} Salva
+          </button>
+        </>
+      }
+    >
+      <div className="stack">
+        <p className="small muted">Indica il codice del promotore che ha presentato questa azienda. Serve per la classifica dei promotori; il cliente non vede nulla.</p>
+        <Field label="Codice promo" htmlFor="ep-code" error={error}>
+          <input id="ep-code" className="input mono" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="es. MARIO24" autoFocus />
+        </Field>
+      </div>
     </Drawer>
   )
 }

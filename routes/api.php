@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\EquipmentController;
 use App\Http\Controllers\Api\ImportController;
 use App\Http\Controllers\Api\IngredientController;
 use App\Http\Controllers\Api\PlatformController;
+use App\Http\Controllers\Api\PromoterController;
 use App\Http\Controllers\Api\RecipeController;
 use App\Http\Controllers\Api\SystemController;
 use App\Http\Controllers\Api\TariffBillController;
@@ -185,4 +186,10 @@ Route::prefix('platform')->group(function () {
     Route::get('/comparison-groups/{id}', [PlatformController::class, 'showGroup']);
     Route::patch('/comparison-groups/{id}', [PlatformController::class, 'updateGroup']);
     Route::delete('/comparison-groups/{id}', [PlatformController::class, 'deleteGroup']);
+    // NUOVO: promotori e codici promo (referral)
+    Route::get('/promoters', [PromoterController::class, 'index']);
+    Route::post('/promoters', [PromoterController::class, 'store']);
+    Route::get('/promoters/{id}', [PromoterController::class, 'show']);
+    Route::patch('/promoters/{id}', [PromoterController::class, 'update']);
+    Route::get('/users', [PromoterController::class, 'users']);
 });
