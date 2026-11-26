@@ -136,6 +136,33 @@ class ImportsTest extends TestCase
         $this->assertSame(0, DB::table('ingredients')->count());
     }
 
+    /** NUOVO: il superadmin in «Assisti» importa per il cliente; un ex superadmin no. */
+    public function test_importazione_in_modalita_assistenza(): void
+    {
+        $company = DB::table('companies')->where('name', 'Laboratorio Import')->value('id');
+        $this->createUser('super@imp.test', 'Super', true);
+        $s = $this->loginAs('super@imp.test');
+        $this->ok($s->post('/api/auth/company', ['companyId' => $company]));
+        $r = $this->upload($s, 'ingredients', 'listino.csv', self::latin1(implode("\r\n", self::LISTINO)));
+        $id = $r->body['id'];
+        $this->validate($s, $id, $r->body['suggestedMapping'], ['encoding' => 'latin1', 'delimiter' => ';']);
+        $imp = $this->ok($s->get("/api/imports/{$id}"));
+        $this->ok($s->post("/api/imports/{$id}/confirm", ['lockVersion' => $imp['lockVersion']]));
+        $this->drain();
+        $this->assertSame('applied', $this->ok($s->get("/api/imports/{$id}"))['status']);
+        $this->assertSame(4, $this->ok($this->admin->get('/api/ingredients'))['meta']['total'], 'il cliente vede i prodotti importati');
+        $this->assertSame(1, DB::table('audit_logs')->where('entity_id', $id)->where('action', 'applied')->where('user_id', DB::table('users')->where('email', 'super@imp.test')->value('id'))->count());
+
+        // se nel frattempo non è più superadmin, l'importazione non si applica
+        $r2 = $this->upload($s, 'ingredients', 'listino2.csv', self::latin1(implode("\r\n", self::LISTINO)));
+        $this->validate($s, $r2->body['id'], $r2->body['suggestedMapping'], ['encoding' => 'latin1', 'delimiter' => ';']);
+        $imp2 = $this->ok($s->get("/api/imports/{$r2->body['id']}"));
+        $this->ok($s->post("/api/imports/{$r2->body['id']}/confirm", ['lockVersion' => $imp2['lockVersion']]));
+        DB::table('users')->where('email', 'super@imp.test')->update(['is_platform_admin' => 0]);
+        $this->drain();
+        $this->assertSame('failed', DB::table('imports')->where('id', $r2->body['id'])->value('status'));
+    }
+
     public function test_conferma_applicazione_atomica_idempotente(): void
     {
         $r = $this->uploadListino();

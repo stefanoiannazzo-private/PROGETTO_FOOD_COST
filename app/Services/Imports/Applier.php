@@ -52,6 +52,12 @@ final class Applier
                 ->where('m.user_id', $imp->created_by)->where('m.company_id', $imp->company_id)->where('m.is_active', 1)->where('u.is_active', 1)
                 ->first(['m.role', 'm.extra_permissions']);
             $perms = $m ? Permissions::effective($m->role, json_decode($m->extra_permissions, true) ?: []) : [];
+            // NUOVO: il superadmin in «Assisti» non è membro dell'azienda ma opera come amministratore (D8):
+            // se è ancora superadmin attivo, l'importazione che ha caricato si applica con i permessi di amministratore
+            if (! $m && DB::table('users')->where('id', $imp->created_by)->where('is_active', 1)->where('is_platform_admin', 1)->exists()) {
+                $m = (object) ['role' => 'admin'];
+                $perms = Permissions::effective('admin', []);
+            }
             $needed = $imp->type === 'ingredients' ? ['imports.manage', 'ingredients.manage'] : ['imports.manage', 'employees.manage', 'salaries.read'];
             if (! $m || array_diff($needed, $perms)) {
                 throw new ApplyError('L’autore dell’importazione non ha più i permessi necessari.');
