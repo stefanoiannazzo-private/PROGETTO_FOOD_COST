@@ -81,6 +81,12 @@ class Promoters
         return $base.strtoupper(bin2hex(random_bytes(3)));
     }
 
+    /** L'errore del database è una violazione di unicità (codice o utente già presi da un'altra richiesta)? */
+    public static function isDuplicate(\Throwable $e): bool
+    {
+        return $e instanceof \Illuminate\Database\QueryException && in_array($e->errorInfo[1] ?? null, [1062, 19], true);
+    }
+
     public static function attach(string $companyId, object $promoter, string $via): void
     {
         DB::table('companies')->where('id', $companyId)->update([

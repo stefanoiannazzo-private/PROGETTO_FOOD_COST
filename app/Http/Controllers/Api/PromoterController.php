@@ -78,14 +78,38 @@ class PromoterController extends Controller
             $msg = 'Indica il nome del promotore.';
             throw new AppError(422, 'validation_failed', $msg, ['fields' => ['name' => $msg]]);
         }
-        $code = ($body['code'] ?? '') !== '' ? $this->checkCode($body['code']) : Promoters::suggest($name);
+        if ($user && ($has = DB::table('promoters')->where('user_id', $user->id)->value('code'))) {
+            $msg = "Questo utente ha già il codice {$has}: una persona ha un solo codice. Apri quel promotore per modificarlo.";
+            throw new AppError(422, 'validation_failed', $msg, ['fields' => ['userId' => $msg]]);
+        }
+        $custom = ($body['code'] ?? '') !== '' ? $this->checkCode($body['code']) : null;
         $id = (string) Str::uuid();
-        DB::table('promoters')->insert([
-            'id' => $id, 'code' => $code, 'code_key' => Promoters::key($code), 'name' => $name,
-            'email' => $body['email'] ?? $user?->email, 'phone' => $body['phone'] ?? null,
-            'user_id' => $user?->id, 'notes' => $body['notes'] ?? null, 'is_active' => 1,
-            'created_by' => $auth->userId(), 'created_at' => Clock::now(),
-        ]);
+        // se nello stesso istante il ristoratore crea il suo codice (o un altro promotore prende lo stesso codice),
+        // il database rifiuta il doppione: si riprova con un nuovo codice automatico oppure si spiega cosa è successo
+        for ($try = 0; ; $try++) {
+            $code = $custom ?? Promoters::suggest($name);
+            try {
+                DB::table('promoters')->insert([
+                    'id' => $id, 'code' => $code, 'code_key' => Promoters::key($code), 'name' => $name,
+                    'email' => $body['email'] ?? $user?->email, 'phone' => $body['phone'] ?? null,
+                    'user_id' => $user?->id, 'notes' => $body['notes'] ?? null, 'is_active' => 1,
+                    'created_by' => $auth->userId(), 'created_at' => Clock::now(),
+                ]);
+                break;
+            } catch (\Throwable $e) {
+                if (! Promoters::isDuplicate($e)) {
+                    throw $e;
+                }
+                if ($user && ($has = DB::table('promoters')->where('user_id', $user->id)->value('code'))) {
+                    $msg = "Nel frattempo l'utente si è creato da solo il codice {$has}: una persona ha un solo codice.";
+                    throw new AppError(422, 'validation_failed', $msg, ['fields' => ['userId' => $msg]]);
+                }
+                if ($custom !== null || $try >= 4) {
+                    $msg = 'Questo codice è appena stato preso da un altro promotore: scegline un altro.';
+                    throw new AppError(422, 'validation_failed', $msg, ['fields' => ['code' => $msg]]);
+                }
+            }
+        }
         Audit::log(null, $auth->userId(), 'promoter', $id, 'created', ['code' => $code, 'name' => $name]);
 
         return ['id' => $id, 'code' => $code, 'name' => $name, 'link' => Promoters::link($code)];
@@ -108,6 +132,10 @@ class PromoterController extends Controller
         }
         if (array_key_exists('userId', $body)) {
             $set['user_id'] = $this->linkedUser($body['userId'])?->id;
+            if ($set['user_id'] && ($has = DB::table('promoters')->where('user_id', $set['user_id'])->where('id', '<>', $id)->value('code'))) {
+                $msg = "Questo utente ha già il codice {$has}: una persona ha un solo codice.";
+                throw new AppError(422, 'validation_failed', $msg, ['fields' => ['userId' => $msg]]);
+            }
         }
         if (array_key_exists('isActive', $body)) {
             $set['is_active'] = $body['isActive'] ? 1 : 0;
@@ -121,7 +149,15 @@ class PromoterController extends Controller
             throw new AppError(422, 'validation_failed', $msg, ['fields' => ['name' => $msg]]);
         }
         if ($set) {
-            DB::table('promoters')->where('id', $id)->update($set);
+            try {
+                DB::table('promoters')->where('id', $id)->update($set);
+            } catch (\Throwable $e) {
+                if (! Promoters::isDuplicate($e)) {
+                    throw $e;
+                }
+                $msg = 'Nel frattempo il codice o l’utente è stato assegnato a un altro promotore: ricarica la pagina e riprova.';
+                throw new AppError(409, 'conflict', $msg);
+            }
             Audit::log(null, $auth->userId(), 'promoter', $id, 'updated', array_keys($set));
         }
 

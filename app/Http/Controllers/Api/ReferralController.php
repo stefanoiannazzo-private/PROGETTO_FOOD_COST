@@ -38,14 +38,27 @@ class ReferralController extends Controller
         }
         $p = DB::table('promoters')->where('user_id', $auth->userId())->first();
         if (! $p) {
-            $code = Promoters::suggest($auth->user['name']);
             $id = (string) Str::uuid();
-            DB::table('promoters')->insert([
-                'id' => $id, 'code' => $code, 'code_key' => Promoters::key($code), 'name' => $auth->user['name'], 'email' => $auth->user['email'],
-                'user_id' => $auth->userId(), 'notes' => 'Creato dal ristoratore (azienda '.$auth->company['name'].').',
-                'is_active' => 1, 'created_by' => $auth->userId(), 'created_at' => Clock::now(),
-            ]);
-            Audit::log($auth->companyId(), $auth->userId(), 'promoter', $id, 'created', ['code' => $code, 'by' => 'self']);
+            // se nello stesso istante il superadmin gli crea il codice, vince chi arriva primo e l'altro riceve quello già creato
+            for ($try = 0; $try < 5; $try++) {
+                $code = Promoters::suggest($auth->user['name']);
+                try {
+                    DB::table('promoters')->insert([
+                        'id' => $id, 'code' => $code, 'code_key' => Promoters::key($code), 'name' => $auth->user['name'], 'email' => $auth->user['email'],
+                        'user_id' => $auth->userId(), 'notes' => 'Creato dal ristoratore (azienda '.$auth->company['name'].').',
+                        'is_active' => 1, 'created_by' => $auth->userId(), 'created_at' => Clock::now(),
+                    ]);
+                    Audit::log($auth->companyId(), $auth->userId(), 'promoter', $id, 'created', ['code' => $code, 'by' => 'self']);
+                    break;
+                } catch (\Throwable $e) {
+                    if (! Promoters::isDuplicate($e)) {
+                        throw $e;
+                    }
+                    if (DB::table('promoters')->where('user_id', $auth->userId())->exists()) {
+                        break; // creato nel frattempo dal superadmin: si mostra quello
+                    }
+                }
+            }
         }
 
         return $this->show($req);

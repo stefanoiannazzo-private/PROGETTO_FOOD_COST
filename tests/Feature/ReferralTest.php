@@ -95,4 +95,37 @@ class ReferralTest extends TestCase
         $this->ok($s->post("/api/platform/signup-requests/{$r['data'][0]['id']}/reject", []));
         $this->assertSame(0, $this->ok($s->get('/api/platform/signup-requests'))['pending']);
     }
+
+    public function test_una_persona_ha_un_solo_codice_anche_se_tu_e_lui_lo_create_insieme(): void
+    {
+        $s = $this->loginAs('super@example.test');
+        $m = $this->loginAs('mario@example.test');
+        $marioId = DB::table('users')->where('email', 'mario@example.test')->value('id');
+
+        // lui crea per primo: tu ricevi un messaggio chiaro, niente doppione
+        $mine = $this->ok($m->post('/api/referral', []))['promoter']['code'];
+        $r = $s->post('/api/platform/promoters', ['userId' => $marioId]);
+        $this->assertSame(422, $r->status);
+        $this->assertStringContainsString($mine, $r->body['error']['message']);
+        $this->assertSame(1, DB::table('promoters')->where('user_id', $marioId)->count());
+
+        // tu per primo: lui riceve il tuo codice
+        DB::table('promoters')->delete();
+        $yours = $this->ok($s->post('/api/platform/promoters', ['userId' => $marioId]))['code'];
+        $this->assertSame($yours, $this->ok($m->post('/api/referral', []))['promoter']['code']);
+        $this->assertSame(1, DB::table('promoters')->where('user_id', $marioId)->count());
+
+        // nello stesso istante: il database rifiuta comunque il secondo
+        $this->expectException(\Illuminate\Database\QueryException::class);
+        DB::table('promoters')->insert(['id' => (string) \Illuminate\Support\Str::uuid(), 'code' => 'ALTRO10', 'code_key' => 'A1TR010', 'name' => 'Mario', 'user_id' => $marioId, 'is_active' => 1, 'created_at' => now()]);
+    }
+
+    public function test_collegare_a_un_utente_che_ha_gia_un_codice_e_bloccato(): void
+    {
+        $s = $this->loginAs('super@example.test');
+        $marioId = DB::table('users')->where('email', 'mario@example.test')->value('id');
+        $this->ok($this->loginAs('mario@example.test')->post('/api/referral', []));
+        $ext = $this->ok($s->post('/api/platform/promoters', ['name' => 'Esterno', 'code' => 'EST-01']));
+        $this->assertSame(422, $s->patch("/api/platform/promoters/{$ext['id']}", ['userId' => $marioId])->status);
+    }
 }
