@@ -48,14 +48,19 @@ export function DuplicatesDrawer({ onClose }: { onClose: () => void }) {
   // NUOVO: per prodotto, se unirlo a quello tenuto (proposti solo quelli con la stessa descrizione)
   const [sel, setSel] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState(false)
-  const groups = q.data?.data ?? []
+  const [hidden, setHidden] = useState<Record<string, boolean>>({})
+  const all = q.data?.data ?? []
+  const groups = all.filter((g) => !hidden[g.key])
+  // NUOVO: quando l'elenco si ricarica (es. dopo «Non sono doppi») le scelte già fatte sugli altri gruppi restano;
+  // si impostano i valori proposti solo per i gruppi e i prodotti nuovi
   useEffect(() => {
-    setKeep(Object.fromEntries(groups.map((g) => [g.key, g.keepId])))
+    setKeep((k) => ({ ...Object.fromEntries(groups.map((g) => [g.key, g.keepId])), ...k }))
     // i gruppi con descrizioni solo simili non partono spuntati: vanno guardati
-    setOn(Object.fromEntries(groups.map((g) => [g.key, g.sure])))
-    setSel(Object.fromEntries(groups.flatMap((g) => g.items.map((i) => [i.id, i.same && i.id !== g.keepId]))))
+    setOn((o) => ({ ...Object.fromEntries(groups.map((g) => [g.key, g.sure])), ...o }))
+    setSel((x) => ({ ...Object.fromEntries(groups.flatMap((g) => g.items.map((i) => [i.id, i.same && i.id !== g.keepId]))), ...x }))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.data])
+
   const keepOf = (g: Group) => keep[g.key] ?? g.keepId
   const mergeIds = (g: Group) => g.items.filter((i) => i.id !== keepOf(g) && sel[i.id]).map((i) => i.id)
   const separateIds = (g: Group) => g.items.filter((i) => i.id !== keepOf(g) && !sel[i.id]).map((i) => i.id)
@@ -63,8 +68,9 @@ export function DuplicatesDrawer({ onClose }: { onClose: () => void }) {
   const notDup = async (g: Group) => {
     try {
       await api.post('/ingredients/duplicates/ignore', { ids: g.items.map((i) => i.id) })
+      // il gruppo sparisce subito; le scelte sugli altri gruppi restano come le hai lasciate
+      setHidden((h) => ({ ...h, [g.key]: true }))
       toast('Segnati come prodotti diversi: non verranno più proposti.')
-      await qc.invalidateQueries({ queryKey: ['ingredients', 'duplicates'] })
     } catch (e) {
       toast(errorMessage(e), 'err')
     }
