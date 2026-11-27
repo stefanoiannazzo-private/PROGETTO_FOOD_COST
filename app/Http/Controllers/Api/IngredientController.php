@@ -423,7 +423,16 @@ final class IngredientController extends Controller
                 }
                 $data = ['densityKgPerL' => $body['densityKgPerL'] !== null ? Dec::of($body['densityKgPerL']) : null, 'unitWeightKg' => $body['unitWeightKg'] !== null ? Dec::of($body['unitWeightKg']) : null];
                 $target = Units::dimensionOf($body['packageUnit']);
+                $perPackage = ! in_array(mb_strtolower((string) $body['purchaseUnit']), ['kg', 'litro', 'l'], true);
                 foreach ($prices as $p) {
+                    // il prezzo era per la confezione di prima (es. «1 pz» = un vaso) e si paga ancora a confezione
+                    // (es. «vaso da 1700 g»): stesso importo per la nuova confezione, senza conversioni
+                    if ($perPackage && $p->package_unit === $cur->package_unit && Dec::of($p->package_content)->eq(Dec::of($cur->package_content))) {
+                        DB::table('ingredient_prices')->where('id', $p->id)->update(['package_content' => $body['packageContent'], 'package_unit' => $body['packageUnit']]);
+                        $repriced++;
+
+                        continue;
+                    }
                     try {
                         $base = Units::convertToDimension(Dec::of($p->package_content), $p->package_unit, $target, $data);
                     } catch (\App\Domain\Costing\UnitConversionError $e) {

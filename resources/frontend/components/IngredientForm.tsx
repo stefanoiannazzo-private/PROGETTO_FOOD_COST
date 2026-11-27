@@ -384,7 +384,11 @@ export function IngredientFields({
         onPrice={price?.onChange}
         onChange={(p) => {
           const next: Partial<IngredientFormValue> = { ...p }
-          if (!usageTouched && (p.mode || p.packageUnit)) next.usageUnit = defaultUsage(p.mode ?? v.mode ?? 'conf', p.packageUnit ?? v.packageUnit)
+          const pu = p.packageUnit ?? v.packageUnit
+          // NUOVO: anche dopo una modifica, se la nuova confezione è di un'altra grandezza (es. da «1 pz» a «vaso da 1700 g»)
+          // e mancano peso o densità per passare dall'una all'altra, l'unità in ricetta segue la confezione
+          const stuck = dim(pu) !== dim(v.usageUnit) && ((dim(pu) === 'count' || dim(v.usageUnit) === 'count') ? !(Number(v.unitWeightKg) > 0) : !(Number(v.densityKgPerL) > 0))
+          if ((!usageTouched || stuck) && (p.mode || p.packageUnit)) next.usageUnit = defaultUsage(p.mode ?? v.mode ?? 'conf', pu)
           set(next)
         }}
       />

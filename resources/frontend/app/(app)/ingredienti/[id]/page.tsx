@@ -106,7 +106,10 @@ export default function IngredientDetailPage() {
   // NUOVO: cambio di tipo (pezzi ↔ peso ↔ volume): tutti i prezzi registrati si convertono con peso del pezzo e densità
   const density = Number(pl.densityKgPerL) > 0 ? Number(pl.densityKgPerL) : null
   const pieceKg = Number(pl.unitWeightKg) > 0 ? Number(pl.unitWeightKg) : null
+  const perPackage = !['kg', 'litro', 'l'].includes((pl.purchaseUnit ?? '').toLowerCase())
   const convert = (content: string, unit: string): number | 'density' | 'piece' => {
+    // prezzo per la confezione di prima (es. «1 pz» = un vaso) e ancora a confezione: stesso importo per la nuova
+    if (perPackage && unit === d.packageUnit && Number(content) === Number(d.packageContent)) return newContent
     const base = Number(content) * (TO_BASE[unit] ?? 1)
     const src = dimOf(unit)
     const dst = dimOf(pl.packageUnit)
@@ -231,7 +234,21 @@ export default function IngredientDetailPage() {
             }}
           >
             <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }}>
-              <IngredientFields v={v} set={(p) => setV((x) => ({ ...x!, ...p }))} errors={errors} />
+              <IngredientFields
+                v={v}
+                set={(p) => {
+                  setV((x) => ({ ...x!, ...p }))
+                  // un campo corretto non resta segnato in rosso fino al prossimo salvataggio
+                  setErrors((e) => {
+                    const keys = Object.keys(p).filter((k) => k in e)
+                    if (!keys.length) return e
+                    const n = { ...e }
+                    keys.forEach((k) => delete n[k])
+                    return n
+                  })
+                }}
+                errors={errors}
+              />
             </fieldset>
             {editable && d.priceVisible
               ? misaligned.map((m) => (

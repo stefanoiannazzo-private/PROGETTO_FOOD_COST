@@ -75,4 +75,21 @@ class PackPricesTest extends TestCase
         $this->assertEqualsWithDelta(1.005, (float) $d['currentPrice']['unitPrice'], 0.0001);
         $this->assertSame(12.06, (float) $d['currentPrice']['package_price']);
     }
+
+    public function test_da_pezzo_a_vaso_con_il_peso_senza_conversione(): void
+    {
+        $c = $this->createCompany('Bar2');
+        $this->addMember($c, $this->createUser('b@bar.test', 'B'), 'admin');
+        $a = $this->loginAs('b@bar.test');
+        $id = $this->ok($a->post('/api/ingredients', ['code' => 'CAP', 'name' => 'FRUTTI DEL CAPPERO in aceto v1700', 'category' => 'Conserve', 'supplier' => 'NOVAL',
+            'purchaseUnit' => 'pezzo', 'packageContent' => '1', 'packageUnit' => 'pz', 'usageUnit' => 'pz', 'initialPrice' => ['packagePrice' => '16.05', 'validFrom' => '2026-11-24']]))['id'];
+        $d = $this->ok($a->get("/api/ingredients/{$id}"));
+        // diventa «vaso da 1700 g»: nessun peso del pezzo richiesto, 16,05 € per 1,7 kg
+        $r = $this->ok($a->patch("/api/ingredients/{$id}", ['code' => 'CAP', 'name' => $d['name'], 'category' => 'Conserve', 'supplier' => 'NOVAL', 'purchaseUnit' => 'vaso',
+            'packageContent' => '1700', 'packageUnit' => 'g', 'usageUnit' => 'g', 'lockVersion' => $d['lockVersion'], 'updatePrices' => true]));
+        $this->assertSame(1, $r['repricedPrices']);
+        $d = $this->ok($a->get("/api/ingredients/{$id}"));
+        $this->assertEqualsWithDelta(16.05 / 1.7, (float) $d['currentPrice']['unitPrice'], 0.0001);
+        $this->assertNull($d['unitWeightKg']);
+    }
 }
