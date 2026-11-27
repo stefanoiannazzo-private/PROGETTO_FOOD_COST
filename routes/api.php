@@ -223,6 +223,9 @@ Route::get('/supplier-invoices/{id}', [SupplierInvoiceController::class, 'show']
 Route::get('/supplier-invoices/{id}/file', [SupplierInvoiceController::class, 'file']);
 Route::post('/supplier-invoices/{id}/confirm', [SupplierInvoiceController::class, 'confirm']);
 Route::delete('/supplier-invoices/{id}', [SupplierInvoiceController::class, 'destroy']);
+// NUOVO: listino dei fornitori (data, nome, prezzo, iva, U.M., sconti, fornitore)
+Route::post('/imports/pricelist/preview', [\App\Http\Controllers\Api\PriceListController::class, 'preview']);
+Route::post('/imports/pricelist/apply', [\App\Http\Controllers\Api\PriceListController::class, 'apply']);
 Route::get('/imports/fields/{type}', [ImportController::class, 'fields']);
 Route::get('/imports/templates/{file}', [ImportController::class, 'template']);
 Route::get('/imports', [ImportController::class, 'index']);

@@ -52,7 +52,7 @@ export default function ImportsPage() {
   const qc = useQueryClient()
   const q = useQuery({ queryKey: ['imports'], queryFn: () => api.get<{ data: ImportRow[] }>('/imports') })
   // NUOVO: ?tipo=fatture (scorciatoia dell'app installata) apre direttamente le fatture XML
-  const [type, setType] = useState<'ingredients' | 'employees' | 'invoices'>(() =>
+  const [type, setType] = useState<'ingredients' | 'employees' | 'invoices' | 'pricelist'>(() =>
     typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tipo') === 'fatture' ? 'invoices' : 'ingredients',
   )
   useQuickAction('fattura', () => setType('invoices'))
@@ -121,7 +121,22 @@ export default function ImportsPage() {
               <label className="checkbox" style={{ opacity: canInvoices ? 1 : 0.5 }}>
                 <input type="radio" name="t" checked={type === 'invoices'} disabled={!canInvoices} onChange={() => setType('invoices')} /> Fatture dei fornitori (XML)
               </label>
+              <label className="checkbox" style={{ opacity: canInvoices ? 1 : 0.5 }}>
+                <input type="radio" name="t" checked={type === 'pricelist'} disabled={!canInvoices} onChange={() => setType('pricelist')} /> Listino dei fornitori
+              </label>
             </div>
+            {type === 'pricelist' ? (
+              <div className="stack">
+                <p className="small muted" style={{ margin: 0 }}>
+                  Il file con <strong>data, nome, prezzo, IVA, U.M., sconti e fornitore</strong> (es. l'esportazione «Listino Momy»): unità KG → prezzo al kg, formati letti dal nome, sconti applicati, fornitori unificati e prodotti già presenti aggiornati. Prima di scrivere vedi l'anteprima prodotto per prodotto.
+                </p>
+                <div className="row">
+                  <Link className="btn primary" href="/importazioni/listino">
+                    <Icon name="upload" /> Importa un listino
+                  </Link>
+                </div>
+              </div>
+            ) : null}
             {type === 'invoices' ? (
               <>
                 <p className="small muted" style={{ margin: 0 }}>
@@ -168,7 +183,7 @@ export default function ImportsPage() {
                 ) : null}
                 {error ? <div className="alert err">{error}</div> : null}
               </>
-            ) : (
+            ) : type === 'pricelist' ? null : (
             <>
             <div className="row wrap">
               <span className="muted small">1. Scarica il modello:</span>
