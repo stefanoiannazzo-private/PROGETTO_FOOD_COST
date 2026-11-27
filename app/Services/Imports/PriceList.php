@@ -206,16 +206,37 @@ final class PriceList
      */
     public static function looseKey(string $name): string
     {
+        return implode(' ', self::stems($name));
+    }
+
+    /**
+     * Parole significative del nome, ridotte alla radice: «COSCE DI POLLO SV» e «Coscia pollo» → [cosc, poll];
+     * «PETTI DI POLLO» e «Petto di pollo» → [pett, poll]. Toglie articoli e preposizioni, «sv» (sottovuoto), le sigle
+     * del vaso (v1700, vt1700), «Cat.1», il codice articolo in testa e «IT ». @return list<string>
+     */
+    public static function stems(string $name): array
+    {
         $s = ' '.mb_strtolower($name).' ';
         $s = preg_replace('/^\s*\d{5,7}\s+/u', ' ', $s);
         $s = preg_replace('/^\s*it\s+/u', ' ', (string) $s);
-        $s = preg_replace('/(?<![a-z])(?:vt|v)\s*\/?\s*\d+(?:[.,]\d+)?(?![a-z])/u', ' ', (string) $s);   // v1700, vt1700, v/1700
-        $s = preg_replace('/(?<![a-z])cat\.?\s*\d*(?![a-z])/u', ' ', (string) $s);                         // Cat.1, Cat.
+        $s = preg_replace('/(?<![a-z])(?:vt|v)\s*\/?\s*\d+(?:[.,]\d+)?(?![a-z])/u', ' ', (string) $s);
+        $s = preg_replace('/(?<![a-z])cat\.?\s*\d*(?![a-z])/u', ' ', (string) $s);
+        $s = preg_replace('/(?<![a-z])s\s*[\/.]\s*v\.?(?![a-z])/u', ' ', (string) $s); // s/v, s.v.
         $s = preg_replace('/[^a-z0-9àèéìòù]+/u', ' ', (string) $s);
-        $stop = ['di', 'del', 'dello', 'della', 'dei', 'degli', 'delle', 'in', 'con', 'al', 'allo', 'alla', 'ai', 'agli', 'alle', 'e', 'ed', 'il', 'lo', 'la', 'i', 'gli', 'le', 'per', 'da', 'v'];
-        $words = array_values(array_filter(explode(' ', (string) $s), fn ($w) => $w !== '' && ! in_array($w, $stop, true)));
+        $stop = ['di', 'del', 'dello', 'della', 'dei', 'degli', 'delle', 'in', 'con', 'al', 'allo', 'alla', 'ai', 'agli', 'alle', 'e', 'ed', 'il', 'lo', 'la', 'i', 'gli', 'le',
+            'per', 'da', 'v', 'a', 'sv', 'sottovuoto', 'conf', 'confezione', 'kg', 'pz', 'es', 'nl', 'za', 'ec'];
+        $out = [];
+        foreach (explode(' ', (string) $s) as $w) {
+            if ($w === '' || in_array($w, $stop, true)) {
+                continue;
+            }
+            if (! ctype_digit($w) && mb_strlen($w) >= 4) {
+                $w = preg_replace('/[aeiouàèéìòù]+$/u', '', $w) ?: $w; // singolare / plurale
+            }
+            $out[] = $w;
+        }
 
-        return implode(' ', $words);
+        return $out;
     }
 
     /* --------------------------- confezione --------------------------- */

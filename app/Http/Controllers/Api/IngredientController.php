@@ -234,13 +234,23 @@ final class IngredientController extends Controller
     public function merge(Request $req): array
     {
         $ctx = $this->requireCompany($req, 'ingredients.manage');
-        $b = $this->parseBody($req, S::object(['groups' => S::array(S::object(['keepId' => S::uuid(), 'mergeIds' => S::array(S::uuid())->min(1)->max(50)]))->min(1)->max(2000)]));
+        $b = $this->parseBody($req, S::object(['groups' => S::array(S::object(['keepId' => S::uuid(), 'mergeIds' => S::array(S::uuid())->max(50),
+            'separateIds' => S::array(S::uuid())->max(50)->optional()]))->min(1)->max(2000)]));
         $cid = $ctx->companyId();
         $keepIds = array_column($b['groups'], 'keepId');
         $watch = ChangeAlerts::watch($cid, 'ingredients', $keepIds);
         $res = DB::transaction(function () use ($b, $cid, $ctx) {
             $t = ['groups' => 0, 'merged' => 0, 'prices' => 0, 'recipes' => 0];
             foreach ($b['groups'] as $g) {
+                // quelli lasciati separati non vengono più proposti insieme al prodotto tenuto
+                if (! empty($g['separateIds'])) {
+                    foreach ($g['separateIds'] as $sid) {
+                        \App\Services\Duplicates::ignore($cid, [$g['keepId'], $sid]);
+                    }
+                }
+                if (! $g['mergeIds']) {
+                    continue;
+                }
                 $r = \App\Services\Duplicates::merge($cid, $g['keepId'], $g['mergeIds'], $ctx->userId());
                 $t['groups']++;
                 $t['merged'] += count(array_diff(array_unique($g['mergeIds']), [$g['keepId']]));
@@ -254,6 +264,15 @@ final class IngredientController extends Controller
         ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Prodotti doppi uniti', 'seenIngredients' => true]);
 
         return [...$res, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
+    }
+
+    /** NUOVO — «Non sono doppi»: i prodotti indicati non verranno più proposti insieme. */
+    public function ignoreDuplicates(Request $req): array
+    {
+        $ctx = $this->requireCompany($req, 'ingredients.manage');
+        $b = $this->parseBody($req, S::object(['ids' => S::array(S::uuid())->min(2)->max(50)]));
+
+        return ['ok' => true, 'pairs' => \App\Services\Duplicates::ignore($ctx->companyId(), $b['ids'])];
     }
 
     /** NUOVO — fornitori già usati dall'azienda, per i suggerimenti del modulo. */

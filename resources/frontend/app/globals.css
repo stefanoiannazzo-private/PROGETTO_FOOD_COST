@@ -922,3 +922,7 @@ span.ellipsis.topbar-company { display: inline-block; }
 .dup-group.off { opacity: .55; }
 .dup-list { list-style: none; margin: 0; padding: 0; }
 .dup-list li { padding: 10px 16px; border-top: 1px solid var(--border); }
+.dup-keep { display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; min-width: 40px; }
+.dup-keep input { width: 18px; height: 18px; }
+.dup-list li.dup-skip { background: var(--surface-2); }
+.dup-list li.dup-skip strong { font-weight: 500; }

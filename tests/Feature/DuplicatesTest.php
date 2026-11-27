@@ -18,6 +18,15 @@ class DuplicatesTest extends TestCase
         $this->assertSame(PriceList::looseKey('ALBICOCCHE Cat.1'), PriceList::looseKey('IT ALBICOCCHE Cat.'));
         $this->assertNotSame(PriceList::looseKey('Acqua Sparea Nat 1,5l Pet'), PriceList::looseKey('Acqua Sparea Nat 50cl Pet'), 'i formati veri restano diversi');
         $this->assertNotSame(PriceList::looseKey('PEPE NERO in grani'), PriceList::looseKey('PEPE NERO macinato'));
+        $this->assertSame(PriceList::looseKey('COSCE DI POLLO'), PriceList::looseKey('Coscia pollo'));
+        $this->assertSame(PriceList::looseKey('COSCE DI POLLO'), PriceList::looseKey('COSCE DI POLLO SV'));
+        $this->assertNotSame(PriceList::looseKey('COSCE DI POLLO'), PriceList::looseKey('COSTE DI POLLO SV'));
+        $st = fn ($n) => PriceList::stems($n);
+        $this->assertTrue(\App\Services\Duplicates::similar($st('ali di pollo'), $st('ALI DI POLLO bbq')), 'simile: da verificare');
+        $this->assertTrue(\App\Services\Duplicates::similar($st('CIOCC. FONDENTE EXTRA ZAINI 1kg'), $st('CIOCCOLATO FONDENTE EXTRA ZAINI 1kg')));
+        $this->assertFalse(\App\Services\Duplicates::similar($st('FILETTI ALICI 720GR'), $st('FILETTI ALICI 270GR')), 'formati diversi');
+        $this->assertFalse(\App\Services\Duplicates::similar($st('CONFETTURA ALBICOCCA 120% 1,5k'), $st('CONFETTURA FRAGOLA 120% 1,5k')));
+        $this->assertFalse(\App\Services\Duplicates::similar($st('COSCE DI POLLO'), $st('COSTE DI POLLO')));
     }
 
     public function test_trova_e_unisce(): void
@@ -34,11 +43,16 @@ class DuplicatesTest extends TestCase
         $y = $mk('ING-00592', 'FRUTTI DI CAPPERO in aceto', '2026-11-24', '14.49');
         $mk('ING-00700', 'FRUTTI DI CAPPERO in aceto', '2026-11-24', '14.49', 'Altro fornitore'); // altro fornitore: non è un doppione
 
+        $bbq = $mk('ING-00800', 'FRUTTI DI CAPPERO in aceto bbq', '2026-11-24', '14.49');
         $groups = $this->ok($a->get('/api/ingredients/duplicates'))['data'];
         $this->assertCount(1, $groups);
-        $this->assertCount(3, $groups[0]['items']);
+        $this->assertCount(4, $groups[0]['items']);
+        $this->assertFalse($groups[0]['sure']);
+        $flags = collect($groups[0]['items'])->mapWithKeys(fn ($i) => [$i['id'] => $i['same']]);
+        $this->assertTrue($flags[$x]);
+        $this->assertFalse($flags[$bbq], 'descrizione solo simile: non proposta');
 
-        $r = $this->ok($a->post('/api/ingredients/merge', ['groups' => [['keepId' => $k, 'mergeIds' => [$x, $y]]]]));
+        $r = $this->ok($a->post('/api/ingredients/merge', ['groups' => [['keepId' => $k, 'mergeIds' => [$x, $y], 'separateIds' => [$bbq]]]]));
         $this->assertSame([1, 2, 1], [$r['groups'], $r['merged'], $r['prices']]);
         $this->assertSame(2, DB::table('ingredient_prices')->where('ingredient_id', $k)->count(), 'ottobre spostato, il 24/11 non raddoppia');
         $this->assertNotNull(DB::table('ingredients')->where('id', $x)->value('archived_at'));
