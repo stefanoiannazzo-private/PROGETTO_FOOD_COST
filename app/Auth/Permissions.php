@@ -10,7 +10,7 @@ final class Permissions
     // NUOVO: cameriere e cucina/bancone per l'area Ordini
     public const ROLES = ['admin', 'manager', 'operator', 'waiter', 'kitchen'];
 
-    public const ROLE_LABELS = ['admin' => 'Amministratore', 'manager' => 'Responsabile', 'operator' => 'Operatore', 'waiter' => 'Cameriere', 'kitchen' => 'Cucina / Bancone'];
+    public const ROLE_LABELS = ['admin' => 'Amministratore', 'manager' => 'Responsabile', 'operator' => 'Operatore', 'waiter' => 'Cameriere', 'kitchen' => 'Cucina / Bancone', 'service' => 'Tablet di servizio'];
 
     public const PERMISSIONS = [
         'recipes.read' => 'Consultare ricette e schede di preparazione',

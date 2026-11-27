@@ -64,6 +64,30 @@ Route::prefix('/orders/setup')->controller(\App\Http\Controllers\Api\OrderSetupC
     Route::put('/settings', 'updateSettings');
     Route::post('/reorder/{what}', 'reorder');
 });
+// NUOVO: area Ordini — servizio (sala, cucina e bancone, PIN, tablet di servizio)
+Route::prefix('/orders')->controller(\App\Http\Controllers\Api\OrderServiceController::class)->group(function () {
+    Route::get('/floor', 'floor');
+    Route::get('/menu', 'menu');
+    Route::post('/sessions', 'open');
+    Route::get('/sessions/{id}', 'show');
+    Route::patch('/sessions/{id}', 'update');
+    Route::post('/sessions/{id}/tables', 'addTables');
+    Route::delete('/sessions/{id}/tables/{tableId}', 'removeTable');
+    Route::post('/sessions/{id}/send', 'send');
+    Route::post('/sessions/{id}/go', 'go');
+    Route::post('/sessions/{id}/served', 'served');
+    Route::get('/sessions/{id}/bill', 'billPreview');
+    Route::post('/sessions/{id}/close', 'close');
+    Route::post('/items/{itemId}/cancel', 'cancelItem');
+    Route::get('/kitchen', 'kitchen');
+    Route::post('/kitchen/status', 'kitchenStatus');
+    Route::put('/pin', 'setOwnPin');
+    Route::get('/staff', 'staff');
+    Route::put('/staff/{userId}/pin', 'setStaffPin');
+    Route::post('/device/enable', 'enableDevice');
+    Route::post('/device/disable', 'disableDevice');
+    Route::post('/device/whoami', 'whoami');
+});
 // NUOVO: promemoria mensile fatture e bollette
 Route::get('/reminders/current', [\App\Http\Controllers\Api\ReminderController::class, 'current']);
 Route::post('/reminders/seen', [\App\Http\Controllers\Api\ReminderController::class, 'seen']);

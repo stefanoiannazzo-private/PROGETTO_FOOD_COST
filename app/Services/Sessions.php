@@ -51,7 +51,7 @@ final class Sessions
             })
             ->where('s.token_hash', $hash)
             ->first([
-                's.token_hash', 's.expires_at', 's.last_seen_at', 's.active_company_id',
+                's.token_hash', 's.expires_at', 's.last_seen_at', 's.active_company_id', 's.service_device',
                 'u.id as user_id', 'u.email', 'u.name', 'u.is_active', 'u.is_platform_admin',
                 'm.role', 'm.extra_permissions', 'c.id as company_id', 'c.name as company_name',
             ]);
@@ -64,6 +64,10 @@ final class Sessions
 
         $isPlatformAdmin = (bool) $row->is_platform_admin;
         $user = ['id' => $row->user_id, 'email' => $row->email, 'name' => $row->name, 'isPlatformAdmin' => $isPlatformAdmin];
+        // NUOVO: tablet di servizio → solo sala e cucina, niente console, costi o impostazioni
+        if ($row->service_device && $row->company_id && $row->role) {
+            return new AuthContext($hash, [...$user, 'isPlatformAdmin' => false], ['id' => $row->company_id, 'name' => $row->company_name], 'service', ['orders.kitchen', 'orders.take'], false, true);
+        }
         if ($row->company_id && $row->role) {
             $extra = json_decode($row->extra_permissions ?? '[]', true) ?: [];
 

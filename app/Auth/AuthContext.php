@@ -20,6 +20,8 @@ final class AuthContext
         public readonly ?string $role,
         public readonly array $permissions,
         public readonly bool $assist = false,
+        // NUOVO: tablet di servizio (area Ordini): solo sala e cucina, l'operatore si identifica con il PIN
+        public readonly bool $serviceDevice = false,
     ) {
     }
 

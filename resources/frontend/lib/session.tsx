@@ -6,7 +6,7 @@ import { api } from './api'
 export interface Me {
   user: { id: string; email: string; name: string; isPlatformAdmin: boolean } | null
   company: { id: string; name: string } | null
-  role: 'admin' | 'manager' | 'operator' | null
+  role: 'admin' | 'manager' | 'operator' | 'waiter' | 'kitchen' | 'service' | null
   roleLabel: string | null
   permissions: string[]
   companies: Array<{ id: string; name: string; role: string; roleLabel: string }>
@@ -14,6 +14,8 @@ export interface Me {
   assist?: boolean
   /** NUOVO: la guida del primo accesso è già stata vista */
   tourDone?: boolean
+  /** NUOVO: tablet di servizio dell'area Ordini (solo sala e cucina, operatore con PIN) */
+  serviceDevice?: boolean
 }
 
 export function useMe() {

@@ -75,14 +75,14 @@ interface Setup {
 }
 
 const KIND: Record<Station['kind'], string> = { kitchen: 'Cucina', bar: 'Bancone / bar', other: 'Altro' }
-type Tab = 'menu' | 'tavoli' | 'postazioni' | 'digitale'
+type Tab = 'menu' | 'tavoli' | 'postazioni' | 'personale' | 'digitale'
 
 export default function OrderSetupPage() {
   const [tab, setTab] = useState<Tab>('menu')
   const q = useQuery({ queryKey: ['orders', 'setup'], queryFn: () => api.get<Setup>('/orders/setup') })
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab') as Tab | null
-    if (t && ['menu', 'tavoli', 'postazioni', 'digitale'].includes(t)) setTab(t)
+    if (t && ['menu', 'tavoli', 'postazioni', 'personale', 'digitale'].includes(t)) setTab(t)
   }, [])
 
   return (
@@ -94,6 +94,7 @@ export default function OrderSetupPage() {
             ['menu', 'Menu'],
             ['tavoli', 'Sale e tavoli'],
             ['postazioni', 'Postazioni'],
+            ['personale', 'Personale e PIN'],
             ['digitale', 'Menu digitale'],
           ] as Array<[Tab, string]>
         ).map(([k, l]) => (
@@ -112,6 +113,8 @@ export default function OrderSetupPage() {
         <TablesTab s={q.data} />
       ) : tab === 'postazioni' ? (
         <StationsTab s={q.data} />
+      ) : tab === 'personale' ? (
+        <StaffTab />
       ) : (
         <DigitalTab s={q.data} />
       )}
@@ -811,6 +814,73 @@ function StationsTab({ s }: { s: Setup }) {
             <Icon name="plus" /> Aggiungi postazione
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ============================ PERSONALE E PIN ============================ */
+
+interface Staff {
+  userId: string
+  name: string
+  email: string
+  roleLabel: string
+  takesOrders: boolean
+  kitchen: boolean
+  hasPin: boolean
+}
+
+function StaffTab() {
+  const toast = useToast()
+  const qc = useQueryClient()
+  const q = useQuery({ queryKey: ['orders', 'staff'], queryFn: () => api.get<{ data: Staff[] }>('/orders/staff') })
+  const setPin = async (st: Staff, remove = false) => {
+    const pin = remove ? null : window.prompt(`PIN di ${st.name} (4–6 cifre). Comunicaglielo a voce: serve sui tablet condivisi.`, '')
+    if (!remove && (pin === null || pin === '')) return
+    try {
+      await api.put(`/orders/staff/${st.userId}/pin`, { pin })
+      void qc.invalidateQueries({ queryKey: ['orders', 'staff'] })
+      toast(remove ? 'PIN tolto.' : `PIN di ${st.name} impostato.`)
+    } catch (e) {
+      toast(fieldErrors(e).pin ?? errorMessage(e))
+    }
+  }
+  return (
+    <div className="card">
+      <div className="card-body stack">
+        <p className="small muted" style={{ margin: 0 }}>
+          Camerieri e cuochi entrano dal <strong>proprio telefono</strong> con email e password (invitali da «Utenti» con il ruolo <em>Cameriere</em> o <em>Cucina / Bancone</em>), oppure dai <strong>tablet condivisi</strong> del locale identificandosi con un <strong>PIN</strong>. Per attivare un tablet condiviso apri «Sala» su quel dispositivo e tocca «Tablet di servizio».
+        </p>
+        {q.error ? (
+          <ErrorBox error={q.error} />
+        ) : !q.data ? (
+          <Skeleton rows={3} />
+        ) : !q.data.data.length ? (
+          <div className="small muted">Nessuno del personale può ancora prendere ordini o vedere le comande.</div>
+        ) : (
+          <ul className="menu-items" style={{ margin: 0 }}>
+            {q.data.data.map((st) => (
+              <li key={st.userId}>
+                <div className="grow">
+                  <strong>{st.name}</strong> <span className="small faint">· {st.roleLabel}</span>
+                  <div className="small faint">
+                    {[st.takesOrders ? 'prende ordini' : null, st.kitchen ? 'vede le comande' : null].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <span className={`badge ${st.hasPin ? 'ok' : ''}`}>{st.hasPin ? 'PIN impostato' : 'senza PIN'}</span>
+                <button className="btn sm" onClick={() => void setPin(st)}>
+                  {st.hasPin ? 'Cambia PIN' : 'Imposta PIN'}
+                </button>
+                {st.hasPin ? (
+                  <button className="btn ghost sm" onClick={() => void setPin(st, true)}>
+                    Togli
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   )

@@ -57,6 +57,8 @@ final class AuthController extends Controller
             'companies' => $companies->map(fn ($c) => ['id' => $c->id, 'name' => $c->name, 'role' => $c->role, 'roleLabel' => Permissions::ROLE_LABELS[$c->role]])->all(),
             // NUOVO: il superadmin che assiste un'azienda di cui non è membro
             'assist' => $auth?->assist ?? false,
+            // NUOVO: tablet di servizio dell'area Ordini
+            'serviceDevice' => $auth?->serviceDevice ?? false,
             // NUOVO: guida del primo accesso già vista (completata o chiusa)
             'tourDone' => DB::table('users')->where('id', $userId)->value('tour_completed_at') !== null,
         ];
@@ -114,6 +116,9 @@ final class AuthController extends Controller
     public function company(Request $req): array
     {
         $auth = $this->requireAuth($req);
+        if ($auth->serviceDevice) {
+            throw AppError::forbidden(); // NUOVO: il tablet di servizio resta sul suo locale
+        }
         $body = $this->parseBody($req, S::object(['companyId' => S::uuid()]));
         $companyId = strtolower($body['companyId']);
         $m = DB::table('memberships as m')->join('companies as c', 'c.id', '=', 'm.company_id')
@@ -140,6 +145,9 @@ final class AuthController extends Controller
     public function changePassword(Request $req): array
     {
         $auth = $this->requireAuth($req);
+        if ($auth->serviceDevice) {
+            throw AppError::forbidden();
+        }
         $body = $this->parseBody($req, S::object(['currentPassword' => S::string()->min(1), 'newPassword' => self::password()]));
         $hash = DB::table('users')->where('id', $auth->userId())->value('password_hash');
         if (! Crypto::verifyPassword($body['currentPassword'], $hash)) {
