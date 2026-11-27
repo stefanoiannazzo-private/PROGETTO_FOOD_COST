@@ -58,6 +58,7 @@ export default function IngredientDetailPage() {
   const [saving, setSaving] = useState(false)
   const [affected, setAffected] = useState<AffectedRecipe[]>([])
   const [confirm, setConfirm] = useState<null | 'delete' | 'archive'>(null)
+  const [updatePrices, setUpdatePrices] = useState(true)
   const editable = can('ingredients.manage')
 
   useEffect(() => {
@@ -84,6 +85,41 @@ export default function IngredientDetailPage() {
   if (q.error) return <ErrorBox error={q.error} retry={() => q.refetch()} />
   if (!q.data || !v) return <Skeleton rows={8} />
   const d = q.data
+  // NUOVO: la confezione cambia (es. da «1 pz» a «24 pz») e ci sono prezzi registrati con quella di prima:
+  // si propone di correggerli, perché l'importo pagato era per la confezione intera.
+  const packChanged = v.packageUnit !== d.packageUnit || Number(String(v.packageContent).replace(',', '.')) !== Number(d.packageContent)
+  const oldPrices = d.prices.filter((p) => p.package_unit === d.packageUnit && Number(p.package_content) === Number(d.packageContent))
+  const newContent = Number(String(v.packageContent).replace(',', '.'))
+  const repack = packChanged && oldPrices.length && newContent > 0 && dimOf(v.packageUnit) === dimOf(d.packageUnit) ? { n: oldPrices.length, sample: oldPrices[0]! } : null
+  const perUnit = (price: string) => {
+    const f = v.packageUnit === 'g' || v.packageUnit === 'ml' ? 1000 : v.packageUnit === 'cl' ? 100 : 1
+    const base = v.packageUnit === 'g' || v.packageUnit === 'kg' ? 'kg' : ['ml', 'cl', 'l'].includes(v.packageUnit) ? 'l' : v.packageUnit
+    return `${euro(String((Number(price) / newContent) * f))}/${base}`
+  }
+  // prezzi già registrati con una confezione diversa da quella attuale (stessa grandezza): proposta di allineamento
+  const misaligned = packChanged
+    ? []
+    : Object.values(
+        d.prices
+          .filter((p) => dimOf(p.package_unit) === dimOf(d.packageUnit) && !(p.package_unit === d.packageUnit && Number(p.package_content) === Number(d.packageContent)))
+          .reduce<Record<string, { content: string; unit: string; n: number; sample: Price }>>((acc, p) => {
+            const k = `${Number(p.package_content)}|${p.package_unit}`
+            acc[k] = acc[k] ? { ...acc[k], n: acc[k].n + 1 } : { content: p.package_content, unit: p.package_unit, n: 1, sample: p }
+            return acc
+          }, {}),
+      )
+  const align = async (m: { content: string; unit: string }) => {
+    try {
+      const r = await api.post<{ updated: number; affectedRecipes: AffectedRecipe[] }>(`/ingredients/${id}/prices/align`, { fromContent: m.content, fromUnit: m.unit })
+      setAffected(r.affectedRecipes)
+      await qc.invalidateQueries({ queryKey: ['ingredients'] })
+      await qc.invalidateQueries({ queryKey: ['recipes'] })
+      toast(r.updated === 1 ? 'Prezzo corretto.' : `${r.updated} prezzi corretti.`)
+    } catch (e) {
+      toast(errorMessage(e), 'err')
+    }
+  }
+  const qn = (x: string | number | null) => String(Number(x)).replace('.', ',')
 
   const save = async () => {
     const local = validateIngredient(v)
@@ -94,11 +130,12 @@ export default function IngredientDetailPage() {
     }
     setSaving(true)
     try {
-      const r = await api.patch<{ affectedRecipes: AffectedRecipe[] }>(`/ingredients/${id}`, { ...ingredientPayload(v), code: v.code, lockVersion: d.lockVersion })
+      const r = await api.patch<{ affectedRecipes: AffectedRecipe[]; repricedPrices: number }>(`/ingredients/${id}`, { ...ingredientPayload(v), code: v.code, lockVersion: d.lockVersion, updatePrices: !!repack && updatePrices })
       setAffected(r.affectedRecipes)
+      if (r.repricedPrices) toast(`Prodotto salvato: confezione corretta anche in ${r.repricedPrices === 1 ? '1 prezzo' : `${r.repricedPrices} prezzi`}.`)
       await qc.invalidateQueries({ queryKey: ['ingredients'] })
       await qc.invalidateQueries({ queryKey: ['recipes'] })
-      toast('Prodotto salvato.')
+      if (!r.repricedPrices) toast('Prodotto salvato.')
     } catch (e) {
       setErrors(fieldErrors(e))
       toast(errorMessage(e), 'err')
@@ -158,6 +195,37 @@ export default function IngredientDetailPage() {
             <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }}>
               <IngredientFields v={v} set={(p) => setV((x) => ({ ...x!, ...p }))} errors={errors} lockDimension={d.prices.length ? dimOf(d.packageUnit) : undefined} />
             </fieldset>
+            {editable && d.priceVisible
+              ? misaligned.map((m) => (
+                  <div key={`${m.content}|${m.unit}`} className="alert warn" style={{ flexDirection: 'column', gap: 8 }}>
+                    <span>
+                      <strong>
+                        {m.n === 1 ? 'Un prezzo è registrato' : `${m.n} prezzi sono registrati`} per {qn(m.content)} {m.unit}, ma la confezione indicata è da {qn(d.packageContent)} {d.packageUnit}.
+                      </strong>{' '}
+                      Se {m.n === 1 ? 'l\'importo era' : 'gli importi erano'} per la confezione intera (es. {euro(m.sample.package_price)} per il cartone), {m.n === 1 ? 'correggilo' : 'correggili'}: costerà {perUnit(m.sample.package_price)} invece di {euro(m.sample.unitPrice)}/{m.sample.baseUnit}.
+                    </span>
+                    <span>
+                      <button type="button" className="btn sm primary" onClick={() => void align(m)}>
+                        Correggi: {euro(m.sample.package_price)} per {qn(d.packageContent)} {d.packageUnit}
+                      </button>
+                    </span>
+                  </div>
+                ))
+              : null}
+            {editable && repack && d.priceVisible ? (
+              <label className="alert info row" style={{ alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
+                <input type="checkbox" checked={updatePrices} onChange={(e) => setUpdatePrices(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>
+                  <strong>
+                    Correggi anche {repack.n === 1 ? 'il prezzo già registrato' : `i ${repack.n} prezzi già registrati`} con la confezione da {qn(d.packageContent)} {d.packageUnit}
+                  </strong>
+                  <br />
+                  <span className="small">
+                    L'importo pagato resta {euro(repack.sample.package_price)}, ma vale per {qn(newContent)} {v.packageUnit}: {perUnit(repack.sample.package_price)} invece di {euro(repack.sample.unitPrice)}/{repack.sample.baseUnit}. Togli la spunta solo se quei prezzi erano davvero per {qn(d.packageContent)} {d.packageUnit}.
+                  </span>
+                </span>
+              </label>
+            ) : null}
             {editable ? (
               <div className="row">
                 <button className="btn primary" type="submit" disabled={saving}>

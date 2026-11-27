@@ -134,6 +134,7 @@ Route::get('/ingredients/{id}', [IngredientController::class, 'show']);
 Route::post('/ingredients', [IngredientController::class, 'store']);
 Route::patch('/ingredients/{id}', [IngredientController::class, 'update']);
 Route::post('/ingredients/{id}/prices', [IngredientController::class, 'addPrice']);
+Route::post('/ingredients/{id}/prices/align', [IngredientController::class, 'alignPrices']);
 Route::delete('/ingredients/{id}/prices/{priceId}', [IngredientController::class, 'deletePrice']);
 Route::post('/ingredients/{id}/archive', [IngredientController::class, 'archive']);
 Route::post('/ingredients/{id}/restore', [IngredientController::class, 'restore']);

@@ -48,6 +48,11 @@ final class IngredientController extends Controller
         ]);
     }
 
+    private static function dimension(string $u): string
+    {
+        return in_array($u, ['g', 'kg'], true) ? 'mass' : (in_array($u, ['ml', 'cl', 'l'], true) ? 'volume' : 'count');
+    }
+
     public static function priceBody(): Schema
     {
         return S::object([
@@ -317,11 +322,14 @@ final class IngredientController extends Controller
     {
         $ctx = $this->requireCompany($req, 'ingredients.manage');
         $id = $this->uuid($id);
-        $body = $this->parseBody($req, self::ingredientBody()->extend(['code' => S::reqText('Il codice', 40), 'lockVersion' => S::int()]));
+        // NUOVO: updatePrices = la confezione era sbagliata (es. 1 pz invece di 24 pz): si corregge anche nei prezzi
+        // registrati con la confezione di prima, lasciando invariato l'importo pagato.
+        $body = $this->parseBody($req, self::ingredientBody()->extend(['code' => S::reqText('Il codice', 40), 'lockVersion' => S::int(), 'updatePrices' => S::bool()->default(false)]));
         self::checkConversions($body);
         $cid = $ctx->companyId();
         $watch = ChangeAlerts::watch($cid, 'ingredients', [$id]);
-        $changes = DB::transaction(function () use ($ctx, $body, $cid, $id) {
+        $repriced = 0;
+        $changes = DB::transaction(function () use ($ctx, $body, $cid, $id, &$repriced) {
             $cur = DB::table('ingredients')->where('id', $id)->where('company_id', $cid)->lockForUpdate()->first();
             if (! $cur) {
                 throw AppError::notFound('Ingrediente');
@@ -353,17 +361,61 @@ final class IngredientController extends Controller
             }
             $changes = Audit::diff($before, array_map([Audit::class, 'normalizeNum'], $next));
             DB::table('ingredients')->where('id', $id)->update([...$next, 'updated_at' => Clock::now(), 'lock_version' => $cur->lock_version + 1]);
+            $packChanged = ! Dec::of($cur->package_content)->eq(Dec::of($body['packageContent'])) || $cur->package_unit !== $body['packageUnit'];
+            if ($body['updatePrices'] && $packChanged) {
+                if (self::dimension($cur->package_unit) !== self::dimension($body['packageUnit'])) {
+                    throw new AppError(422, 'validation_failed', 'I prezzi registrati non si possono convertire in un\'altra unità (es. da pezzi a kg).', ['fields' => ['packageUnit' => 'Unità non compatibile con i prezzi già registrati.']]);
+                }
+                $repriced = DB::table('ingredient_prices')->where('company_id', $cid)->where('ingredient_id', $id)
+                    ->where('package_content', Dec::of($cur->package_content)->toFixed(6))->where('package_unit', $cur->package_unit)
+                    ->update(['package_content' => $body['packageContent'], 'package_unit' => $body['packageUnit']]);
+                if ($repriced) {
+                    $changes['prices_package'] = ['from' => Audit::normalizeNum($cur->package_content).' '.$cur->package_unit, 'to' => Audit::normalizeNum($body['packageContent']).' '.$body['packageUnit'], 'rows' => $repriced];
+                }
+            }
             Audit::log($cid, $ctx->userId(), 'ingredient', $id, 'updated', $changes);
 
             return $changes;
         });
-        $costRelevant = array_intersect(['edible_yield', 'density_kg_per_l', 'unit_weight_kg'], array_keys($changes));
+        $costRelevant = array_intersect(['edible_yield', 'density_kg_per_l', 'unit_weight_kg', 'prices_package'], array_keys($changes));
         $affected = $costRelevant ? Costing::invalidate($cid, 'ingredients', [$id]) : [];
         if ($costRelevant) {
-            ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Dati di «'.$body['name'].'» modificati (resa, densità o peso)', 'seenIngredients' => true]);
+            $label = $repriced ? 'Confezione di «'.$body['name'].'» corretta anche nei prezzi registrati' : 'Dati di «'.$body['name'].'» modificati (resa, densità o peso)';
+            ChangeAlerts::commit($watch, $ctx->userId(), ['label' => $label, 'seenIngredients' => true]);
         }
 
-        return ['ok' => true, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
+        return ['ok' => true, 'repricedPrices' => $repriced, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
+    }
+
+    /**
+     * NUOVO — prezzi registrati con una confezione diversa da quella del prodotto (es. 12,06 € «per 1 pz»
+     * mentre il cartone è da 24 pz): l'importo pagato resta, la confezione diventa quella del prodotto.
+     */
+    public function alignPrices(Request $req, string $id): array
+    {
+        $ctx = $this->requireCompany($req, 'ingredients.manage', 'costs.read');
+        $id = $this->uuid($id);
+        $b = $this->parseBody($req, S::object(['fromContent' => S::dec(['gt' => 0, 'label' => 'La confezione']), 'fromUnit' => S::measureUnit()]));
+        $cid = $ctx->companyId();
+        $ing = DB::table('ingredients')->where('id', $id)->where('company_id', $cid)->first();
+        if (! $ing) {
+            throw AppError::notFound('Ingrediente');
+        }
+        if (self::dimension($b['fromUnit']) !== self::dimension($ing->package_unit)) {
+            throw new AppError(422, 'validation_failed', 'Questi prezzi sono in un\'altra unità e non si possono convertire.');
+        }
+        $watch = ChangeAlerts::watch($cid, 'ingredients', [$id]);
+        $n = DB::table('ingredient_prices')->where('company_id', $cid)->where('ingredient_id', $id)
+            ->where('package_content', Dec::of($b['fromContent'])->toFixed(6))->where('package_unit', $b['fromUnit'])
+            ->update(['package_content' => $ing->package_content, 'package_unit' => $ing->package_unit]);
+        $affected = [];
+        if ($n) {
+            Audit::log($cid, $ctx->userId(), 'ingredient', $id, 'prices_aligned', ['prices_package' => ['from' => Audit::normalizeNum($b['fromContent']).' '.$b['fromUnit'], 'to' => Audit::normalizeNum($ing->package_content).' '.$ing->package_unit, 'rows' => $n]]);
+            $affected = Costing::invalidate($cid, 'ingredients', [$id]);
+            ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Confezione di «'.$ing->name.'» corretta nei prezzi registrati', 'seenIngredients' => true]);
+        }
+
+        return ['ok' => true, 'updated' => $n, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
     }
 
     /** Nuovo prezzo: crea una voce di storico e segnala le ricette interessate, anche indirettamente. */

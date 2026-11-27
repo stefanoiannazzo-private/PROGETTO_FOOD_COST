@@ -358,7 +358,7 @@ export function IngredientFields({
         }}
       />
       {v.mode === 'conf' ? <PackHelpers v={v} set={set} errors={errors} lockDimension={lockDimension} onUsage={(u) => !usageTouched && set({ usageUnit: u })} /> : null}
-      {!isNew && v.mode ? <div className="faint small">Vale per i prossimi prezzi: quelli già registrati restano con la loro confezione.</div> : null}
+      {!isNew && v.mode ? <div className="faint small">Se correggi la confezione, sotto ti proponiamo di correggerla anche nei prezzi già registrati (l’importo pagato resta uguale).</div> : null}
       <div className="grid-3">
         <Field label="Resa" htmlFor="ing-yield" hint="Facoltativa. Su 10 kg te ne restano 8 dopo la pulizia? Scrivi 80%" error={errors.edibleYieldPercent}>
           <NumberInput id="ing-yield" value={v.edibleYieldPercent} onChange={(x) => set({ edibleYieldPercent: x })} suffix="%" invalid={!!errors.edibleYieldPercent} />
