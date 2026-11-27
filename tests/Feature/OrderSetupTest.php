@@ -69,6 +69,19 @@ class OrderSetupTest extends TestCase
         $this->assertSame(409, $a->del("/api/orders/setup/sections/{$pizze}")->status);
     }
 
+    public function test_sala_con_nome_doppio_rifiutata(): void
+    {
+        $a = $this->loginAs('admin@o.test');
+        $s1 = $this->ok($a->post('/api/orders/setup/areas', ['name' => 'Sala 1']))['id'];
+        $dup = $a->post('/api/orders/setup/areas', ['name' => ' sala 1 ']);
+        $this->assertSame(422, $dup->status);
+        $this->assertSame('Esiste già una sala con questo nome.', $dup->body['error']['details']['fields']['name']);
+        $s2 = $this->ok($a->post('/api/orders/setup/areas', ['name' => 'Dehors']))['id'];
+        $this->assertSame(422, $a->put("/api/orders/setup/areas/{$s2}", ['name' => 'SALA 1'])->status);
+        $this->ok($a->put("/api/orders/setup/areas/{$s1}", ['name' => 'Sala 1'])); // stesso nome sulla stessa sala: ok
+        $this->assertSame(1, DB::table('dining_areas')->where('name', 'Sala 1')->count());
+    }
+
     public function test_tavoli_singoli_e_a_intervallo(): void
     {
         $a = $this->loginAs('admin@o.test');

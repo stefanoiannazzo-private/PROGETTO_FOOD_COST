@@ -185,7 +185,7 @@ function MenuTab({ s }: { s: Setup }) {
         const items = s.items.filter((m) => m.sectionId === sec.id)
         return (
           <div className="card menu-section" key={sec.id} style={{ marginBottom: 14, opacity: sec.isVisible ? 1 : 0.6 }}>
-            <div className="card-head">
+            <div className="card-head area-head">
               <div>
                 <h2 style={{ display: 'inline' }}>{sec.name}</h2>{' '}
                 {sec.isDrinks ? <span className="badge info">bevande · partono subito</span> : null}
@@ -518,79 +518,117 @@ function ItemEditor({ s, item, sectionId, onClose }: { s: Setup; item: MenuItem 
 function TablesTab({ s }: { s: Setup }) {
   const refresh = useRefresh()
   const toast = useToast()
-  const [adding, setAdding] = useState(false)
+  // NUOVO: i tavoli si aggiungono dentro la loro sala (pulsante nel riquadro); la sala si rinomina o elimina da lì.
+  const [adding, setAdding] = useState<{ areaId: string | null } | null>(null)
   const [edit, setEdit] = useState<Table | null>(null)
   const [areaName, setAreaName] = useState('')
+  const [busy, setBusy] = useState(false)
   const addArea = async () => {
-    if (!areaName.trim()) return
+    if (!areaName.trim() || busy) return
+    setBusy(true)
     try {
-      await api.post('/orders/setup/areas', { name: areaName })
+      await api.post('/orders/setup/areas', { name: areaName.trim() })
       setAreaName('')
+      refresh()
+    } catch (e) {
+      toast(errorMessage(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const renameArea = async (a: Area) => {
+    const name = window.prompt('Nuovo nome della sala', a.name)
+    if (!name || !name.trim() || name.trim() === a.name) return
+    try {
+      await api.put(`/orders/setup/areas/${a.id}`, { name: name.trim() })
       refresh()
     } catch (e) {
       toast(errorMessage(e))
     }
   }
-  const groups = [...s.areas.map((a) => ({ id: a.id as string | null, name: a.name })), { id: null, name: s.areas.length ? 'Senza sala' : 'Tavoli' }]
+  const deleteArea = async (a: Area, count: number) => {
+    const msg = count ? `Eliminare la sala «${a.name}»? I suoi ${count} tavoli restano, senza sala.` : `Eliminare la sala «${a.name}»?`
+    if (!window.confirm(msg)) return
+    try {
+      await api.del(`/orders/setup/areas/${a.id}`)
+      refresh()
+    } catch (e) {
+      toast(errorMessage(e))
+    }
+  }
+  const loose = s.tables.filter((t) => !t.areaId)
+  const groups: { area: Area | null; name: string; tables: Table[] }[] = [
+    ...s.areas.map((a) => ({ area: a, name: a.name, tables: s.tables.filter((t) => t.areaId === a.id) })),
+    ...(loose.length || !s.areas.length ? [{ area: null, name: s.areas.length ? 'Senza sala' : 'Tavoli', tables: loose }] : []),
+  ]
   return (
     <>
       <div className="row between wrap" style={{ marginBottom: 12, gap: 8 }}>
         <div className="row" style={{ gap: 6 }}>
-          <input className="input" style={{ width: 200 }} placeholder="Nuova sala (es. Dehors)" value={areaName} onChange={(e) => setAreaName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void addArea()} />
-          <button className="btn" onClick={() => void addArea()} disabled={!areaName.trim()}>
-            Aggiungi sala
+          <input className="input" style={{ width: 200 }} placeholder="Nuova sala (es. Dehors)" value={areaName} maxLength={60} onChange={(e) => setAreaName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void addArea()} />
+          <button className="btn" onClick={() => void addArea()} disabled={!areaName.trim() || busy}>
+            {busy ? <span className="spinner" /> : <Icon name="plus" />} Aggiungi sala
           </button>
         </div>
-        <div className="row" style={{ gap: 6 }}>
-          {s.tables.length ? (
-            <Link className="btn" href="/ordini/qr" target="_blank">
-              <Icon name="qr" /> Stampa i QR
-            </Link>
-          ) : null}
-          <button className="btn primary" onClick={() => setAdding(true)}>
-            <Icon name="plus" /> Aggiungi tavoli
-          </button>
-        </div>
+        {s.tables.length ? (
+          <Link className="btn" href="/ordini/qr" target="_blank">
+            <Icon name="qr" /> Stampa i QR
+          </Link>
+        ) : null}
       </div>
-      {!s.tables.length ? (
-        <div className="card">
-          <Empty title="Nessun tavolo">Aggiungi i tavoli del locale: puoi crearne tanti in un colpo, per esempio dal 1 al 20. Durante il servizio il cameriere potrà unirli (5 + 6 → «5-6»).</Empty>
-        </div>
-      ) : (
-        groups.map((g) => {
-          const tables = s.tables.filter((t) => t.areaId === g.id)
-          if (!tables.length && g.id === null) return null
-          return (
-            <div className="card" key={g.id ?? 'none'} style={{ marginBottom: 14 }}>
-              <div className="card-head">
-                <h2>{g.name}</h2>
-                <span className="small muted">
-                  {tables.length} tavoli · {tables.reduce((a, t) => a + t.seats, 0)} posti
-                </span>
-              </div>
-              <div className="card-body table-grid">
-                {tables.map((t) => (
-                  <button key={t.id} type="button" className={`table-chip ${t.isActive ? '' : 'off'}`} onClick={() => setEdit(t)}>
-                    <strong>{t.label}</strong>
-                    <span className="small faint">{t.seats} posti</span>
-                  </button>
-                ))}
-                {!tables.length ? <span className="small muted">Nessun tavolo in questa sala.</span> : null}
-              </div>
+      {groups.map((g) => (
+        <div className="card area-card" key={g.area?.id ?? 'none'} style={{ marginBottom: 14 }}>
+          <div className="card-head area-head">
+            <div>
+              <h2>{g.name}</h2>
+              <span className="small muted">
+                {g.tables.length} {g.tables.length === 1 ? 'tavolo' : 'tavoli'} · {g.tables.reduce((n, t) => n + t.seats, 0)} posti
+              </span>
             </div>
-          )
-        })
-      )}
-      {adding ? <TablesAdd s={s} onClose={() => setAdding(false)} /> : null}
+            <div className="row" style={{ gap: 6 }}>
+              {g.area ? (
+                <>
+                  <button className="btn sm ghost" onClick={() => void renameArea(g.area!)}>
+                    Rinomina
+                  </button>
+                  <button className="btn sm ghost" onClick={() => void deleteArea(g.area!, g.tables.length)}>
+                    Elimina
+                  </button>
+                </>
+              ) : null}
+              <button className="btn sm primary" onClick={() => setAdding({ areaId: g.area?.id ?? null })}>
+                <Icon name="plus" /> Aggiungi tavoli
+              </button>
+            </div>
+          </div>
+          <div className="card-body table-grid">
+            {g.tables.map((t) => (
+              <button key={t.id} type="button" className={`table-chip ${t.isActive ? '' : 'off'}`} onClick={() => setEdit(t)}>
+                <strong>{t.label}</strong>
+                <span className="small faint">{t.seats} posti</span>
+              </button>
+            ))}
+            {!g.tables.length ? (
+              <span className="small muted table-grid-empty">
+                {g.area ? 'Nessun tavolo in questa sala: tocca «Aggiungi tavoli».' : 'Aggiungi i tavoli del locale: puoi crearne tanti in un colpo, per esempio dal 1 al 20. Durante il servizio il cameriere potrà unirli (5 + 6 → «5-6»). Se hai più sale (es. Interna, Dehors) creale prima qui sopra.'}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ))}
+      {adding ? <TablesAdd s={s} areaId={adding.areaId} onClose={() => setAdding(null)} /> : null}
       {edit ? <TableEdit s={s} table={edit} onClose={() => setEdit(null)} /> : null}
     </>
   )
 }
 
-function TablesAdd({ s, onClose }: { s: Setup; onClose: () => void }) {
+function TablesAdd({ s, areaId, onClose }: { s: Setup; areaId: string | null; onClose: () => void }) {
   const refresh = useRefresh()
   const [mode, setMode] = useState<'range' | 'one'>('range')
-  const [v, setV] = useState({ from: '1', to: '10', label: '', seats: '4', areaId: s.areas[0]?.id ?? '' })
+  // I numeri dei tavoli sono unici nel locale: si propone di continuare dall'ultimo.
+  const next = s.tables.reduce((m, t) => (/^\d+$/.test(t.label) ? Math.max(m, Number(t.label)) : m), 0) + 1
+  const [v, setV] = useState({ from: String(next), to: String(next + 9), label: '', seats: '4', areaId: areaId ?? '' })
+  const areaName = s.areas.find((a) => a.id === areaId)?.name
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const save = async () => {
@@ -612,7 +650,7 @@ function TablesAdd({ s, onClose }: { s: Setup; onClose: () => void }) {
   }
   return (
     <Drawer
-      title="Aggiungi tavoli"
+      title={areaName ? `Aggiungi tavoli · ${areaName}` : 'Aggiungi tavoli'}
       onClose={onClose}
       footer={
         <>

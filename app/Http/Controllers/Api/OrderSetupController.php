@@ -228,8 +228,17 @@ class OrderSetupController extends Controller
     {
         $ctx = $this->requireCompany($req, 'orders.manage');
         $b = $this->parseBody($req, S::object(['name' => S::reqText('Il nome della sala', 60)]));
+        $this->checkAreaName($ctx->companyId(), $b['name']);
         $id = (string) Str::uuid();
-        DB::table('dining_areas')->insert(['id' => $id, 'company_id' => $ctx->companyId(), 'name' => $b['name'], 'sort' => $this->nextSort('dining_areas', $ctx->companyId()), 'created_at' => Clock::now()]);
+        try {
+            DB::table('dining_areas')->insert(['id' => $id, 'company_id' => $ctx->companyId(), 'name' => $b['name'], 'sort' => $this->nextSort('dining_areas', $ctx->companyId()), 'created_at' => Clock::now()]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
+                throw $e;
+            }
+            $this->checkAreaName($ctx->companyId(), $b['name']); // doppio invio nello stesso istante
+            throw $e;
+        }
 
         return ['id' => $id];
     }
@@ -239,6 +248,7 @@ class OrderSetupController extends Controller
         $ctx = $this->requireCompany($req, 'orders.manage');
         $id = $this->owned('dining_areas', $id, $ctx->companyId());
         $b = $this->parseBody($req, S::object(['name' => S::reqText('Il nome della sala', 60)]));
+        $this->checkAreaName($ctx->companyId(), $b['name'], $id);
         DB::table('dining_areas')->where('id', $id)->update(['name' => $b['name']]);
 
         return ['ok' => true];
@@ -251,6 +261,17 @@ class OrderSetupController extends Controller
         DB::table('dining_areas')->where('id', $id)->delete(); // i tavoli restano, senza sala
 
         return ['ok' => true];
+    }
+
+    private function checkAreaName(string $cid, string $name, ?string $except = null): void
+    {
+        $q = DB::table('dining_areas')->where('company_id', $cid)->whereRaw('LOWER(TRIM(name)) = ?', [mb_strtolower(trim($name))]);
+        if ($except) {
+            $q->where('id', '!=', $except);
+        }
+        if ($q->exists()) {
+            throw new AppError(422, 'validation_failed', 'Esiste già una sala con questo nome.', ['fields' => ['name' => 'Esiste già una sala con questo nome.']]);
+        }
     }
 
     /** Uno o più tavoli: label singola oppure da… a… (es. 1–20). */
