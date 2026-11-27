@@ -10,6 +10,7 @@ import { PageHead } from '@/components/AppShell'
 import { DataTable, useList, useListState, type Column } from '@/components/DataTable'
 import { CreateIngredientDrawer } from '@/components/IngredientForm'
 import { CategoriesDrawer } from '@/components/CategoriesDrawer'
+import { DuplicatesDrawer, useDuplicates } from '@/components/DuplicatesDrawer'
 import { Empty, Icon } from '@/components/ui'
 import { ChangedBadge, ChangedListBanner, useChangedSet } from '@/components/ChangeAlerts'
 import { useQuickAction } from '@/lib/quick'
@@ -37,6 +38,9 @@ export default function IngredientsPage() {
   const query = useList<Row>('ingredients', '/ingredients', state)
   const [creating, setCreating] = useState(false)
   const [categories, setCategories] = useState(false)
+  const [dups, setDups] = useState(false)
+  const dupQ = useDuplicates(can('ingredients.manage'))
+  const dupGroups = dupQ.data?.data.length ?? 0
   useQuickAction('nuovo-ingrediente', () => can('ingredients.manage') && setCreating(true))
   const cats = useQuery({ queryKey: ['ingredients', 'categories'], queryFn: () => api.get<{ data: string[] }>('/ingredients/categories'), staleTime: 60_000 })
   const showCosts = can('costs.read')
@@ -108,6 +112,18 @@ export default function IngredientsPage() {
       />
       <datalist id="ingredient-categories">{cats.data?.data.map((c) => <option key={c} value={c} />)}</datalist>
       <ChangedListBanner type="ingredient" />
+      {/* NUOVO: stesso articolo dello stesso fornitore scritto in modi diversi */}
+      {dupGroups > 0 ? (
+        <div className="alert warn" style={{ marginBottom: 12 }}>
+          <Icon name="alert" />
+          <div className="grow">
+            <strong>{dupGroups} {dupGroups === 1 ? 'prodotto è doppio' : 'prodotti sono doppi'}</strong>: lo stesso articolo dello stesso fornitore scritto in modi diversi nelle fatture. Uniscili per avere un solo storico prezzi.
+          </div>
+          <button className="btn sm" onClick={() => setDups(true)}>
+            Rivedi e unisci
+          </button>
+        </div>
+      ) : null}
       {/* NUOVO: prodotti a pezzi senza peso (es. importati da Excel con contenuto «1 pz») */}
       {Number(query.data?.meta.missingWeight ?? 0) > 0 && state.filters.weight !== 'missing' ? (
         <div className="alert warn" style={{ marginBottom: 12 }}>
@@ -166,6 +182,7 @@ export default function IngredientsPage() {
       />
       {creating ? <CreateIngredientDrawer onClose={() => setCreating(false)} /> : null}
       {categories ? <CategoriesDrawer onClose={() => setCategories(false)} /> : null}
+      {dups ? <DuplicatesDrawer onClose={() => setDups(false)} /> : null}
     </>
   )
 }

@@ -128,6 +128,8 @@ Route::patch('/companies/current', [CompanyController::class, 'updateCurrent']);
 // Ingredienti
 Route::get('/ingredients', [IngredientController::class, 'index']);
 Route::get('/ingredients/categories', [IngredientController::class, 'categories']);
+Route::get('/ingredients/duplicates', [IngredientController::class, 'duplicates']);
+Route::post('/ingredients/merge', [IngredientController::class, 'merge']);
 Route::get('/ingredients/category-settings', [IngredientController::class, 'categorySettings']);
 Route::put('/ingredients/category-settings', [IngredientController::class, 'updateCategorySetting']);
 Route::get('/ingredients/suppliers', [IngredientController::class, 'suppliers']);

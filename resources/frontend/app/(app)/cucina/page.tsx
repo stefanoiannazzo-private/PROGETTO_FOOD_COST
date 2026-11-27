@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useMe } from '@/lib/session'
@@ -38,6 +39,14 @@ export default function KitchenPage() {
   const qc = useQueryClient()
   const toast = useToast()
   const [started, setStarted] = useState(false)
+  // NUOVO: il riquadro iniziale si può chiudere senza avviare il servizio (pagina aperta per sbaglio o solo per guardare)
+  const [dismissed, setDismissed] = useState(false)
+  const router = useRouter()
+  const start = () => {
+    unlockAudio()
+    alertSound('ready', 0.6)
+    setStarted(true)
+  }
   const [chosen, setChosen] = useState<string[] | null>(null)
   const [alarm, setAlarm] = useState<string[]>([]) // comande nuove non ancora viste
   const [soldOut, setSoldOut] = useState(false)
@@ -131,6 +140,11 @@ export default function KitchenPage() {
         </div>
         <div className="row wrap" style={{ gap: 6 }}>
           <span className={`badge ${started && audioReady() ? 'ok' : 'warn'}`}>{started && audioReady() ? 'suono attivo' : 'suono spento'}</span>
+          {!started && dismissed ? (
+            <button className="btn sm primary" onClick={start}>
+              <Icon name="bell" /> Inizia il servizio
+            </button>
+          ) : null}
           {started ? <span className={`badge ${wake ? 'ok' : ''}`}>{wake ? 'schermo sempre acceso' : 'schermo normale'}</span> : null}
           <button className="btn sm" onClick={() => setSoldOut(true)}>
             Esauriti
@@ -180,9 +194,12 @@ export default function KitchenPage() {
         </>
       )}
 
-      {!started ? (
-        <div className="overlay center" style={{ zIndex: 80 }}>
-          <div className="dialog" role="dialog" aria-modal="true">
+      {!started && !dismissed ? (
+        <div className="overlay center" style={{ zIndex: 80 }} onClick={(e) => e.target === e.currentTarget && setDismissed(true)}>
+          <div className="dialog" role="dialog" aria-modal="true" style={{ position: 'relative' }}>
+            <button className="btn ghost icon" style={{ position: 'absolute', top: 8, right: 8 }} aria-label="Chiudi" onClick={() => setDismissed(true)}>
+              <Icon name="x" />
+            </button>
             <div className="card-body stack" style={{ textAlign: 'center', alignItems: 'center' }}>
               <span className="reminder-ic" style={{ width: 64, height: 64 }}>
                 <Icon name="bell" size={30} />
@@ -194,14 +211,18 @@ export default function KitchenPage() {
               <button
                 className="btn primary"
                 style={{ height: 56, fontSize: 18, width: '100%' }}
-                onClick={() => {
-                  unlockAudio()
-                  alertSound('ready', 0.6)
-                  setStarted(true)
-                }}
+                onClick={start}
               >
                 Inizia il servizio
               </button>
+              <div className="row" style={{ gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <button className="btn" onClick={() => setDismissed(true)}>
+                  Guarda senza allarme
+                </button>
+                <button className="btn ghost" onClick={() => (window.history.length > 1 ? router.back() : router.push('/'))}>
+                  ‹ Torna indietro
+                </button>
+              </div>
             </div>
           </div>
         </div>

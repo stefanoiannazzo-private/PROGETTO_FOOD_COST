@@ -223,6 +223,39 @@ final class IngredientController extends Controller
         return ['ok' => true];
     }
 
+    /** NUOVO — prodotti doppi dello stesso fornitore, da unire. */
+    public function duplicates(Request $req): array
+    {
+        $ctx = $this->requireCompany($req, 'ingredients.manage');
+
+        return ['data' => \App\Services\Duplicates::find($ctx->companyId())];
+    }
+
+    public function merge(Request $req): array
+    {
+        $ctx = $this->requireCompany($req, 'ingredients.manage');
+        $b = $this->parseBody($req, S::object(['groups' => S::array(S::object(['keepId' => S::uuid(), 'mergeIds' => S::array(S::uuid())->min(1)->max(50)]))->min(1)->max(2000)]));
+        $cid = $ctx->companyId();
+        $keepIds = array_column($b['groups'], 'keepId');
+        $watch = ChangeAlerts::watch($cid, 'ingredients', $keepIds);
+        $res = DB::transaction(function () use ($b, $cid, $ctx) {
+            $t = ['groups' => 0, 'merged' => 0, 'prices' => 0, 'recipes' => 0];
+            foreach ($b['groups'] as $g) {
+                $r = \App\Services\Duplicates::merge($cid, $g['keepId'], $g['mergeIds'], $ctx->userId());
+                $t['groups']++;
+                $t['merged'] += count(array_diff(array_unique($g['mergeIds']), [$g['keepId']]));
+                $t['prices'] += $r['prices'];
+                $t['recipes'] += $r['recipes'];
+            }
+
+            return $t;
+        });
+        $affected = Costing::invalidate($cid, 'ingredients', $keepIds);
+        ChangeAlerts::commit($watch, $ctx->userId(), ['label' => 'Prodotti doppi uniti', 'seenIngredients' => true]);
+
+        return [...$res, 'affectedRecipes' => Costing::describeRecipes($cid, $affected)];
+    }
+
     /** NUOVO — fornitori già usati dall'azienda, per i suggerimenti del modulo. */
     public function suppliers(Request $req): array
     {

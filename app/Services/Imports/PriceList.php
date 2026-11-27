@@ -199,6 +199,25 @@ final class PriceList
         return trim((string) $s);
     }
 
+    /**
+     * NUOVO — chiave «larga» per riconoscere lo stesso prodotto scritto in modi diversi dal fornitore:
+     * «FRUTTI DEL CAPPERO in aceto», «FRUTTI DI CAPPERO in aceto vt1700», «… v/1700» → «frutti cappero aceto»;
+     * «ALBICOCCHE Cat.1» e «ALBICOCCHE Cat.» → «albicocche». I formati veri (500 ml, 1 kg, 33 cl) restano nella chiave.
+     */
+    public static function looseKey(string $name): string
+    {
+        $s = ' '.mb_strtolower($name).' ';
+        $s = preg_replace('/^\s*\d{5,7}\s+/u', ' ', $s);
+        $s = preg_replace('/^\s*it\s+/u', ' ', (string) $s);
+        $s = preg_replace('/(?<![a-z])(?:vt|v)\s*\/?\s*\d+(?:[.,]\d+)?(?![a-z])/u', ' ', (string) $s);   // v1700, vt1700, v/1700
+        $s = preg_replace('/(?<![a-z])cat\.?\s*\d*(?![a-z])/u', ' ', (string) $s);                         // Cat.1, Cat.
+        $s = preg_replace('/[^a-z0-9àèéìòù]+/u', ' ', (string) $s);
+        $stop = ['di', 'del', 'dello', 'della', 'dei', 'degli', 'delle', 'in', 'con', 'al', 'allo', 'alla', 'ai', 'agli', 'alle', 'e', 'ed', 'il', 'lo', 'la', 'i', 'gli', 'le', 'per', 'da', 'v'];
+        $words = array_values(array_filter(explode(' ', (string) $s), fn ($w) => $w !== '' && ! in_array($w, $stop, true)));
+
+        return implode(' ', $words);
+    }
+
     /* --------------------------- confezione --------------------------- */
 
     private const U = ['kg' => 'kg', 'k' => 'kg', 'kgm' => 'kg', 'g' => 'g', 'gr' => 'g', 'grammi' => 'g', 'l' => 'l', 'lt' => 'l', 'ltr' => 'l', 'litri' => 'l', 'ml' => 'ml', 'cl' => 'cl'];
@@ -407,8 +426,10 @@ final class PriceList
         $byNameSup = [];
         $byName = [];
         $supNames = [];
+        $byLoose = [];
         foreach ($existing as $e) {
             $byCode[mb_strtolower($e->code)] = $e;
+            $byLoose[self::looseKey($e->name)][] = ['sk' => self::supplierKey((string) $e->supplier), 'e' => $e];
             $nk = self::nameKey($e->name);
             $sk = self::supplierKey((string) $e->supplier);
             $byNameSup[$nk][] = ['sk' => $sk, 'e' => $e];
@@ -475,7 +496,7 @@ final class PriceList
             [$sk, $supplier] = $canonOf($r['supplier']);
             $nk = self::nameKey($r['name']);
             $code = self::articleCode($r['name']);
-            $key = $sk.'|'.$nk;
+            $key = $sk.'|'.self::looseKey($r['name']); // stesso prodotto scritto in modi diversi = un solo prodotto
             $d = self::discounts($r['discount']);
             if ($d) {
                 $discounted++;
@@ -490,6 +511,14 @@ final class PriceList
                 }
                 if (! $match) {
                     foreach ($byNameSup[$nk] ?? [] as $c) {
+                        if (self::sameSupplier($c['sk'], $sk)) {
+                            $match = $c['e'];
+                            break;
+                        }
+                    }
+                }
+                if (! $match) {
+                    foreach ($byLoose[self::looseKey($r['name'])] ?? [] as $c) {
                         if (self::sameSupplier($c['sk'], $sk)) {
                             $match = $c['e'];
                             break;
