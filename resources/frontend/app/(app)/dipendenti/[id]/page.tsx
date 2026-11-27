@@ -1,6 +1,7 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
+import { backTarget } from '@/lib/nav-history'
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type AffectedRecipe } from '@/lib/api'
@@ -45,6 +46,7 @@ export default function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const can = useCan()
   const qc = useQueryClient()
+  const router = useRouter()
   const toast = useToast()
   const q = useQuery({ queryKey: ['employees', id], queryFn: () => api.get<Detail>(`/employees/${id}`) })
   const [v, setV] = useState<{ code: string; firstName: string; lastName: string; jobTitle: string; status: 'active' | 'inactive' } | null>(null)
@@ -74,8 +76,8 @@ export default function EmployeeDetailPage() {
             try {
               await api.patch(`/employees/${id}`, { ...v, jobTitle: v.jobTitle || null })
               toast('Dati salvati.')
-              await q.refetch()
               qc.invalidateQueries({ queryKey: ['employees'] })
+              router.push(backTarget(`/dipendenti/${id}`, '/dipendenti')) // NUOVO: torna all'elenco
             } catch (err) {
               setErrors(fieldErrors(err))
               toast(errorMessage(err), 'err')

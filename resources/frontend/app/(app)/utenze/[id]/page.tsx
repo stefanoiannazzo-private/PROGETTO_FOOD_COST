@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { backTarget } from '@/lib/nav-history'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -137,7 +138,7 @@ export default function TariffDetailPage() {
             </div>
           ) : null}
         </div>
-        {can('tariffs.manage') ? <NewVersion key={editing?.id ?? 'nuovo'} t={t} editing={editing} onCancelEdit={() => setEditing(null)} onDone={(r) => { setAffected(r); setEditing(null) }} /> : null}
+        {can('tariffs.manage') ? <NewVersion key={editing?.id ?? 'nuovo'} t={t} editing={editing} onCancelEdit={() => setEditing(null)} onDone={(r) => { setAffected(r); setEditing(null); router.push(backTarget(`/utenze/${id}`, '/utenze')) }} /> : null}
         <div className="card">
           <div className="card-head">
             <h2>Storico valori</h2>

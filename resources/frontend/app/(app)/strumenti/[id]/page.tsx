@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
+import { backTarget, savedMessage } from '@/lib/nav-history'
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type AffectedRecipe } from '@/lib/api'
@@ -16,6 +17,7 @@ export default function EquipmentDetailPage() {
   const { id } = useParams<{ id: string }>()
   const can = useCan()
   const qc = useQueryClient()
+  const router = useRouter()
   const toast = useToast()
   const q = useQuery({ queryKey: ['equipment', id], queryFn: () => api.get<Detail>(`/equipment/${id}`) })
   const [v, setV] = useState<EquipmentValue | null>(null)
@@ -84,9 +86,12 @@ export default function EquipmentDetailPage() {
               const r = await api.patch<{ warnings: string[]; affectedRecipes: AffectedRecipe[] }>(`/equipment/${id}`, { ...equipmentPayload(filled.v), code: v.code, lockVersion: d.lockVersion })
               setWarnings(r.warnings)
               setAffected(r.affectedRecipes)
-              toast(filled.note ? `Strumento salvato. ${filled.note}` : 'Strumento salvato.')
-              await q.refetch()
+              toast(savedMessage(filled.note ? `Strumento salvato. ${filled.note}` : 'Strumento salvato.', r.affectedRecipes))
               qc.invalidateQueries({ queryKey: ['recipes'] })
+              qc.invalidateQueries({ queryKey: ['equipment'] })
+              // NUOVO: senza avvisi da leggere si torna all'elenco (o alla pagina da cui si era arrivati)
+              if (!r.warnings.length) router.push(backTarget(`/strumenti/${id}`, '/strumenti'))
+              else await q.refetch()
             } catch (err) {
               setErrors(fieldErrors(err))
               toast(errorMessage(err), 'err')

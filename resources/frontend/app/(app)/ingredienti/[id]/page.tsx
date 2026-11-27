@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { backTarget, savedMessage } from '@/lib/nav-history'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -173,10 +174,11 @@ export default function IngredientDetailPage() {
     try {
       const r = await api.patch<{ affectedRecipes: AffectedRecipe[]; repricedPrices: number }>(`/ingredients/${id}`, { ...ingredientPayload(v), code: v.code, lockVersion: d.lockVersion, updatePrices: conversions.length > 0 || (!!repack && updatePrices) })
       setAffected(r.affectedRecipes)
-      if (r.repricedPrices) toast(`Prodotto salvato: confezione corretta anche in ${r.repricedPrices === 1 ? '1 prezzo' : `${r.repricedPrices} prezzi`}.`)
+      toast(savedMessage(r.repricedPrices ? `Prodotto salvato: confezione corretta anche in ${r.repricedPrices === 1 ? '1 prezzo' : `${r.repricedPrices} prezzi`}.` : 'Prodotto salvato.', r.affectedRecipes))
       await qc.invalidateQueries({ queryKey: ['ingredients'] })
       await qc.invalidateQueries({ queryKey: ['recipes'] })
-      if (!r.repricedPrices) toast('Prodotto salvato.')
+      // NUOVO: torna all'elenco (o alla pagina da cui si era arrivati)
+      router.push(backTarget(`/ingredienti/${id}`, '/ingredienti'))
     } catch (e) {
       setErrors(fieldErrors(e))
       toast(errorMessage(e), 'err')

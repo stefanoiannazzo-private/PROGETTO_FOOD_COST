@@ -1,6 +1,7 @@
 'use client'
 
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { backTarget } from '@/lib/nav-history'
 import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError, type AffectedRecipe } from '@/lib/api'
@@ -260,7 +261,8 @@ export function RecipeEditor({ recipeId, initial, lockVersion }: { recipeId: str
         setDirty(false)
         toast(r.affectedRecipes.length ? `Salvata (revisione ${r.revisionNumber}). Aggiornate anche: ${r.affectedRecipes.map((x) => x.title).join(', ')}.` : `Salvata (revisione ${r.revisionNumber}).`)
         await qc.invalidateQueries({ queryKey: ['recipes'] })
-        router.push(`/ricette/${recipeId}`)
+        // NUOVO: torna da dove si era partiti (scheda della ricetta o elenco), altrimenti alla scheda
+        router.push(backTarget(`/ricette/${recipeId}/modifica`, `/ricette/${recipeId}`))
       } else {
         const r = await api.post<{ id: string }>('/recipes', body)
         clearLocalDraft(draftKey)
