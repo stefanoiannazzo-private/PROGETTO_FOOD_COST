@@ -7,9 +7,10 @@ namespace App\Auth;
 /** Ruoli e permessi (port di apps/api/src/auth/permissions.ts). */
 final class Permissions
 {
-    public const ROLES = ['admin', 'manager', 'operator'];
+    // NUOVO: cameriere e cucina/bancone per l'area Ordini
+    public const ROLES = ['admin', 'manager', 'operator', 'waiter', 'kitchen'];
 
-    public const ROLE_LABELS = ['admin' => 'Amministratore', 'manager' => 'Responsabile', 'operator' => 'Operatore'];
+    public const ROLE_LABELS = ['admin' => 'Amministratore', 'manager' => 'Responsabile', 'operator' => 'Operatore', 'waiter' => 'Cameriere', 'kitchen' => 'Cucina / Bancone'];
 
     public const PERMISSIONS = [
         'recipes.read' => 'Consultare ricette e schede di preparazione',
@@ -25,15 +26,22 @@ final class Permissions
         'salaries.read' => 'Leggere le retribuzioni e i costi orari nominativi',
         'imports.manage' => 'Eseguire importazioni massive',
         'users.manage' => 'Gestire utenti, ruoli e inviti',
+        // NUOVO: area Ordini
+        'orders.take' => 'Prendere ordini ai tavoli',
+        'orders.kitchen' => 'Vedere e preparare le comande della postazione',
+        'orders.manage' => 'Configurare menu, tavoli e postazioni',
+        'sales.read' => 'Consultare le statistiche di vendita',
     ];
 
     public const ROLE_PERMISSIONS = [
         'manager' => ['recipes.read', 'recipes.manage', 'costs.read', 'snapshots.create', 'ingredients.manage', 'equipment.manage', 'tariffs.read', 'employees.read'],
         'operator' => ['recipes.read'],
+        'waiter' => ['orders.take'],
+        'kitchen' => ['orders.kitchen', 'recipes.read'],
     ];
 
     /** Permessi concedibili oltre al ruolo. */
-    public const GRANTABLE = ['costs.read', 'salaries.read', 'tariffs.read', 'tariffs.manage', 'employees.read', 'employees.manage', 'imports.manage', 'ingredients.manage', 'snapshots.create'];
+    public const GRANTABLE = ['costs.read', 'salaries.read', 'tariffs.read', 'tariffs.manage', 'employees.read', 'employees.manage', 'imports.manage', 'ingredients.manage', 'snapshots.create', 'orders.take', 'orders.kitchen', 'orders.manage', 'sales.read'];
 
     public static function all(): array
     {

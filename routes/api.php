@@ -41,6 +41,29 @@ Route::post('/system/first-admin', [SystemController::class, 'firstAdmin']);
 // NUOVO: richiesta di attivazione pubblica (link del promotore) e controllo del codice promo
 Route::get('/public/promo/{code}', [\App\Http\Controllers\Api\SignupRequestController::class, 'checkCode']);
 Route::post('/public/signup-requests', [\App\Http\Controllers\Api\SignupRequestController::class, 'store']);
+// NUOVO: area Ordini — configurazione (menu, postazioni, sale e tavoli, menu digitale)
+Route::prefix('/orders/setup')->controller(\App\Http\Controllers\Api\OrderSetupController::class)->group(function () {
+    Route::get('/', 'index');
+    Route::get('/sources', 'sources');
+    Route::post('/stations', 'storeStation');
+    Route::put('/stations/{id}', 'updateStation');
+    Route::delete('/stations/{id}', 'destroyStation');
+    Route::post('/sections', 'storeSection');
+    Route::put('/sections/{id}', 'updateSection');
+    Route::delete('/sections/{id}', 'destroySection');
+    Route::post('/items', 'storeItem');
+    Route::put('/items/{id}', 'updateItem');
+    Route::patch('/items/{id}/availability', 'availability');
+    Route::delete('/items/{id}', 'destroyItem');
+    Route::post('/areas', 'storeArea');
+    Route::put('/areas/{id}', 'updateArea');
+    Route::delete('/areas/{id}', 'destroyArea');
+    Route::post('/tables', 'storeTables');
+    Route::put('/tables/{id}', 'updateTable');
+    Route::delete('/tables/{id}', 'destroyTable');
+    Route::put('/settings', 'updateSettings');
+    Route::post('/reorder/{what}', 'reorder');
+});
 // NUOVO: promemoria mensile fatture e bollette
 Route::get('/reminders/current', [\App\Http\Controllers\Api\ReminderController::class, 'current']);
 Route::post('/reminders/seen', [\App\Http\Controllers\Api\ReminderController::class, 'seen']);

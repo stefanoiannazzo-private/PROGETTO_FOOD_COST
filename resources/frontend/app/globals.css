@@ -697,3 +697,41 @@ span.ellipsis.topbar-company { display: inline-block; }
   .reminder-item .btn { justify-content: center; }
 }
 .reminder-overlay { z-index: 70; }
+
+/* NUOVO — area Ordini: configurazione */
+.menu-items { list-style: none; margin: 0; padding: 0; }
+.menu-items li { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); }
+.menu-items li:first-child { border-top: 0; }
+.menu-items li.sold-out { opacity: .6; }
+.menu-items .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.link-btn { all: unset; cursor: pointer; font-weight: 600; color: var(--accent); }
+.link-btn:hover { text-decoration: underline; }
+.switch { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; color: var(--text-2); }
+.pick-list { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; max-height: 300px; overflow-y: auto; }
+.pick-list button { all: unset; cursor: pointer; padding: 8px 10px; border-radius: 8px; }
+.pick-list button:hover, .pick-list button:focus-visible { background: var(--surface-2); }
+.table-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+.table-chip { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 14px 6px; border: 1px solid var(--border-strong, var(--border)); border-radius: 12px; background: var(--surface); cursor: pointer; font: inherit; color: var(--text); }
+.table-chip strong { font-size: 20px; }
+.table-chip.off { opacity: .45; border-style: dashed; }
+.choice-list { display: flex; flex-direction: column; gap: 8px; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
+.choice > span { display: flex; flex-direction: column; gap: 2px; }
+.choice.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+@media (max-width: 700px) {
+  .menu-items li { flex-wrap: wrap; }
+  .menu-items li .grow { flex-basis: 100%; }
+}
+
+/* NUOVO — foglio QR dei tavoli */
+.qr-sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.qr-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 18px 14px; border: 1.5px dashed #bbb; border-radius: 14px; background: #fff; color: #1a1a1a; break-inside: avoid; page-break-inside: avoid; }
+.qr-card > img, .qr-ph { width: 170px; height: 170px; }
+.qr-top { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
+.qr-label { font-size: 22px; }
+.qr-hint { font-size: 12px; color: #555; text-align: center; }
+@media print {
+  .no-print, .sidebar, .topbar, .bottom-nav, .update-banner, .offline-banner { display: none !important; }
+  .content, .main { padding: 0 !important; margin: 0 !important; }
+  .qr-sheet { grid-template-columns: repeat(3, 1fr); gap: 8mm; }
+}

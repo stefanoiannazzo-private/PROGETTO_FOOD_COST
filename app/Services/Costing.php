@@ -446,6 +446,34 @@ final class Costing
         return (new RecipeCostEngine($ctx))->value($recipeId);
     }
 
+    /**
+     * NUOVO — costo di una porzione di prodotto venduto così com'è (area Ordini): es. 1 pz, 0,2 l.
+     * Null se manca il prezzo o la conversione non è possibile.
+     */
+    public static function ingredientPortionCost(string $companyId, string $ingredientId, string $qty, string $unit, string $date): ?Dec
+    {
+        $ing = self::loadIngredients($companyId, [$ingredientId], $date)[$ingredientId] ?? null;
+        if (! $ing) {
+            return null;
+        }
+        try {
+            return \App\Domain\Costing\Calculators::ingredientUsageCost($ing, Dec::of($qty), $unit)['cost'];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** NUOVO — costo per porzione delle ricette (null se mancano porzioni o prezzi). @return array<string, ?string> */
+    public static function recipePortionCosts(string $companyId, array $recipeIds, string $date): array
+    {
+        $out = [];
+        foreach (self::currentValuations($companyId, array_values(array_unique($recipeIds)), $date) as $id => $v) {
+            $out[$id] = $v['costPerPortion'] ?? null;
+        }
+
+        return $out;
+    }
+
     /** Un importo per una colonna DECIMAL(18,6): arrotondato a 6 decimali come fa NUMERIC(18,6) di PostgreSQL. */
     public static function fit(?string $v): ?string
     {

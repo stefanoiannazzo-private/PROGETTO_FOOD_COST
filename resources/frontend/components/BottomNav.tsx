@@ -32,6 +32,7 @@ export function BottomNav({
   sections,
   platform,
   quick,
+  main,
   fourth,
   count,
   isActive,
@@ -40,6 +41,8 @@ export function BottomNav({
   sections: NavItem[]
   platform: NavItem[]
   quick: Quick[]
+  /** NUOVO: le due voci a sinistra (Ricette/Prodotti, oppure Sala/Cucina per chi lavora in servizio) */
+  main: NavItem[]
   fourth: NavItem
   count: (href: string) => number
   isActive: (href: string) => boolean
@@ -68,10 +71,6 @@ export function BottomNav({
     else router.push(`${q.path}?azione=${q.action}`)
   }
 
-  const main: NavItem[] = [
-    { href: '/ricette', label: 'Ricette', icon: 'book' },
-    { href: '/ingredienti', label: 'Prodotti', icon: 'box' },
-  ]
   // «Altro» è attivo quando la pagina aperta non è una delle voci della barra
   const inBar = [...main, fourth].some((n) => isActive(n.href))
   const moreCount = sections.filter((s) => !main.some((m) => m.href === s.href) && s.href !== fourth.href).reduce((a, s) => a + count(s.href), 0)
@@ -179,8 +178,8 @@ export function BottomNav({
       ) : null}
 
       <nav className="bottom-nav" aria-label="Navigazione rapida">
-        {tab(main[0]!)}
-        {tab(main[1]!)}
+        {main[0] ? tab(main[0]) : <span />}
+        {main[1] ? tab(main[1]) : <span />}
         {quick.length ? (
           <button className="bn-fab" aria-label="Crea o carica" aria-expanded={sheet === 'quick'} onClick={() => setSheet(sheet === 'quick' ? null : 'quick')}>
             <Icon name={sheet === 'quick' ? 'x' : 'plus'} />

@@ -18,7 +18,11 @@ import { useAlerts } from './ChangeAlerts'
 import { trackPath } from '@/lib/nav-history'
 
 const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adminOnly?: boolean }> = [
-  { href: '/', label: 'Dashboard', icon: 'home' },
+  { href: '/', label: 'Dashboard', icon: 'home', perm: 'recipes.read' },
+  // NUOVO: area Ordini
+  { href: '/sala', label: 'Sala', icon: 'tables', perm: 'orders.take' },
+  { href: '/cucina', label: 'Cucina e bancone', icon: 'flame', perm: 'orders.kitchen' },
+  { href: '/ordini/menu', label: 'Menu e tavoli', icon: 'list', perm: 'orders.manage' },
   { href: '/ricette', label: 'Ricette', icon: 'book', perm: 'recipes.read' },
   { href: '/ingredienti', label: 'Ingredienti', icon: 'box', perm: 'recipes.read' },
   { href: '/strumenti', label: 'Strumenti', icon: 'tool', perm: 'recipes.read' },
@@ -86,6 +90,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.company?.id, me?.tourDone])
+
+  // NUOVO: chi lavora solo in sala o in cucina entra direttamente nella sua pagina
+  useEffect(() => {
+    if (!me?.company || pathname !== '/') return
+    const p = new Set(me.permissions)
+    if (p.has('recipes.read') || p.has('costs.read')) return
+    router.replace(p.has('orders.take') ? '/sala' : p.has('orders.kitchen') ? '/cucina' : p.has('orders.manage') ? '/ordini/menu' : '/assistenza')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.company?.id, pathname])
 
   useEffect(() => {
     const onUnauth = () => {
@@ -156,7 +169,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // NUOVO: barra in basso su smartphone (solo dentro un'azienda; la console piattaforma usa il menu laterale)
   const sections = me.company ? NAV.filter((n) => (!n.perm || perms.has(n.perm)) && (!n.adminOnly || me.role === 'admin')) : []
-  const fourth = me.role === 'admin' ? NAV.find((n) => n.href === '/redditivita')! : NAV[0]!
+  // NUOVO: camerieri e cucina (senza ricette) hanno in basso le pagine operative
+  const opsOnly = !perms.has('recipes.read') && !perms.has('costs.read')
+  const opsTabs = sections.filter((n) => ['/sala', '/cucina', '/ordini/menu', '/assistenza', '/impostazioni'].includes(n.href))
+  const mainTabs = opsOnly ? opsTabs.slice(0, 2) : [NAV.find((n) => n.href === '/ricette')!, { ...NAV.find((n) => n.href === '/ingredienti')!, label: 'Prodotti' }]
+  const fourth = opsOnly ? (opsTabs[2] ?? opsTabs[opsTabs.length - 1] ?? NAV[0]!) : me.role === 'admin' ? NAV.find((n) => n.href === '/redditivita')! : NAV[0]!
   const quick = [
     perms.has('recipes.manage') ? { key: 'r', label: 'Nuova ricetta', hint: 'Piatto o preparazione', icon: 'book', path: '/ricette/nuova' } : null,
     perms.has('ingredients.manage') ? { key: 'i', label: 'Nuovo prodotto', hint: 'Ingrediente con il suo prezzo', icon: 'box', path: '/ingredienti', action: 'nuovo-ingrediente' } : null,
@@ -254,6 +271,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             sections={sections}
             platform={platform ? PLATFORM_NAV : []}
             quick={quick}
+            main={mainTabs}
             fourth={fourth}
             count={alertCount}
             isActive={isActive}
