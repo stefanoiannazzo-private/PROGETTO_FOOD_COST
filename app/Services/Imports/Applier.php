@@ -154,6 +154,13 @@ final class Applier
                 if (self::t($n['edibleYieldPercent'] ?? null)) {
                     $set['edible_yield'] = Dec::of($n['edibleYieldPercent'])->div(100)->toFixed();
                 }
+                // NUOVO: unità KG o L con contenuto 1 → il prezzo è al kg / al litro, non «a confezione»
+                if (isset($set['package_content']) || isset($set['package_unit'])) {
+                    $pu = self::purchaseUnitFor($set['package_content'] ?? $cur->package_content, $set['package_unit'] ?? $cur->package_unit);
+                    if ($pu) {
+                        $set['purchase_unit'] = $pu;
+                    }
+                }
                 if ($set) {
                     $updates[$id] = $set;
                 }
@@ -174,6 +181,7 @@ final class Applier
                     'supplier' => $n['supplier'] ?? null,
                     'package_content' => $n['packageContent'],
                     'package_unit' => $n['packageUnit'],
+                    'purchase_unit' => self::purchaseUnitFor($n['packageContent'], $n['packageUnit']) ?? 'confezione',
                     'usage_unit' => $n['usageUnit'] ?? $n['packageUnit'],
                     'edible_yield' => self::t($n['edibleYieldPercent'] ?? null) ? Dec::of($n['edibleYieldPercent'])->div(100)->toFixed() : '1',
                     'density_kg_per_l' => $n['densityKgPerL'] ?? null,
@@ -280,5 +288,15 @@ final class Applier
         }
 
         return $ids;
+    }
+
+    /** NUOVO — «1 kg» o «1 l»: si paga al kg / al litro (è il prezzo dell'unità di misura, non di una confezione). */
+    public static function purchaseUnitFor(mixed $content, mixed $unit): ?string
+    {
+        if ($content === null || $content === '' || ! in_array($unit, ['kg', 'l'], true) || ! Dec::of((string) $content)->eq(Dec::of('1'))) {
+            return null;
+        }
+
+        return $unit === 'kg' ? 'kg' : 'litro';
     }
 }

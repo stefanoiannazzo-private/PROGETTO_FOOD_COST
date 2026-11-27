@@ -114,7 +114,9 @@ final class Normalize
         if (! $s) {
             return null;
         }
-        $alias = ['gr' => 'g', 'grammi' => 'g', 'kg' => 'kg', 'chili' => 'kg', 'lt' => 'l', 'litri' => 'l', 'litro' => 'l', 'pezzi' => 'pz', 'pz' => 'pz', 'pezzo' => 'pz', 'n' => 'pz', 'nr' => 'pz'];
+        // NUOVO: anche le sigle delle fatture e dei gestionali (K, KGM, LTR…)
+        $alias = ['gr' => 'g', 'grammi' => 'g', 'grammo' => 'g', 'grm' => 'g', 'kg' => 'kg', 'k' => 'kg', 'kgm' => 'kg', 'kgs' => 'kg', 'kgr' => 'kg', 'kilo' => 'kg', 'kili' => 'kg', 'chilo' => 'kg', 'chili' => 'kg', 'chilogrammi' => 'kg', 'kilogrammi' => 'kg',
+            'lt' => 'l', 'ltr' => 'l', 'lit' => 'l', 'li' => 'l', 'litri' => 'l', 'litro' => 'l', 'pezzi' => 'pz', 'pz' => 'pz', 'pezzo' => 'pz', 'n' => 'pz', 'nr' => 'pz', 'num' => 'pz', 'pce' => 'pz', 'pcs' => 'pz', 'h87' => 'pz'];
         $u = $alias[$s] ?? $s;
         if (! Units::isMeasureUnit($u)) {
             throw new CellError("unità “{$s}” non riconosciuta (g, kg, ml, cl, l, pz)");

@@ -276,6 +276,7 @@ final class SupplierInvoiceController extends Controller
                     'l' => ['1', 'l', 'litro'],
                     default => [$d['packageContent'] ?? null, $d['packageUnit'] ?? null, $d['purchaseUnit'] ?? 'confezione'],
                 };
+                $purchase = \App\Services\Imports\Applier::purchaseUnitFor($content, $unit) ?? $purchase; // «1 kg» = al kg
                 if ($mode === 'conf' && (! $content || ! $unit)) {
                     $fields["line{$n}.packageContent"] = 'Indica quanto contiene la confezione.';
 

@@ -95,8 +95,10 @@ const baseLabel = (u: string) => (dim(u) === 'mass' ? 'kg' : dim(u) === 'volume'
 /** Modalità di un prodotto già registrato, dai campi che esistono nel database. */
 export function inferMode(purchaseUnit: string | null | undefined, content: string | number | null | undefined, unit: string): BuyMode {
   const pu = (purchaseUnit ?? '').trim().toLowerCase()
-  if (Number(content) === 1 && unit === 'kg' && pu === 'kg') return 'kg'
-  if (Number(content) === 1 && unit === 'l' && (pu === 'litro' || pu === 'l')) return 'l'
+  // NUOVO: «1 kg» / «1 l» senza un tipo di confezione vero = prezzo al kg / al litro
+  const generic = ['kg', '', 'confezione', 'conf', 'cf'].includes(pu)
+  if (Number(content) === 1 && unit === 'kg' && generic) return 'kg'
+  if (Number(content) === 1 && unit === 'l' && (pu === 'litro' || pu === 'l' || generic)) return 'l'
   if (pu === 'pezzo' && dim(unit) === 'mass') return 'pz'
   return 'conf'
 }

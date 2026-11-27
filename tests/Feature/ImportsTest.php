@@ -170,6 +170,31 @@ class ImportsTest extends TestCase
         $this->assertSame(1, $this->ok($this->admin->get('/api/ingredients'))['meta']['missingWeight']);
     }
 
+    /** NUOVO: unità KG / K / L con contenuto 1 → prodotto «al kg» / «al litro», non «a confezione». */
+    public function test_unita_kg_diventa_al_kg(): void
+    {
+        $csv = implode("\r\n", [
+            'Codice;Nome;Categoria;Fornitore;Prezzo confezione;Contenuto confezione;Unità contenuto;Data prezzo',
+            'ALB;ALBICOCCHE Cat.1;Frutta;SIAL;2,80;1;KG;03/09/2026',
+            'PES;PESCHE;Frutta;SIAL;2,10;1;K;03/09/2026',
+            'OLI;OLIO sfuso;Condimenti;SIAL;6,50;1;LT;03/09/2026',
+            'ALP;ALPIGIANA vasc.1,5k;Latticini;NOV;9,53;1,5;kg;03/09/2026',
+        ]);
+        $r = $this->upload($this->admin, 'ingredients', 'kg.csv', $csv);
+        $id = $r->body['id'];
+        $this->validate($this->admin, $id, $r->body['suggestedMapping'], ['delimiter' => ';']);
+        $imp = $this->ok($this->admin->get("/api/imports/{$id}"));
+        $this->ok($this->admin->post("/api/imports/{$id}/confirm", ['lockVersion' => $imp['lockVersion']]));
+        $this->drain();
+        $pu = DB::table('ingredients')->pluck('purchase_unit', 'code')->all();
+        $this->assertSame('kg', $pu['ALB']);
+        $this->assertSame('kg', $pu['PES']);
+        $this->assertSame('litro', $pu['OLI']);
+        $this->assertSame('confezione', $pu['ALP'], 'vaschetta da 1,5 kg: confezione vera');
+        $list = collect($this->ok($this->admin->get('/api/ingredients'))['data'])->keyBy('code');
+        $this->assertSame('2.8', rtrim(rtrim((string) $list['ALB']['price']['unitPrice'], '0'), '.'));
+    }
+
     /** NUOVO: il superadmin in «Assisti» importa per il cliente; un ex superadmin no. */
     public function test_importazione_in_modalita_assistenza(): void
     {
