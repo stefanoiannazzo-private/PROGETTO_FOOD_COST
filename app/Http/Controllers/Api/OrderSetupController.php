@@ -346,6 +346,35 @@ class OrderSetupController extends Controller
         return ['ok' => true];
     }
 
+    /* ------------------------- clienti registrati ------------------------- */
+
+    /** Clienti registrati dal menu digitale (solo chi configura l'area Ordini). */
+    public function guests(Request $req): mixed
+    {
+        $ctx = $this->requireCompany($req, 'orders.manage');
+        $rows = DB::table('menu_guests as g')->leftJoin('dining_tables as t', 't.id', '=', 'g.table_id')
+            ->where('g.company_id', $ctx->companyId())->orderByDesc('g.created_at')->limit(5000)
+            ->get(['g.*', 't.label as table_label']);
+        if ($req->query('format') === 'csv') {
+            Audit::log($ctx->companyId(), $ctx->userId(), 'menu_guest', null, 'exported', ['rows' => $rows->count()]);
+            $out = fopen('php://temp', 'r+');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['Data', 'Nome', 'Cognome', 'Email', 'Telefono', 'Consenso marketing', 'Tavolo', 'Omaggio', 'Codice', 'Omaggio consegnato'], ';');
+            foreach ($rows as $g) {
+                fputcsv($out, [substr((string) $g->created_at, 0, 16), $g->first_name, $g->last_name, $g->email, $g->phone, $g->marketing_consent ? 'sì' : 'no', $g->table_label, $g->gift_text, $g->gift_code, $g->gift_redeemed_at ? substr((string) $g->gift_redeemed_at, 0, 16) : ''], ';');
+            }
+            rewind($out);
+
+            return response(stream_get_contents($out), 200, ['Content-Type' => 'text/csv; charset=utf-8', 'Content-Disposition' => 'attachment; filename="clienti-menu-digitale.csv"']);
+        }
+
+        return ['data' => $rows->map(fn ($g) => [
+            'id' => $g->id, 'firstName' => $g->first_name, 'lastName' => $g->last_name, 'email' => $g->email, 'phone' => $g->phone,
+            'marketing' => (bool) $g->marketing_consent, 'table' => $g->table_label, 'gift' => $g->gift_text, 'giftCode' => $g->gift_code,
+            'giftRedeemedAt' => Clock::iso($g->gift_redeemed_at), 'createdAt' => Clock::iso($g->created_at),
+        ])->all(), 'total' => DB::table('menu_guests')->where('company_id', $ctx->companyId())->count()];
+    }
+
     /* ------------------------------ supporto ------------------------------ */
 
     public static function settings(string $cid): array

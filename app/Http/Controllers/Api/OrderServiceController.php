@@ -391,6 +391,23 @@ class OrderServiceController extends Controller
         return ['ok' => true, 'updated' => $n];
     }
 
+    /** Il cliente mostra il codice dell'omaggio: il cameriere lo verifica e lo segna come consegnato. */
+    public function redeemGift(Request $req): array
+    {
+        $ctx = $this->requireCompany($req, 'orders.take');
+        $b = $this->parseBody($req, S::object(['code' => S::string()->trim()->max(12), 'confirm' => S::bool()->default(false)]));
+        $g = DB::table('menu_guests')->where('company_id', $ctx->companyId())->where('gift_code', strtoupper($b['code']))->first();
+        if (! $g) {
+            throw new AppError(404, 'not_found', 'Codice omaggio non trovato.');
+        }
+        if ($b['confirm'] && ! $g->gift_redeemed_at) {
+            DB::table('menu_guests')->where('id', $g->id)->update(['gift_redeemed_at' => Clock::now()]);
+            Audit::log($ctx->companyId(), $ctx->userId(), 'menu_guest', $g->id, 'gift_redeemed');
+        }
+
+        return ['name' => $g->first_name.' '.$g->last_name, 'gift' => $g->gift_text, 'redeemedAt' => Clock::iso($b['confirm'] && ! $g->gift_redeemed_at ? Clock::now() : $g->gift_redeemed_at), 'alreadyRedeemed' => $g->gift_redeemed_at !== null];
+    }
+
     /* ============================ PIN E TABLET ============================ */
 
     /** Il proprio PIN (4–6 cifre) per i tablet condivisi. */

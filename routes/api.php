@@ -63,6 +63,7 @@ Route::prefix('/orders/setup')->controller(\App\Http\Controllers\Api\OrderSetupC
     Route::delete('/tables/{id}', 'destroyTable');
     Route::put('/settings', 'updateSettings');
     Route::post('/reorder/{what}', 'reorder');
+    Route::get('/guests', 'guests');
 });
 // NUOVO: area Ordini — servizio (sala, cucina e bancone, PIN, tablet di servizio)
 Route::prefix('/orders')->controller(\App\Http\Controllers\Api\OrderServiceController::class)->group(function () {
@@ -87,11 +88,16 @@ Route::prefix('/orders')->controller(\App\Http\Controllers\Api\OrderServiceContr
     Route::post('/device/enable', 'enableDevice');
     Route::post('/device/disable', 'disableDevice');
     Route::post('/device/whoami', 'whoami');
+    Route::post('/gifts/redeem', 'redeemGift');
 });
 // NUOVO: promemoria mensile fatture e bollette
 Route::get('/reminders/current', [\App\Http\Controllers\Api\ReminderController::class, 'current']);
 Route::post('/reminders/seen', [\App\Http\Controllers\Api\ReminderController::class, 'seen']);
 Route::post('/reminders/done', [\App\Http\Controllers\Api\ReminderController::class, 'done']);
+// NUOVO: menu digitale pubblico (QR), senza login
+Route::get('/public/menu/t/{qr}', [\App\Http\Controllers\Api\PublicMenuController::class, 'showTable']);
+Route::get('/public/menu/{token}', [\App\Http\Controllers\Api\PublicMenuController::class, 'show']);
+Route::post('/public/menu/{token}/guests', [\App\Http\Controllers\Api\PublicMenuController::class, 'register']);
 // NUOVO: «Invita un collega» (codice e link del ristoratore)
 Route::get('/referral', [\App\Http\Controllers\Api\ReferralController::class, 'show']);
 Route::post('/referral', [\App\Http\Controllers\Api\ReferralController::class, 'store']);

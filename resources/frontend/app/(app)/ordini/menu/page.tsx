@@ -954,6 +954,72 @@ function DigitalTab({ s }: { s: Setup }) {
           </button>
         </div>
       </div>
+      <Guests />
+    </div>
+  )
+}
+
+interface Guest {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string
+  marketing: boolean
+  table: string | null
+  gift: string | null
+  giftCode: string | null
+  giftRedeemedAt: string | null
+  createdAt: string
+}
+
+/** Clienti registrati dal menu digitale, con esportazione per l'email marketing (solo chi ha dato il consenso). */
+function Guests() {
+  const q = useQuery({ queryKey: ['orders', 'guests'], queryFn: () => api.get<{ data: Guest[]; total: number }>('/orders/setup/guests') })
+  if (!q.data || !q.data.total) return null
+  return (
+    <div className="card-body" style={{ borderTop: '1px solid var(--border)' }}>
+      <div className="row between wrap" style={{ marginBottom: 8, gap: 8 }}>
+        <strong>
+          Clienti registrati: {q.data.total} · con consenso promozioni: {q.data.data.filter((g) => g.marketing).length}
+        </strong>
+        <a className="btn sm" href="/api/orders/setup/guests?format=csv">
+          <Icon name="download" /> Scarica CSV
+        </a>
+      </div>
+      <div className="table-wrap">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Cliente</th>
+              <th>Contatti</th>
+              <th>Promozioni</th>
+              <th>Omaggio</th>
+            </tr>
+          </thead>
+          <tbody>
+            {q.data.data.slice(0, 100).map((g) => (
+              <tr key={g.id}>
+                <td className="small faint">{new Date(g.createdAt).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' })}</td>
+                <td>
+                  {g.firstName} {g.lastName}
+                  {g.table ? <div className="small faint">tavolo {g.table}</div> : null}
+                </td>
+                <td className="small">
+                  {g.email}
+                  <div className="faint">{g.phone}</div>
+                </td>
+                <td>{g.marketing ? <span className="badge ok">sì</span> : <span className="badge">no</span>}</td>
+                <td className="small">{g.giftCode ? `${g.giftCode} · ${g.giftRedeemedAt ? 'consegnato' : 'da consegnare'}` : '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="small faint" style={{ margin: '8px 0 0' }}>
+        Usa per le promozioni solo i contatti con il consenso «sì». Se un cliente chiede di cancellare i suoi dati, scrivi all’assistenza.
+      </p>
     </div>
   )
 }

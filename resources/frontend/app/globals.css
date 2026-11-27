@@ -832,3 +832,42 @@ span.ellipsis.topbar-company { display: inline-block; }
 @media print {
   .order-page > *:not(.overlay) { display: none !important; }
 }
+
+/* NUOVO — menu digitale pubblico (telefono del cliente) */
+.pm-wrap { max-width: 640px; margin: 0 auto; padding: 16px 14px 40px; display: flex; flex-direction: column; gap: 14px; }
+.pm-head { text-align: center; padding: 18px 0 6px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.pm-head h1 { margin: 0; font-size: 28px; letter-spacing: -.01em; }
+.pm-table { font-weight: 700; color: var(--accent); }
+.pm-hello { color: var(--text-2); }
+.pm-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+.pm-center { text-align: center; color: var(--text-2); }
+.pm-nav { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; padding: 8px 0; background: var(--bg); scrollbar-width: none; }
+.pm-nav a { flex: none; padding: 8px 14px; border-radius: 18px; border: 1px solid var(--border-strong, var(--border)); color: var(--text); text-decoration: none; font-weight: 600; }
+.pm-section { scroll-margin-top: 60px; }
+.pm-section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--accent); margin: 18px 2px 8px; }
+.pm-item { display: flex; justify-content: space-between; gap: 14px; padding: 12px 2px; border-bottom: 1px solid var(--border); }
+.pm-item.off { opacity: .45; }
+.pm-name { font-weight: 650; font-size: 17px; }
+.pm-desc { color: var(--text-2); font-size: 14px; margin-top: 3px; line-height: 1.4; }
+.pm-price { font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pm-foot { color: var(--text-3); font-size: 13px; text-align: center; display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.pm-brand { display: inline-flex; align-items: center; justify-content: center; gap: 6px; opacity: .7; }
+.pm-offer { all: unset; cursor: pointer; display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border: 1px dashed var(--accent); }
+.pm-gift { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px; border-radius: 16px; background: color-mix(in srgb, #2f9a62 14%, var(--surface)); border: 1px solid #2f9a62; text-align: center; }
+.pm-gift code { font-size: 28px; font-weight: 800; letter-spacing: .12em; }
+.pm-small { font-size: 13px; color: var(--text-2); }
+.pm-form { display: flex; flex-direction: column; gap: 12px; position: relative; }
+.pm-form h2 { margin: 0 0 4px; font-size: 20px; }
+.pm-form label { display: flex; flex-direction: column; gap: 4px; font-weight: 600; font-size: 14px; }
+.pm-form input:not([type='checkbox']) { height: 48px; border-radius: 10px; border: 1px solid var(--border-strong, var(--border)); padding: 0 12px; font: inherit; font-size: 16px; background: var(--bg); color: var(--text); }
+.pm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.pm-check { flex-direction: row !important; align-items: flex-start; font-weight: 400 !important; font-size: 13px !important; color: var(--text-2); }
+.pm-check input { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.pm-btn { height: 52px; border: 0; border-radius: 12px; background: var(--accent); color: #fff; font: inherit; font-size: 17px; font-weight: 700; cursor: pointer; }
+.pm-btn:disabled { opacity: .5; }
+.pm-link { all: unset; cursor: pointer; text-align: center; color: var(--text-2); text-decoration: underline; font-size: 14px; }
+.pm-error { color: #c0392b; font-size: 13px; font-weight: 500; }
+.pm-card { box-sizing: border-box; width: 100%; }
+.pm-form { padding: 18px !important; }
+.pm-form input:not([type='checkbox']) { width: 100%; min-width: 0; box-sizing: border-box; }
+.pm-row > label { min-width: 0; }

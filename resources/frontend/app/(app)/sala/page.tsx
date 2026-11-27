@@ -61,6 +61,7 @@ function Sala() {
                 <Icon name="users" /> {operator} · cambia
               </button>
             ) : null}
+            <GiftCheck />
             {me?.role === 'admin' || me?.serviceDevice ? <ServiceDeviceButton /> : null}
           </div>
         }
@@ -192,5 +193,29 @@ function OpenTable({ floor, first, onClose, onOpened }: { floor: Floor; first: s
         </div>
       </div>
     </div>
+  )
+}
+
+/** Il cliente mostra il codice dell'omaggio ricevuto registrandosi dal QR. */
+function GiftCheck() {
+  const toast = useToast()
+  const check = async () => {
+    const code = window.prompt('Codice omaggio mostrato dal cliente (es. ABC-123)')
+    if (!code) return
+    try {
+      const r = await api.post<{ name: string; gift: string; alreadyRedeemed: boolean }>('/orders/gifts/redeem', { code })
+      if (r.alreadyRedeemed) return toast(`Omaggio già consegnato a ${r.name}.`)
+      if (window.confirm(`${r.name}: «${r.gift}». Segnarlo come consegnato?`)) {
+        await api.post('/orders/gifts/redeem', { code, confirm: true })
+        toast('Omaggio consegnato.')
+      }
+    } catch (e) {
+      toast(errorMessage(e))
+    }
+  }
+  return (
+    <button className="btn ghost sm" onClick={() => void check()}>
+      <Icon name="gift" /> Omaggio
+    </button>
   )
 }

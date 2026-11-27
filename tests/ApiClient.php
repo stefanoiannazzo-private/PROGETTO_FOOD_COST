@@ -11,9 +11,12 @@ final class ApiClient
     {
     }
 
-    public function request(string $method, string $url, mixed $payload = null, bool $csrf = true, ?string $origin = null, array $files = [], array $form = []): ApiResponse
+    public function request(string $method, string $url, mixed $payload = null, bool $csrf = true, ?string $origin = null, array $files = [], array $form = [], array $headers = []): ApiResponse
     {
         $server = ['HTTP_ACCEPT' => 'application/json', 'REMOTE_ADDR' => '10.0.0.1'];
+        foreach ($headers as $k => $v) {
+            $server['HTTP_'.strtoupper(str_replace('-', '_', $k))] = $v;
+        }
         if ($csrf && $method !== 'GET') {
             $server['HTTP_X_REQUESTED_WITH'] = 'foodcost';
         }
