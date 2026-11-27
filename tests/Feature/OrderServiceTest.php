@@ -77,9 +77,7 @@ class OrderServiceTest extends TestCase
         $this->assertNull($s['heldCourse']);
         $this->assertSame(409, $cam->post("/api/orders/sessions/{$s['id']}/go")->status);
 
-        // chiusura: con piatti ancora in cucina chiede conferma
-        $this->assertSame(409, $cam->post("/api/orders/sessions/{$s['id']}/close")->status);
-        $this->ok($kitchen->post('/api/orders/kitchen/status', ['ids' => array_column(array_filter($s['items'], fn ($i) => in_array($i['name'], ['Tagliata', 'Acqua 75cl'], true)), 'id'), 'status' => 'ready']));
+        // chiusura: i piatti già in cucina contano come serviti anche senza «pronto»
         $closed = $this->ok($cam->post("/api/orders/sessions/{$s['id']}/close"));
         // 2×12 + 2×18 + 2,50 + coperto 2×2 = 66,50
         $this->assertSame('66.50', $closed['bill']['total']);
@@ -87,6 +85,19 @@ class OrderServiceTest extends TestCase
         $this->assertNull(collect($this->ok($cam->get('/api/orders/floor'))['tables'])->firstWhere('label', '3')['sessionId'], 'tavolo di nuovo libero');
         $this->assertSame('Marco Cameriere', DB::table('users')->where('id', DB::table('order_items')->value('waiter_id'))->value('name'));
         $this->assertNotNull(DB::table('order_items')->where('name', 'Acqua 75cl')->value('unit_cost'), 'costo del momento registrato');
+    }
+
+    public function test_chiusura_con_portata_mai_partita(): void
+    {
+        $cam = $this->loginAs('cam@s.test');
+        $s = $this->ok($cam->post('/api/orders/sessions', ['tableIds' => [$this->ids['t2']], 'covers' => 1]));
+        $this->ok($cam->post("/api/orders/sessions/{$s['id']}/send", ['items' => [['menuItemId' => $this->ids['carbonara'], 'qty' => 1, 'course' => 1], ['menuItemId' => $this->ids['tagliata'], 'qty' => 1, 'course' => 2]]]));
+        $r = $cam->post("/api/orders/sessions/{$s['id']}/close");
+        $this->assertSame(409, $r->status);
+        $this->assertStringContainsString('1 piatto in attesa del VIA', $r->body['error']['message']);
+        $bill = $this->ok($cam->post("/api/orders/sessions/{$s['id']}/close", ['force' => true]))['bill'];
+        $this->assertSame('14.00', $bill['total'], 'solo la carbonara (12) + 1 coperto (2)');
+        $this->assertSame(['served', 'cancelled'], DB::table('order_items')->orderBy('course')->pluck('status')->all());
     }
 
     public function test_unione_tavoli_e_esauriti(): void

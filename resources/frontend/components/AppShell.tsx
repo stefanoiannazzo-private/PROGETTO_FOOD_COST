@@ -23,6 +23,7 @@ const NAV: Array<{ href: string; label: string; icon: string; perm?: string; adm
   { href: '/sala', label: 'Sala', icon: 'tables', perm: 'orders.take' },
   { href: '/cucina', label: 'Cucina e bancone', icon: 'flame', perm: 'orders.kitchen' },
   { href: '/ordini/menu', label: 'Menu e tavoli', icon: 'list', perm: 'orders.manage' },
+  { href: '/statistiche', label: 'Statistiche vendite', icon: 'chart', perm: 'sales.read' },
   { href: '/ricette', label: 'Ricette', icon: 'book', perm: 'recipes.read' },
   { href: '/ingredienti', label: 'Ingredienti', icon: 'box', perm: 'recipes.read' },
   { href: '/strumenti', label: 'Strumenti', icon: 'tool', perm: 'recipes.read' },

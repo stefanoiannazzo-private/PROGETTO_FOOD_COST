@@ -90,6 +90,8 @@ Route::prefix('/orders')->controller(\App\Http\Controllers\Api\OrderServiceContr
     Route::post('/device/whoami', 'whoami');
     Route::post('/gifts/redeem', 'redeemGift');
 });
+// NUOVO: statistiche di vendita (area Ordini)
+Route::get('/sales/stats', [\App\Http\Controllers\Api\SalesController::class, 'stats']);
 // NUOVO: promemoria mensile fatture e bollette
 Route::get('/reminders/current', [\App\Http\Controllers\Api\ReminderController::class, 'current']);
 Route::post('/reminders/seen', [\App\Http\Controllers\Api\ReminderController::class, 'seen']);

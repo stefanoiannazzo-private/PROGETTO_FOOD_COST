@@ -155,8 +155,26 @@ final class ProfitabilityController extends Controller
             ];
         }
 
+        // 5) NUOVO: vendite della settimana in corso (area Ordini) → quanto manca al pareggio o quanto si guadagna
+        [$wFrom, $wTo, $wNow] = \App\Services\Sales::currentWeek();
+        $wLines = \App\Services\Sales::lines($cid, $wFrom, $wTo);
+        $wc = \App\Services\Sales::contribution($wLines);
+        $weeklyFixed = $periods['weekly'] ?? null;
+        $week = [
+            'from' => $wFrom->format('Y-m-d'), 'to' => $wTo->subDay()->format('Y-m-d'), 'dayOfWeek' => (int) $wNow->format('N'),
+            'hasSales' => $wLines->isNotEmpty(),
+            'revenue' => self::money($wc['revenue']), 'revenueNet' => self::money($wc['revenueNet']), 'contribution' => self::money($wc['contribution']),
+            'fixedWeekly' => self::money($weeklyFixed),
+            'gap' => $weeklyFixed ? self::money($weeklyFixed->minus($wc['contribution'])) : null, // > 0 mancano, < 0 si guadagna
+            'dishesSold' => (int) $wLines->sum('qty'), 'missingCostQty' => $wc['missingCostQty'],
+            'covers' => (int) DB::table('table_sessions')->where('company_id', $cid)->where('status', '<>', 'cancelled')
+                ->where('opened_at', '>=', \App\Services\Sales::utc($wFrom))->where('opened_at', '<', \App\Services\Sales::utc($wTo))->sum('covers'),
+            'soldByRecipe' => $wLines->whereNotNull('recipe_id')->groupBy('recipe_id')->map(fn ($g) => (int) $g->sum('qty'))->all(),
+        ];
+
         return [
             'date' => $date,
+            'week' => $week,
             'settings' => $settings,
             'openDaysPerWeek' => $openDays,
             'categories' => self::CATEGORIES,

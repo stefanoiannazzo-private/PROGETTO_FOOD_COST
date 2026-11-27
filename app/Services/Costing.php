@@ -463,12 +463,22 @@ final class Costing
         }
     }
 
-    /** NUOVO — costo per porzione delle ricette (null se mancano porzioni o prezzi). @return array<string, ?string> */
+    /**
+     * NUOVO — costo variabile per porzione (ingredienti + energia) delle ricette, come nella Redditività:
+     * il personale è già tra i costi fissi e non va contato due volte. Null se mancano porzioni o prezzi.
+     * @return array<string, ?string>
+     */
     public static function recipePortionCosts(string $companyId, array $recipeIds, string $date): array
     {
         $out = [];
         foreach (self::currentValuations($companyId, array_values(array_unique($recipeIds)), $date) as $id => $v) {
-            $out[$id] = $v['costPerPortion'] ?? null;
+            $portions = isset($v['portions']) ? Dec::of($v['portions']) : null;
+            if (! $portions || ! $portions->gt(0) || ! isset($v['expanded']['ingredients'], $v['expanded']['energy'])) {
+                $out[$id] = null;
+
+                continue;
+            }
+            $out[$id] = Dec::of($v['expanded']['ingredients'])->plus($v['expanded']['energy'])->div($portions)->toFixed();
         }
 
         return $out;

@@ -313,13 +313,14 @@ class OrderServiceController extends Controller
         $cid = $ctx->companyId();
         $out = DB::transaction(function () use ($id, $cid, $b, $waiter) {
             $s = $this->session($id, $cid, true, true);
-            $pending = DB::table('order_items')->where('session_id', $s->id)->whereIn('status', ['held', 'sent', 'preparing'])->count();
-            if ($pending && ! $b['force']) {
-                throw new AppError(409, 'pending_items', "Ci sono ancora {$pending} piatti da preparare o in attesa del VIA. Chiudi comunque?");
+            // le portate mai partite (in attesa del VIA) non sono state fatte: si annullano, con conferma
+            $held = (int) DB::table('order_items')->where('session_id', $s->id)->where('status', 'held')->sum('qty');
+            if ($held && ! $b['force']) {
+                throw new AppError(409, 'pending_items', $held === 1 ? 'C’è ancora 1 piatto in attesa del VIA: chiudendo non verrà preparato. Chiudi comunque?' : "Ci sono ancora {$held} piatti in attesa del VIA: chiudendo non verranno preparati. Chiudi comunque?");
             }
-            // ciò che non è ancora uscito viene annullato; il pronto si considera servito
-            DB::table('order_items')->where('session_id', $s->id)->whereIn('status', ['held', 'sent', 'preparing'])->update(['status' => 'cancelled', 'cancelled_at' => Clock::now()]);
-            DB::table('order_items')->where('session_id', $s->id)->where('status', 'ready')->update(['status' => 'served']);
+            DB::table('order_items')->where('session_id', $s->id)->where('status', 'held')->update(['status' => 'cancelled', 'cancelled_at' => Clock::now()]);
+            // ciò che era già in cucina è stato fatto e servito (anche se nessuno ha toccato «pronto»)
+            DB::table('order_items')->where('session_id', $s->id)->whereIn('status', ['sent', 'preparing', 'ready'])->update(['status' => 'served']);
             $bill = $this->bill($cid, $s);
             DB::table('table_sessions')->where('id', $s->id)->update(['status' => 'closed', 'closed_at' => Clock::now(), 'closed_by' => $waiter, 'total' => $bill['total']]);
             DB::table('table_session_tables')->where('session_id', $s->id)->update(['is_open' => 0]);

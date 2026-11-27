@@ -46,8 +46,25 @@ interface Dish {
   perMonth: number | null
   issue: null | 'missing_portions' | 'missing_price' | 'missing_cost' | 'no_margin' | 'no_open_days'
 }
+/** NUOVO: vendite della settimana registrate dall'area Ordini */
+interface Week {
+  from: string
+  to: string
+  dayOfWeek: number
+  hasSales: boolean
+  revenue: string | null
+  revenueNet: string | null
+  contribution: string | null
+  fixedWeekly: string | null
+  gap: string | null
+  dishesSold: number
+  missingCostQty: number
+  covers: number
+  soldByRecipe: Record<string, number>
+}
 interface Data {
   date: string
+  week?: Week
   settings: { closedWeekdays: number[]; includeStaff: boolean; referenceRecipeId: string | null }
   openDaysPerWeek: number
   categories: Record<string, string>
@@ -196,6 +213,7 @@ export default function ProfitabilityPage() {
                 </p>
               </>
             )}
+            {d.week ? <WeekProgress week={d.week} dish={ref && !ref.issue ? ref : null} /> : null}
           </div>
         </div>
 
@@ -607,5 +625,64 @@ function QuickPrice({ dish, onSaved }: { dish: Dish; onSaved: () => void }) {
         {busy ? <span className="spinner" /> : null} Salva prezzo
       </button>
     </>
+  )
+}
+
+/**
+ * NUOVO — avanzamento della settimana con le vendite registrate in sala:
+ * «sei a 56 pizze dal pareggio» oppure «+26 pizze: stai già guadagnando X €».
+ */
+function WeekProgress({ week, dish }: { week: Week; dish: Dish | null }) {
+  const fmt = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+  if (!week.hasSales) {
+    return (
+      <div className="week-progress empty">
+        <strong>Questa settimana ({fmt(week.from)} – {fmt(week.to)})</strong>
+        <span className="small muted">
+          Quando prendi le comande in <a className="link" href="/sala">Sala</a>, qui vedi in tempo reale quanti piatti mancano al pareggio o quanto stai già guadagnando.
+        </span>
+      </div>
+    )
+  }
+  const gap = Number(week.gap ?? 0)
+  const margin = Number(dish?.margin ?? 0)
+  const fixed = Number(week.fixedWeekly ?? 0)
+  const covered = fixed > 0 ? Math.min(100, Math.max(0, (Number(week.contribution ?? 0) / fixed) * 100)) : 100
+  const sold = dish ? (week.soldByRecipe[dish.recipeId] ?? 0) : 0
+  const units = dish && margin > 0 ? (gap > 0 ? Math.ceil(gap / margin) : Math.floor(-gap / margin)) : null
+  return (
+    <div className={`week-progress ${gap > 0 ? 'behind' : 'ahead'}`}>
+      <div className="row between wrap" style={{ gap: 8 }}>
+        <strong>
+          Questa settimana ({fmt(week.from)} – {fmt(week.to)})
+        </strong>
+        <span className="small muted">
+          {num(week.dishesSold)} piatti venduti · {num(week.covers)} coperti · incasso {euro(week.revenue)}
+        </span>
+      </div>
+      <div className="wp-headline">
+        {units === null ? (
+          gap > 0 ? `Mancano ${euro(String(gap))} al pareggio` : `Stai già guadagnando ${euro(String(-gap))}`
+        ) : gap > 0 ? (
+          <>
+            Sei a <b>{num(units)}</b> {dish?.title} dal pareggio
+          </>
+        ) : (
+          <>
+            Sei a <b>+{num(units)}</b> {dish?.title}: stai già guadagnando <b>{euro(String(-gap))}</b>
+          </>
+        )}
+      </div>
+      <div className="wp-bar" role="img" aria-label={`Costi fissi della settimana coperti al ${Math.round(covered)}%`}>
+        <span style={{ width: `${covered}%` }} />
+      </div>
+      <div className="small muted">
+        Il guadagno dei piatti venduti ({euro(week.contribution)}) ha coperto il {Math.round(covered)}% dei costi fissi della settimana ({euro(week.fixedWeekly)}).
+        {gap > 0 && dish ? ` I piatti che mancano sono espressi in ${dish.title}, ma vale qualsiasi piatto venduto.` : ''}
+        {!dish ? ' Scegli qui sopra un piatto calcolabile per vedere quanti ne mancano.' : ''}
+        {sold && dish ? ` ${dish.title}: ${num(sold)} venduti finora.` : ''}
+        {week.missingCostQty ? ` ${num(week.missingCostQty)} piatti venduti senza costo calcolabile non sono contati.` : ''}
+      </div>
+    </div>
   )
 }
