@@ -44,6 +44,31 @@ export interface IngredientFormValue {
   edibleYieldPercent: string | null
   densityKgPerL: string | null
   unitWeightKg: string | null
+  /** NUOVO: eccezione «non alimentare» sul prodotto (null = come la categoria) */
+  nonFood?: boolean | null
+}
+
+/* NUOVO — prodotti non alimentari: la categoria decide (riconosciuta dal nome finché il titolare non la imposta). */
+const NON_FOOD_WORDS = ['materiale', 'consumo', 'combustib', 'legna', 'pellet', 'carbone', 'pulizia', 'pulizie', 'detersiv', 'detergent', 'igien', 'sanific', 'imball', 'packaging', 'monouso', 'usa e getta', 'cancelleria', 'stoviglie', 'attrezz', 'utensil', 'manutenzion', 'ricambi', 'divise', 'abbigliamento', 'non alimentar', 'carta e plastica', 'plastica', 'sacchi']
+export const guessNonFood = (category: string) => {
+  const c = category.trim().toLowerCase()
+  return !!c && NON_FOOD_WORDS.some((w) => c.includes(w))
+}
+export interface CategorySetting {
+  name: string
+  count: number
+  nonFood: boolean
+  auto: boolean
+}
+export function useCategorySettings() {
+  const q = useQuery({ queryKey: ['ingredients', 'category-settings'], queryFn: () => api.get<{ data: CategorySetting[] }>('/ingredients/category-settings'), staleTime: 60_000 })
+  const list = q.data?.data ?? []
+  const map = new Map(list.map((c) => [c.name.trim().toLowerCase(), c.nonFood]))
+  const categoryNonFood = (category: string) => {
+    const k = category.trim().toLowerCase()
+    return map.has(k) ? !!map.get(k) : guessNonFood(category)
+  }
+  return { list, categoryNonFood, loading: q.isLoading }
 }
 
 export const emptyIngredient = (name = ''): IngredientFormValue => ({
@@ -60,6 +85,7 @@ export const emptyIngredient = (name = ''): IngredientFormValue => ({
   edibleYieldPercent: '100',
   densityKgPerL: null,
   unitWeightKg: null,
+  nonFood: null,
 })
 
 const dim = (u: string) => (['g', 'kg'].includes(u) ? 'mass' : ['ml', 'cl', 'l'].includes(u) ? 'volume' : 'count')
@@ -289,7 +315,7 @@ export function AgentSelect({ id, supplier, value, onChange }: { id: string; sup
 }
 
 /** Controlli del modulo prima dell'invio: categoria e fornitore obbligatori, come lo paghi e peso/contenuto. */
-export function validateIngredient(v: IngredientFormValue): Record<string, string> {
+export function validateIngredient(v: IngredientFormValue, nonFood = false): Record<string, string> {
   const e: Record<string, string> = {}
   if (!v.name.trim()) e.name = 'Inserisci il nome del prodotto.'
   if (!v.category.trim()) e.category = 'Scegli o scrivi la categoria.'
@@ -297,7 +323,7 @@ export function validateIngredient(v: IngredientFormValue): Record<string, strin
   if (!v.mode) e.mode = 'Scegli come lo paghi.'
   if ((v.mode === 'pz' || v.mode === 'conf') && !(Number(v.packageContent) > 0)) e.packageContent = v.mode === 'pz' ? 'Indica il peso del pezzo.' : 'Indica quanto contiene la confezione.'
   // NUOVO: confezione «a pezzi» → serve sapere quanto pesa o contiene un pezzo, altrimenti in ricetta si dosa solo a pezzi
-  if (v.mode === 'conf' && dim(v.packageUnit) === 'count' && !(Number(v.unitWeightKg) > 0)) e.unitWeightKg = 'Indica quanto pesa o contiene un pezzo: senza, nelle ricette potrai usarlo solo a pezzi.'
+  if (!nonFood && v.mode === 'conf' && dim(v.packageUnit) === 'count' && !(Number(v.unitWeightKg) > 0)) e.unitWeightKg = 'Indica quanto pesa o contiene un pezzo: senza, nelle ricette potrai usarlo solo a pezzi.'
   return e
 }
 
@@ -325,6 +351,9 @@ export function IngredientFields({
   lockDimension?: 'mass' | 'volume' | 'count'
 }) {
   const s = useSuggestions()
+  const cats = useCategorySettings()
+  const catNonFood = cats.categoryNonFood(v.category)
+  const nonFood = v.nonFood ?? catNonFood
   const [usageTouched, setUsageTouched] = useState(!isNew)
   const needDensity = dim(v.packageUnit) !== dim(v.usageUnit) && [dim(v.packageUnit), dim(v.usageUnit)].includes('volume')
   const needUnitWeight = dim(v.packageUnit) !== dim(v.usageUnit) && [dim(v.packageUnit), dim(v.usageUnit)].includes('count') && v.mode !== 'pz'
@@ -357,7 +386,7 @@ export function IngredientFields({
           set(next)
         }}
       />
-      {v.mode === 'conf' ? <PackHelpers v={v} set={set} errors={errors} lockDimension={lockDimension} onUsage={(u) => !usageTouched && set({ usageUnit: u })} /> : null}
+      {v.mode === 'conf' ? <PackHelpers v={v} set={set} errors={errors} lockDimension={lockDimension} nonFood={nonFood} onUsage={(u) => !usageTouched && set({ usageUnit: u })} /> : null}
       {!isNew && v.mode ? <div className="faint small">Se correggi la confezione, sotto ti proponiamo di correggerla anche nei prezzi già registrati (l’importo pagato resta uguale).</div> : null}
       <div className="grid-3">
         <Field label="Resa" htmlFor="ing-yield" hint="Facoltativa. Su 10 kg te ne restano 8 dopo la pulizia? Scrivi 80%" error={errors.edibleYieldPercent}>
@@ -370,6 +399,12 @@ export function IngredientFields({
               <option key={c} value={c} />
             ))}
           </datalist>
+          <label className="row small nonfood-check" style={{ gap: 6, marginTop: 6, cursor: 'pointer' }}>
+            <input type="checkbox" checked={nonFood} onChange={(e) => set({ nonFood: e.target.checked === catNonFood ? null : e.target.checked })} />
+            <span>
+              Non alimentare <span className="faint">(legna, bicchieri, box…: non serve il peso{v.nonFood != null && v.category.trim() ? ', eccezione rispetto alla categoria' : ''})</span>
+            </span>
+          </label>
         </Field>
         <Field label="Unità in ricetta" htmlFor="ing-uu" hint="Unità proposta quando lo dosi">
           <select
@@ -445,19 +480,21 @@ function PackHelpers({
   set,
   errors,
   lockDimension,
+  nonFood,
   onUsage,
 }: {
   v: IngredientFormValue
   set: (p: Partial<IngredientFormValue>) => void
   errors: Record<string, string>
   lockDimension?: 'mass' | 'volume' | 'count'
+  nonFood?: boolean
   onUsage: (u: string) => void
 }) {
   const [pieceUnit, setPieceUnit] = useState<'g' | 'ml'>(v.densityKgPerL && Number(v.densityKgPerL) === 1 && dim(v.usageUnit) === 'volume' ? 'ml' : 'g')
   const sz = sizeFromName(v.name)
   const same = sz && Number(v.packageContent) === Number(sz.qty) && v.packageUnit === sz.unit
   const canUse = sz && !same && (!lockDimension || lockDimension === dim(sz.unit))
-  const counted = dim(v.packageUnit) === 'count'
+  const counted = dim(v.packageUnit) === 'count' && !nonFood
   const density = Number(v.densityKgPerL) > 0 ? Number(v.densityKgPerL) : 1
   const shown = v.unitWeightKg ? String(Math.round((Number(v.unitWeightKg) * 1000 * (pieceUnit === 'ml' ? 1 / density : 1)) * 1000) / 1000) : null
   const setPiece = (x: string | null, unit = pieceUnit) => {
@@ -542,6 +579,7 @@ export function ingredientPayload(v: IngredientFormValue) {
     edibleYieldPercent: v.edibleYieldPercent ?? '100',
     densityKgPerL: v.densityKgPerL,
     unitWeightKg: v.mode === 'pz' ? pieceKg : v.unitWeightKg,
+    nonFood: v.nonFood ?? null,
   }
 }
 
@@ -554,6 +592,7 @@ export function CreateIngredientDrawer({ initialName = '', onClose, onCreated }:
   const qc = useQueryClient()
   const toast = useToast()
   const [v, setV] = useState<IngredientFormValue>(emptyIngredient(initialName))
+  const cats = useCategorySettings()
   const [price, setPrice] = useState<{ packagePrice: string | null; validFrom: string; source: string; agentName: string }>({ packagePrice: null, validFrom: todayIso(), source: '', agentName: '' })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
@@ -563,7 +602,7 @@ export function CreateIngredientDrawer({ initialName = '', onClose, onCreated }:
 
   const save = async () => {
     setError('')
-    const local = validateIngredient(v)
+    const local = validateIngredient(v, v.nonFood ?? cats.categoryNonFood(v.category))
     if (showPrice && !(Number(price.packagePrice) > 0)) local.packagePrice = 'Inserisci il prezzo (senza IVA).'
     setErrors(local)
     if (Object.keys(local).length) {

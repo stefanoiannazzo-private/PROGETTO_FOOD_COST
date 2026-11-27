@@ -9,6 +9,7 @@ import { useCan } from '@/lib/session'
 import { PageHead } from '@/components/AppShell'
 import { DataTable, useList, useListState, type Column } from '@/components/DataTable'
 import { CreateIngredientDrawer } from '@/components/IngredientForm'
+import { CategoriesDrawer } from '@/components/CategoriesDrawer'
 import { Empty, Icon } from '@/components/ui'
 import { ChangedBadge, ChangedListBanner, useChangedSet } from '@/components/ChangeAlerts'
 import { useQuickAction } from '@/lib/quick'
@@ -26,6 +27,7 @@ interface Row {
   archived: boolean
   /** NUOVO: a pezzi senza peso → in ricetta si dosa solo a pezzi */
   needsWeight?: boolean
+  nonFood?: boolean
   price: { status: 'ok' | 'zero' | 'missing'; packagePrice: string | null; validFrom: string | null; unitPrice: string | null; baseUnit: string } | null
 }
 
@@ -34,6 +36,7 @@ export default function IngredientsPage() {
   const [state, update] = useListState('ingredients', { sort: 'name' })
   const query = useList<Row>('ingredients', '/ingredients', state)
   const [creating, setCreating] = useState(false)
+  const [categories, setCategories] = useState(false)
   useQuickAction('nuovo-ingrediente', () => can('ingredients.manage') && setCreating(true))
   const cats = useQuery({ queryKey: ['ingredients', 'categories'], queryFn: () => api.get<{ data: string[] }>('/ingredients/categories'), staleTime: 60_000 })
   const showCosts = can('costs.read')
@@ -56,6 +59,7 @@ export default function IngredientsPage() {
               manca il peso
             </span>
           ) : null}
+          {r.nonFood ? <span className="badge" title="Non alimentare: non serve il peso del pezzo">non alimentare</span> : null}
         </>
       ),
     },
@@ -90,11 +94,16 @@ export default function IngredientsPage() {
         title="Ingredienti e prodotti"
         sub={showCosts ? 'Prezzi netti IVA, normalizzati per kg, litro o pezzo alla data odierna.' : undefined}
         actions={
-          can('ingredients.manage') ? (
-            <button className="btn primary" onClick={() => setCreating(true)}>
-              <Icon name="plus" /> Nuovo ingrediente
+          <>
+            <button className="btn" onClick={() => setCategories(true)}>
+              <Icon name="list" /> Categorie
             </button>
-          ) : null
+            {can('ingredients.manage') ? (
+              <button className="btn primary" onClick={() => setCreating(true)}>
+                <Icon name="plus" /> Nuovo ingrediente
+              </button>
+            ) : null}
+          </>
         }
       />
       <datalist id="ingredient-categories">{cats.data?.data.map((c) => <option key={c} value={c} />)}</datalist>
@@ -104,8 +113,11 @@ export default function IngredientsPage() {
         <div className="alert warn" style={{ marginBottom: 12 }}>
           <Icon name="alert" />
           <div className="grow">
-            <strong>{String(query.data?.meta.missingWeight)} prodotti</strong> sono registrati a pezzi senza sapere quanto pesa o contiene un pezzo: nelle ricette si possono usare solo a pezzi, non a grammi o ml.
+            <strong>{String(query.data?.meta.missingWeight)} prodotti</strong> sono registrati a pezzi senza sapere quanto pesa o contiene un pezzo: nelle ricette si possono usare solo a pezzi, non a grammi o ml. Per legna, bicchieri, box e simili il peso non serve: segna la loro categoria come <strong>non alimentare</strong>.
           </div>
+          <button className="btn sm" onClick={() => setCategories(true)}>
+            Categorie
+          </button>
           <button className="btn sm" onClick={() => update({ filters: { ...state.filters, weight: 'missing' } })}>
             Mostrali
           </button>
@@ -153,6 +165,7 @@ export default function IngredientsPage() {
         }
       />
       {creating ? <CreateIngredientDrawer onClose={() => setCreating(false)} /> : null}
+      {categories ? <CategoriesDrawer onClose={() => setCategories(false)} /> : null}
     </>
   )
 }

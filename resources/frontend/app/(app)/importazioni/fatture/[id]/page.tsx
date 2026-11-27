@@ -12,6 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type AffectedRecipe } from '@/lib/api'
 import { date, euro, num } from '@/lib/num'
 import { PageHead } from '@/components/AppShell'
+import { useCategorySettings } from '@/components/IngredientForm'
 import { AffectedNotice, Confirm, ErrorBox, errorMessage, Field, fieldErrors, Icon, NumberInput, Skeleton, useToast } from '@/components/ui'
 
 type Mode = 'kg' | 'l' | 'conf'
@@ -136,6 +137,7 @@ export default function SupplierInvoicePage() {
   const router = useRouter()
   const qc = useQueryClient()
   const toast = useToast()
+  const catSettings = useCategorySettings()
   const q = useQuery({ queryKey: ['supplier-invoice', id], queryFn: () => api.get<Invoice>(`/supplier-invoices/${id}`) })
   const [choices, setChoices] = useState<Record<number, Choice>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -186,7 +188,7 @@ export default function SupplierInvoicePage() {
           packageContent: c.mode === 'conf' ? c.packageContent : null,
           packageUnit: c.mode === 'conf' ? c.packageUnit : null,
           purchaseUnit: c.mode === 'conf' ? c.purchaseUnit : null,
-          pieceSize: c.action === 'new' && c.mode === 'conf' && c.packageUnit === 'pz' ? c.pieceSize : null,
+          pieceSize: c.action === 'new' && c.mode === 'conf' && c.packageUnit === 'pz' && !catSettings.categoryNonFood(c.category) ? c.pieceSize : null,
           pieceUnit: c.pieceUnit,
           remember: c.remember,
         }
@@ -384,7 +386,10 @@ export default function SupplierInvoicePage() {
                             </Field>
                           </div>
                         ) : null}
-                        {c.action === 'new' && c.mode === 'conf' && c.packageUnit === 'pz' ? (
+                        {c.action === 'new' && c.mode === 'conf' && c.packageUnit === 'pz' && catSettings.categoryNonFood(c.category) ? (
+                          <div className="small faint">Categoria non alimentare: non serve il peso del pezzo.</div>
+                        ) : null}
+                        {c.action === 'new' && c.mode === 'conf' && c.packageUnit === 'pz' && !catSettings.categoryNonFood(c.category) ? (
                           <div className="grid-2">
                             <Field label="Quanto pesa o contiene un pezzo?" required htmlFor={`pc-${l.n}`} error={e('pieceSize')} hint="es. bustina 12 g · uovo 60 g · bottiglietta 250 ml: così in ricetta lo usi anche a grammi o ml">
                               <NumberInput

@@ -10,7 +10,7 @@ import { useCan } from '@/lib/session'
 import { PageHead } from '@/components/AppShell'
 import { ChangesNotice, type Change } from '@/components/ChangeAlerts'
 import { PriceHistory } from '@/components/PriceHistory'
-import { AgentSelect, BuyBlock, inferMode, IngredientFields, ingredientPayload, packageOf, validateIngredient, type BuyMode, type IngredientFormValue } from '@/components/IngredientForm'
+import { AgentSelect, BuyBlock, inferMode, IngredientFields, ingredientPayload, packageOf, validateIngredient, type BuyMode, type IngredientFormValue, useCategorySettings } from '@/components/IngredientForm'
 import { AffectedNotice, Confirm, ErrorBox, errorMessage, Field, fieldErrors, Icon, NumberInput, Skeleton, StatusBadge, useToast } from '@/components/ui'
 
 interface Price {
@@ -31,6 +31,7 @@ interface Price {
   baseUnit: string
   future: boolean
 }
+const TO_BASE: Record<string, number> = { g: 0.001, kg: 1, ml: 0.001, cl: 0.01, l: 1, pz: 1 }
 const dimOf = (u: string): 'mass' | 'volume' | 'count' => (['g', 'kg'].includes(u) ? 'mass' : ['ml', 'cl', 'l'].includes(u) ? 'volume' : 'count')
 
 interface Detail extends Omit<IngredientFormValue, 'code' | 'mode'> {
@@ -38,6 +39,8 @@ interface Detail extends Omit<IngredientFormValue, 'code' | 'mode'> {
   code: string
   archived: boolean
   lockVersion: number
+  nonFoodOverride: boolean | null
+  categoryNonFood: boolean
   priceVisible: boolean
   currentPrice: (Price & { unitPrice: string }) | null
   prices: Price[]
@@ -60,6 +63,7 @@ export default function IngredientDetailPage() {
   const [confirm, setConfirm] = useState<null | 'delete' | 'archive'>(null)
   const [updatePrices, setUpdatePrices] = useState(true)
   const editable = can('ingredients.manage')
+  const cats = useCategorySettings()
 
   useEffect(() => {
     if (q.data) {
@@ -78,6 +82,7 @@ export default function IngredientDetailPage() {
         edibleYieldPercent: d.edibleYieldPercent,
         densityKgPerL: d.densityKgPerL,
         unitWeightKg: d.unitWeightKg,
+        nonFood: d.nonFoodOverride,
       })
     }
   }, [q.data])
@@ -87,15 +92,46 @@ export default function IngredientDetailPage() {
   const d = q.data
   // NUOVO: la confezione cambia (es. da «1 pz» a «24 pz») e ci sono prezzi registrati con quella di prima:
   // si propone di correggerli, perché l'importo pagato era per la confezione intera.
-  const packChanged = v.packageUnit !== d.packageUnit || Number(String(v.packageContent).replace(',', '.')) !== Number(d.packageContent)
+  const pl = ingredientPayload(v)
+  const packChanged = pl.packageUnit !== d.packageUnit || Number(String(pl.packageContent).replace(',', '.')) !== Number(d.packageContent)
   const oldPrices = d.prices.filter((p) => p.package_unit === d.packageUnit && Number(p.package_content) === Number(d.packageContent))
-  const newContent = Number(String(v.packageContent).replace(',', '.'))
-  const repack = packChanged && oldPrices.length && newContent > 0 && dimOf(v.packageUnit) === dimOf(d.packageUnit) ? { n: oldPrices.length, sample: oldPrices[0]! } : null
-  const perUnit = (price: string) => {
-    const f = v.packageUnit === 'g' || v.packageUnit === 'ml' ? 1000 : v.packageUnit === 'cl' ? 100 : 1
-    const base = v.packageUnit === 'g' || v.packageUnit === 'kg' ? 'kg' : ['ml', 'cl', 'l'].includes(v.packageUnit) ? 'l' : v.packageUnit
-    return `${euro(String((Number(price) / newContent) * f))}/${base}`
+  const newContent = Number(String(pl.packageContent).replace(',', '.'))
+  const dimChanged = dimOf(pl.packageUnit) !== dimOf(d.packageUnit)
+  const repack = !dimChanged && packChanged && oldPrices.length && newContent > 0 ? { n: oldPrices.length, sample: oldPrices[0]! } : null
+  const perUnit = (price: string, content = newContent) => {
+    const f = TO_BASE[pl.packageUnit] ?? 1
+    const base = dimOf(pl.packageUnit) === 'mass' ? 'kg' : dimOf(pl.packageUnit) === 'volume' ? 'l' : 'pz'
+    return euroPer(String(Number(price) / (content * f)), base, 4)
   }
+  // NUOVO: cambio di tipo (pezzi ↔ peso ↔ volume): tutti i prezzi registrati si convertono con peso del pezzo e densità
+  const density = Number(pl.densityKgPerL) > 0 ? Number(pl.densityKgPerL) : null
+  const pieceKg = Number(pl.unitWeightKg) > 0 ? Number(pl.unitWeightKg) : null
+  const convert = (content: string, unit: string): number | 'density' | 'piece' => {
+    const base = Number(content) * (TO_BASE[unit] ?? 1)
+    const src = dimOf(unit)
+    const dst = dimOf(pl.packageUnit)
+    let kg: number
+    if (src === 'mass') kg = base
+    else if (src === 'volume') {
+      if (!density) return 'density'
+      kg = base * density
+    } else {
+      if (!pieceKg) return 'piece'
+      kg = base * pieceKg
+    }
+    let out: number
+    if (dst === 'mass') out = kg
+    else if (dst === 'volume') {
+      if (!density) return 'density'
+      out = kg / density
+    } else {
+      if (!pieceKg) return 'piece'
+      out = kg / pieceKg
+    }
+    return out / (TO_BASE[pl.packageUnit] ?? 1)
+  }
+  const conversions = dimChanged && d.prices.length ? d.prices.map((p) => ({ p, to: convert(p.package_content, p.package_unit) })) : []
+  const convMissing = conversions.find((c) => typeof c.to === 'string')?.to as 'density' | 'piece' | undefined
   // prezzi già registrati con una confezione diversa da quella attuale (stessa grandezza): proposta di allineamento
   const misaligned = packChanged
     ? []
@@ -122,7 +158,9 @@ export default function IngredientDetailPage() {
   const qn = (x: string | number | null) => String(Number(x)).replace('.', ',')
 
   const save = async () => {
-    const local = validateIngredient(v)
+    const local = validateIngredient(v, v.nonFood ?? cats.categoryNonFood(v.category))
+    if (convMissing === 'density') local.densityKgPerL = 'Serve per convertire i prezzi già registrati (per l’acqua 1).'
+    if (convMissing === 'piece') local.unitWeightKg = 'Serve per convertire i prezzi già registrati.'
     setErrors(local)
     if (Object.keys(local).length) {
       toast('Completa i campi evidenziati.', 'err')
@@ -130,7 +168,7 @@ export default function IngredientDetailPage() {
     }
     setSaving(true)
     try {
-      const r = await api.patch<{ affectedRecipes: AffectedRecipe[]; repricedPrices: number }>(`/ingredients/${id}`, { ...ingredientPayload(v), code: v.code, lockVersion: d.lockVersion, updatePrices: !!repack && updatePrices })
+      const r = await api.patch<{ affectedRecipes: AffectedRecipe[]; repricedPrices: number }>(`/ingredients/${id}`, { ...ingredientPayload(v), code: v.code, lockVersion: d.lockVersion, updatePrices: conversions.length > 0 || (!!repack && updatePrices) })
       setAffected(r.affectedRecipes)
       if (r.repricedPrices) toast(`Prodotto salvato: confezione corretta anche in ${r.repricedPrices === 1 ? '1 prezzo' : `${r.repricedPrices} prezzi`}.`)
       await qc.invalidateQueries({ queryKey: ['ingredients'] })
@@ -193,7 +231,7 @@ export default function IngredientDetailPage() {
             }}
           >
             <fieldset disabled={!editable} style={{ border: 0, padding: 0, margin: 0 }}>
-              <IngredientFields v={v} set={(p) => setV((x) => ({ ...x!, ...p }))} errors={errors} lockDimension={d.prices.length ? dimOf(d.packageUnit) : undefined} />
+              <IngredientFields v={v} set={(p) => setV((x) => ({ ...x!, ...p }))} errors={errors} />
             </fieldset>
             {editable && d.priceVisible
               ? misaligned.map((m) => (
@@ -212,6 +250,29 @@ export default function IngredientDetailPage() {
                   </div>
                 ))
               : null}
+            {editable && conversions.length && d.priceVisible ? (
+              <div className={`alert ${convMissing ? 'warn' : 'info'}`} style={{ flexDirection: 'column', gap: 6 }}>
+                <strong>
+                  Cambi il tipo di prezzo: {conversions.length === 1 ? 'il prezzo già registrato viene convertito' : `i ${conversions.length} prezzi già registrati vengono convertiti`} (l'importo pagato resta uguale)
+                </strong>
+                {convMissing ? (
+                  <span className="small">
+                    {convMissing === 'density'
+                      ? 'Per convertire serve la densità (kg per litro: acqua 1, latte 1,03, olio 0,92). Indicala in «Altri dettagli».'
+                      : 'Per convertire serve quanto pesa o contiene un pezzo. Indicalo in «Altri dettagli» («Peso medio di un pezzo»).'}
+                  </span>
+                ) : (
+                  <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
+                    {conversions.slice(0, 4).map(({ p, to }) => (
+                      <li key={p.id}>
+                        dal {date(p.valid_from)}: {euro(p.package_price)} per {qn(p.package_content)} {p.package_unit} → per {qn(Math.round((to as number) * 1000) / 1000)} {pl.packageUnit} = <strong>{perUnit(p.package_price, to as number)}</strong>
+                      </li>
+                    ))}
+                    {conversions.length > 4 ? <li>e altri {conversions.length - 4}</li> : null}
+                  </ul>
+                )}
+              </div>
+            ) : null}
             {editable && repack && d.priceVisible ? (
               <label className="alert info row" style={{ alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}>
                 <input type="checkbox" checked={updatePrices} onChange={(e) => setUpdatePrices(e.target.checked)} style={{ marginTop: 3 }} />

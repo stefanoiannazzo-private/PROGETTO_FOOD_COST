@@ -281,7 +281,8 @@ final class SupplierInvoiceController extends Controller
 
                     continue;
                 }
-                if ($d['action'] === 'new' && $mode === 'conf' && $unit === 'pz' && empty($d['pieceSize'])) {
+                // NUOVO: per il materiale non alimentare (categoria «Materiale di consumo», «Combustibili»…) il peso non serve
+                if ($d['action'] === 'new' && $mode === 'conf' && $unit === 'pz' && empty($d['pieceSize']) && ! \App\Support\NonFood::isCategory($cid, $d['category'] ?? null, $nfMap ??= \App\Support\NonFood::categoryMap($cid))) {
                     $fields["line{$n}.pieceSize"] = 'Indica quanto pesa o contiene un pezzo: senza, nelle ricette si potrà usare solo a pezzi.';
 
                     continue;

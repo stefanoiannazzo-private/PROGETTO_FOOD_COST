@@ -53,4 +53,26 @@ class PackPricesTest extends TestCase
         // unità di un'altra grandezza: rifiutata
         $this->assertSame(422, $a->post("/api/ingredients/{$id}/prices/align", ['fromContent' => '1', 'fromUnit' => 'kg'])->status);
     }
+
+    public function test_cambio_tipo_converte_i_prezzi(): void
+    {
+        [$a, $id] = $this->setUpWater();
+        $d = $this->ok($a->get("/api/ingredients/{$id}"));
+        $this->ok($a->patch("/api/ingredients/{$id}", $this->body($d, ['updatePrices' => true])));   // 12,06 € per 24 pz
+        $d = $this->ok($a->get("/api/ingredients/{$id}"));
+        $toLitre = fn (array $d, array $x = []) => $this->body($d, ['packageContent' => '1', 'packageUnit' => 'l', 'purchaseUnit' => 'litro', 'usageUnit' => 'ml', ...$x]);
+        // senza conferma: rifiutato
+        $this->assertSame(422, $a->patch("/api/ingredients/{$id}", $toLitre($d))->status);
+        // senza densità non si converte
+        $r = $a->patch("/api/ingredients/{$id}", $toLitre($d, ['updatePrices' => true, 'densityKgPerL' => null]));
+        $this->assertSame(422, $r->status);
+        $this->assertArrayHasKey('densityKgPerL', $r->body['error']['details']['fields']);
+        // 24 pz × 0,5 kg ÷ densità 1 = 12 l → 1,005 €/l
+        $this->assertSame(1, $this->ok($a->patch("/api/ingredients/{$id}", $toLitre($d, ['updatePrices' => true])))['repricedPrices']);
+        $d = $this->ok($a->get("/api/ingredients/{$id}"));
+        $this->assertSame('l', $d['currentPrice']['package_unit']);
+        $this->assertEqualsWithDelta(12, (float) $d['currentPrice']['package_content'], 0.000001);
+        $this->assertEqualsWithDelta(1.005, (float) $d['currentPrice']['unitPrice'], 0.0001);
+        $this->assertSame(12.06, (float) $d['currentPrice']['package_price']);
+    }
 }

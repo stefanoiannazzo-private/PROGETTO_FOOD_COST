@@ -34,6 +34,8 @@ final class Validator
         $type = $imp->type;
         $companyId = $imp->company_id;
         DB::table('import_rows')->where('import_id', $importId)->delete();
+        // NUOVO: categorie non alimentari (niente avviso sul peso del pezzo)
+        $opts['_nonFood'] = \App\Support\NonFood::categoryMap($companyId);
 
         // anagrafica esistente indicizzata per codice (chiave di abbinamento); mai per nome
         $existing = [];
@@ -327,7 +329,9 @@ final class Validator
             }
         }
         // NUOVO: contenuto «in pezzi» senza peso → nelle ricette il prodotto si potrà dosare solo a pezzi
-        if ($effUnit === 'pz' && ! self::t($unitWeightG) && $s['action'] !== 'skip' && $s['action'] !== 'error') {
+        $category = Normalize::text($get('category'));
+        $nonFoodCat = self::t($category) && (isset($o['_nonFood'][mb_strtolower(trim($category))]) ? $o['_nonFood'][mb_strtolower(trim($category))]['nonFood'] : \App\Support\NonFood::guess($category));
+        if ($effUnit === 'pz' && ! self::t($unitWeightG) && ! $nonFoodCat && $s['action'] !== 'skip' && $s['action'] !== 'error') {
             $size = PackSize::fromName($name ?? ($hit['name'] ?? null));
             $s['warnings'][] = 'Contenuto in pezzi senza peso: nelle ricette si potrà usare solo a pezzi, non a grammi o ml. '
                 .($size ? "Dal nome sembra {$size['qty']} {$size['unit']}: scrivi «Contenuto confezione» {$size['qty']} e «Unità contenuto» {$size['unit']}, " : 'Scrivi il contenuto in g, kg, ml o l, ')

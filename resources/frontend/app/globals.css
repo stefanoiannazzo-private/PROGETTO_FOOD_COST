@@ -896,3 +896,11 @@ span.ellipsis.topbar-company { display: inline-block; }
 @media (max-width: 600px) { .area-head > .row { width: 100%; justify-content: flex-end; } }
 .table-grid-empty { grid-column: 1 / -1; }
 @media (max-width: 600px) { .area-head > div:first-child { min-width: 0; flex: 1 1 100%; } }
+
+/* NUOVO — categorie non alimentari */
+.cat-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.cat-list li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.cat-list li:last-child { border-bottom: 0; }
+.switch-row { display: flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
+.switch-row input { width: 18px; height: 18px; accent-color: var(--accent, #b5401f); }
+.nonfood-check input { width: 16px; height: 16px; }

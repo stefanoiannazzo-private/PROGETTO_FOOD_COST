@@ -13,6 +13,7 @@ use App\Services\Audit;
 use App\Services\Codes;
 use App\Services\ChangeAlerts;
 use App\Services\Costing;
+use App\Support\NonFood;
 use App\Support\AppError;
 use App\Support\Clock;
 use App\Support\Row;
@@ -45,6 +46,8 @@ final class IngredientController extends Controller
             'edibleYieldPercent' => S::dec(['gt' => 0, 'max' => 100, 'label' => 'La resa edibile'])->default('100'),
             'densityKgPerL' => S::decOpt(['gt' => 0, 'label' => 'La densità']),
             'unitWeightKg' => S::decOpt(['gt' => 0, 'label' => 'Il peso medio unitario']),
+            // NUOVO: eccezione «non alimentare» sul singolo prodotto (null = come la categoria)
+            'nonFood' => S::bool()->nullable()->optional(),
         ]);
     }
 
@@ -129,19 +132,21 @@ final class IngredientController extends Controller
             $query->where('p.package_price', '=', 0);
         }
         if ($q['weight'] === 'missing') {
-            $query->where('i.package_unit', 'pz')->whereNull('i.unit_weight_kg');
+            NonFood::needsWeightWhere($query, $cid);
         }
+        $nfMap = NonFood::categoryMap($cid);
         $sortCol = self::SORTS[$q['sort'] ?? 'name'] ?? self::SORTS['name'];
         $total = (clone $query)->count();
         // come PostgreSQL: NULL in fondo in ordine crescente, in testa in ordine decrescente
         $rows = $query->orderByRaw("{$sortCol} IS NULL ".($q['dir'] === 'desc' ? 'DESC' : 'ASC'))->orderBy($sortCol, $q['dir'])->orderBy('i.id')
             ->limit($q['pageSize'])->offset(($q['page'] - 1) * $q['pageSize'])
-            ->get(['i.id', 'i.code', 'i.name', 'i.category', 'i.supplier', 'i.package_content', 'i.package_unit', 'i.usage_unit', 'i.purchase_unit', 'i.edible_yield', 'i.archived_at', 'i.updated_at', 'i.unit_weight_kg',
+            ->get(['i.id', 'i.code', 'i.name', 'i.category', 'i.supplier', 'i.package_content', 'i.package_unit', 'i.usage_unit', 'i.purchase_unit', 'i.edible_yield', 'i.archived_at', 'i.updated_at', 'i.unit_weight_kg', 'i.non_food',
                 'p.package_price', 'p.package_content as price_content', 'p.package_unit as price_unit', 'p.valid_from']);
 
         return [
-            'data' => $rows->map(function ($r) use ($showCosts) {
+            'data' => $rows->map(function ($r) use ($showCosts, $cid, $nfMap) {
                 $hasPrice = $r->package_price !== null;
+                $nonFood = NonFood::effective($r->non_food === null ? null : (bool) $r->non_food, NonFood::isCategory($cid, $r->category, $nfMap));
 
                 return [
                     'id' => $r->id,
@@ -156,7 +161,8 @@ final class IngredientController extends Controller
                     'edibleYieldPercent' => Dec::of($r->edible_yield)->times(100)->toFixed(),
                     'archived' => $r->archived_at !== null,
                     'updatedAt' => Clock::iso($r->updated_at),
-                    'needsWeight' => $r->package_unit === 'pz' && $r->unit_weight_kg === null,
+                    'nonFood' => $nonFood,
+                    'needsWeight' => ! $nonFood && $r->package_unit === 'pz' && $r->unit_weight_kg === null,
                     'price' => $showCosts ? [
                         'status' => $hasPrice ? (Dec::of($r->package_price)->isZero() ? 'zero' : 'ok') : 'missing',
                         'packagePrice' => $r->package_price,
@@ -167,7 +173,7 @@ final class IngredientController extends Controller
                 ];
             })->all(),
             'meta' => ['page' => $q['page'], 'pageSize' => $q['pageSize'], 'total' => $rows->isEmpty() ? 0 : $total, 'date' => $date,
-                'missingWeight' => DB::table('ingredients')->where('company_id', $cid)->whereNull('archived_at')->where('package_unit', 'pz')->whereNull('unit_weight_kg')->count()],
+                'missingWeight' => tap(DB::table('ingredients as i')->where('i.company_id', $cid)->whereNull('i.archived_at'), fn ($w) => NonFood::needsWeightWhere($w, $cid))->count()],
         ];
     }
 
@@ -176,6 +182,45 @@ final class IngredientController extends Controller
         $ctx = $this->requireCompany($req, 'recipes.read');
 
         return ['data' => DB::table('ingredients')->where('company_id', $ctx->companyId())->whereNotNull('category')->distinct()->orderBy('category')->pluck('category')->all()];
+    }
+
+    /** NUOVO — categorie con l'impostazione «non alimentare» (riconosciuta dal nome finché il titolare non la cambia). */
+    public function categorySettings(Request $req): array
+    {
+        $ctx = $this->requireCompany($req, 'recipes.read');
+        $cid = $ctx->companyId();
+        $map = NonFood::categoryMap($cid);
+        $counts = DB::table('ingredients')->where('company_id', $cid)->whereNull('archived_at')->whereNotNull('category')->groupBy('category')->pluck(DB::raw('COUNT(*)'), 'category');
+        $names = [];
+        foreach ($counts as $name => $n) {
+            $names[mb_strtolower(trim($name))] = ['name' => $name, 'count' => (int) $n];
+        }
+        foreach (DB::table('ingredient_categories')->where('company_id', $cid)->pluck('name') as $name) {
+            $names[mb_strtolower(trim($name))] ??= ['name' => $name, 'count' => 0];
+        }
+        $out = [];
+        foreach ($names as $k => $v) {
+            $out[] = [...$v, 'nonFood' => $map[$k]['nonFood'] ?? NonFood::guess($v['name']), 'auto' => $map[$k]['auto'] ?? true];
+        }
+        usort($out, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+
+        return ['data' => $out];
+    }
+
+    public function updateCategorySetting(Request $req): array
+    {
+        $ctx = $this->requireCompany($req, 'ingredients.manage');
+        $b = $this->parseBody($req, S::object(['name' => S::reqText('La categoria', 255), 'nonFood' => S::bool()]));
+        $cid = $ctx->companyId();
+        $row = DB::table('ingredient_categories')->where('company_id', $cid)->where('name', $b['name'])->first();
+        if ($row) {
+            DB::table('ingredient_categories')->where('id', $row->id)->update(['non_food' => $b['nonFood'], 'updated_at' => Clock::now()]);
+        } else {
+            DB::table('ingredient_categories')->insert(['id' => (string) Str::uuid(), 'company_id' => $cid, 'name' => $b['name'], 'non_food' => $b['nonFood'], 'updated_at' => Clock::now()]);
+        }
+        Audit::log($cid, $ctx->userId(), 'ingredient_category', null, 'non_food', ['category' => $b['name'], 'non_food' => $b['nonFood']]);
+
+        return ['ok' => true];
     }
 
     /** NUOVO — fornitori già usati dall'azienda, per i suggerimenti del modulo. */
@@ -238,6 +283,8 @@ final class IngredientController extends Controller
             'edibleYieldPercent' => Dec::of($i->edible_yield)->times(100)->toFixed(),
             'densityKgPerL' => $i->density_kg_per_l,
             'unitWeightKg' => $i->unit_weight_kg,
+            'nonFoodOverride' => $i->non_food === null ? null : (bool) $i->non_food,
+            'categoryNonFood' => NonFood::isCategory($cid, $i->category),
             'archived' => $i->archived_at !== null,
             'lockVersion' => (int) $i->lock_version,
             'createdAt' => Clock::iso($i->created_at),
@@ -291,6 +338,7 @@ final class IngredientController extends Controller
                 'edible_yield' => Dec::of($body['edibleYieldPercent'])->div(100)->toFixed(),
                 'density_kg_per_l' => $body['densityKgPerL'],
                 'unit_weight_kg' => $body['unitWeightKg'],
+                'non_food' => $body['nonFood'] ?? null,
                 'created_at' => Clock::now(),
                 'updated_at' => Clock::now(),
             ]);
@@ -355,6 +403,9 @@ final class IngredientController extends Controller
                 'density_kg_per_l' => $body['densityKgPerL'],
                 'unit_weight_kg' => $body['unitWeightKg'],
             ];
+            if (array_key_exists('nonFood', $body)) {
+                $next['non_food'] = $body['nonFood'] === null ? null : ($body['nonFood'] ? 1 : 0);
+            }
             $before = [];
             foreach (array_keys($next) as $k) {
                 $before[$k] = Audit::normalizeNum($cur->{$k});
@@ -362,10 +413,36 @@ final class IngredientController extends Controller
             $changes = Audit::diff($before, array_map([Audit::class, 'normalizeNum'], $next));
             DB::table('ingredients')->where('id', $id)->update([...$next, 'updated_at' => Clock::now(), 'lock_version' => $cur->lock_version + 1]);
             $packChanged = ! Dec::of($cur->package_content)->eq(Dec::of($body['packageContent'])) || $cur->package_unit !== $body['packageUnit'];
-            if ($body['updatePrices'] && $packChanged) {
-                if (self::dimension($cur->package_unit) !== self::dimension($body['packageUnit'])) {
-                    throw new AppError(422, 'validation_failed', 'I prezzi registrati non si possono convertire in un\'altra unità (es. da pezzi a kg).', ['fields' => ['packageUnit' => 'Unità non compatibile con i prezzi già registrati.']]);
+            $dimChanged = self::dimension($cur->package_unit) !== self::dimension($body['packageUnit']);
+            if ($dimChanged) {
+                // NUOVO: cambio di tipo (es. da confezione di pezzi a «al litro»): tutti i prezzi registrati si convertono
+                // con il peso del pezzo e la densità; l'importo pagato resta, cambia l'unità della confezione.
+                $prices = DB::table('ingredient_prices')->where('company_id', $cid)->where('ingredient_id', $id)->get(['id', 'package_content', 'package_unit']);
+                if ($prices->isNotEmpty() && ! $body['updatePrices']) {
+                    throw new AppError(422, 'validation_failed', 'Cambiando il tipo di prezzo vanno convertiti anche i prezzi già registrati.', ['fields' => ['packageUnit' => 'Conferma la conversione dei prezzi registrati.']]);
                 }
+                $data = ['densityKgPerL' => $body['densityKgPerL'] !== null ? Dec::of($body['densityKgPerL']) : null, 'unitWeightKg' => $body['unitWeightKg'] !== null ? Dec::of($body['unitWeightKg']) : null];
+                $target = Units::dimensionOf($body['packageUnit']);
+                foreach ($prices as $p) {
+                    try {
+                        $base = Units::convertToDimension(Dec::of($p->package_content), $p->package_unit, $target, $data);
+                    } catch (\App\Domain\Costing\UnitConversionError $e) {
+                        $needDensity = in_array('volume', [self::dimension($p->package_unit), $target], true) && ! ($data['densityKgPerL']?->gt(0));
+                        throw new AppError(422, 'validation_failed', $needDensity
+                            ? 'Per convertire i prezzi registrati serve la densità (kg per litro; per l\'acqua 1).'
+                            : 'Per convertire i prezzi registrati serve quanto pesa o contiene un pezzo.', ['fields' => [$needDensity ? 'densityKgPerL' : 'unitWeightKg' => 'Serve per convertire i prezzi già registrati.']]);
+                    }
+                    $content = Units::fromBase($base, $body['packageUnit']);
+                    if (! $content->gt(0)) {
+                        throw new AppError(422, 'validation_failed', 'La conversione dei prezzi registrati dà una quantità nulla: controlla peso e densità.');
+                    }
+                    DB::table('ingredient_prices')->where('id', $p->id)->update(['package_content' => $content->toFixed(6), 'package_unit' => $body['packageUnit']]);
+                    $repriced++;
+                }
+                if ($repriced) {
+                    $changes['prices_package'] = ['from' => $cur->package_unit, 'to' => $body['packageUnit'], 'rows' => $repriced, 'converted' => true];
+                }
+            } elseif ($body['updatePrices'] && $packChanged) {
                 $repriced = DB::table('ingredient_prices')->where('company_id', $cid)->where('ingredient_id', $id)
                     ->where('package_content', Dec::of($cur->package_content)->toFixed(6))->where('package_unit', $cur->package_unit)
                     ->update(['package_content' => $body['packageContent'], 'package_unit' => $body['packageUnit']]);
@@ -380,7 +457,7 @@ final class IngredientController extends Controller
         $costRelevant = array_intersect(['edible_yield', 'density_kg_per_l', 'unit_weight_kg', 'prices_package'], array_keys($changes));
         $affected = $costRelevant ? Costing::invalidate($cid, 'ingredients', [$id]) : [];
         if ($costRelevant) {
-            $label = $repriced ? 'Confezione di «'.$body['name'].'» corretta anche nei prezzi registrati' : 'Dati di «'.$body['name'].'» modificati (resa, densità o peso)';
+            $label = $repriced ? 'Confezione o tipo di prezzo di «'.$body['name'].'» corretti anche nei prezzi registrati' : 'Dati di «'.$body['name'].'» modificati (resa, densità o peso)';
             ChangeAlerts::commit($watch, $ctx->userId(), ['label' => $label, 'seenIngredients' => true]);
         }
 
